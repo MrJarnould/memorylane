@@ -37,11 +37,25 @@ const createTray = () => {
 
   // Optional: Register a callback to log captures
   capture.onScreenshot((screenshot) => {
-    console.log('Screenshot captured:', {
+    const logData: Record<string, unknown> = {
       id: screenshot.id,
       timestamp: new Date(screenshot.timestamp).toISOString(),
       filepath: screenshot.filepath,
-    });
+      trigger: screenshot.trigger.type,
+    };
+
+    if (screenshot.trigger.confidence) {
+      logData.changePercent = screenshot.trigger.confidence.toFixed(2) + '%';
+    }
+
+    if (screenshot.interaction) {
+      logData.interaction = screenshot.interaction.type;
+      if (screenshot.interaction.clickPosition) {
+        logData.clickPosition = screenshot.interaction.clickPosition;
+      }
+    }
+
+    console.log('Screenshot captured:', logData);
   });
 };
 

@@ -10,14 +10,15 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "eslint --ext .ts,.tsx ."
+    "lint": "eslint --ext .ts,.tsx .",
+    "postinstall": "electron-rebuild -f -w uiohook-napi"
   },
   "keywords": [],
   "author": {
     "name": "Petr Ungar",
     "email": "petr.ungar@gmail.com"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "devDependencies": {
     "@electron-forge/cli": "^7.11.1",
     "@electron-forge/maker-deb": "^7.11.1",
@@ -28,6 +29,7 @@
     "@electron-forge/plugin-fuses": "^7.11.1",
     "@electron-forge/plugin-vite": "^7.11.1",
     "@electron/fuses": "^1.8.0",
+    "@electron/rebuild": "^4.0.3",
     "@types/electron-squirrel-startup": "^1.0.2",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
@@ -40,6 +42,7 @@
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
+    "uiohook-napi": "^1.5.4",
     "uuid": "^13.0.0"
   }
 }
