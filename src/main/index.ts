@@ -1,20 +1,14 @@
 import { app, Tray, Menu, nativeImage } from 'electron';
 import path from 'node:path';
-import started from 'electron-squirrel-startup';  
-import * as recorder from './main/recorder/recorder';
-import { EventProcessor } from './main/processor/index';
-import { EmbeddingService } from './main/processor/embedding';
-import { StorageService } from './main/processor/storage';
-import * as interactionMonitor from './main/recorder/interaction-monitor';
-import { Screenshot } from './shared/types';
+import * as recorder from './recorder/recorder';
+import { EventProcessor } from './processor/index';
+import { EmbeddingService } from './processor/embedding';
+import { StorageService } from './processor/storage';
+import * as interactionMonitor from './recorder/interaction-monitor';
+import { Screenshot } from '../shared/types';
 import dotenv from 'dotenv';
 
 dotenv.config();
-
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (started) {
-  app.quit();
-}
 
 let tray: Tray | null = null;
 let processor: EventProcessor | null = null;
