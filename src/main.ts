@@ -7,6 +7,9 @@ import { EmbeddingService } from './main/processor/embedding';
 import { StorageService } from './main/processor/storage';
 import * as interactionMonitor from './main/recorder/interaction-monitor';
 import { Screenshot } from './shared/types';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
