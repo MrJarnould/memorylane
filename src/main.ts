@@ -1,11 +1,12 @@
 import { app, Tray, Menu, nativeImage } from 'electron';
 import path from 'node:path';
-import started from 'electron-squirrel-startup';
-import * as capture from './main/capture';
+import started from 'electron-squirrel-startup';  
+import * as recorder from './main/recorder/recorder';
 import { EventProcessor } from './main/processor/index';
 import { EmbeddingService } from './main/processor/embedding';
 import { StorageService } from './main/processor/storage';
-import * as interactionMonitor from './main/interaction-monitor';
+import * as interactionMonitor from './main/recorder/interaction-monitor';
+import { Screenshot } from './shared/types';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -46,7 +47,7 @@ const createTray = () => {
   updateTrayMenu();
 
   // Register a callback to process screenshots
-  capture.onScreenshot(async (screenshot) => {
+  recorder.onScreenshot(async (screenshot: Screenshot) => {
     // 1. Log basic info
     console.log(`[Main] Screenshot captured: ${screenshot.id}`);
 
@@ -87,17 +88,17 @@ const createTray = () => {
 const updateTrayMenu = () => {
   if (!tray) return;
 
-  const isCapturing = capture.isCapturingNow();
+  const isCapturing = recorder.isCapturingNow();
 
   const contextMenu = Menu.buildFromTemplate([
     {
       label: isCapturing ? 'Stop Capture' : 'Start Capture',
       click: () => {
         if (isCapturing) {
-          capture.stopCapture();
+          recorder.stopCapture();
           interactionMonitor.stopInteractionMonitoring();
         } else {
-          capture.startCapture();
+          recorder.startCapture();
           // Start interaction monitoring separately
           try {
             interactionMonitor.startInteractionMonitoring();
@@ -113,7 +114,7 @@ const updateTrayMenu = () => {
       label: 'Capture Now',
       click: async () => {
         try {
-          const screenshot = await capture.captureNow();
+          const screenshot = await recorder.captureNow();
           console.log('Manual capture successful:', screenshot.id);
         } catch (error) {
           console.error('Manual capture failed:', error);
@@ -160,7 +161,7 @@ const updateTrayMenu = () => {
     {
       label: 'Quit',
       click: () => {
-        capture.stopCapture();
+        recorder.stopCapture();
         interactionMonitor.stopInteractionMonitoring();
         app.quit();
       },
@@ -173,7 +174,7 @@ const updateTrayMenu = () => {
 // This method will be called when Electron has finished initialization
 app.on('ready', () => {
   createTray();
-  console.log('MemoryLane started. Screenshots will be saved to:', capture.getScreenshotsDir());
+  console.log('MemoryLane started. Screenshots will be saved to:', recorder.getScreenshotsDir());
 });
 
 // macOS: Prevent dock icon from showing (optional for tray-only app)

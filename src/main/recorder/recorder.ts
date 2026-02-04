@@ -3,15 +3,17 @@ import { app, desktopCapturer } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Screenshot, OnScreenshotCallback, CaptureReason } from '../shared/types';
-import { CAPTURE_INTERVAL_MS } from '../shared/constants';
+import { Screenshot, OnScreenshotCallback, CaptureReason } from '../../shared/types';
+import { VISUAL_DETECTOR_CONFIG } from '../../shared/constants';
 import * as visualDetector from './visual-detector';
+import * as interactionMonitor from './interaction-monitor';
+import * as coordinator from './capture-coordinator';
 
 // Configuration
 const SCREENSHOTS_DIR = path.join(app.getPath('userData'), 'screenshots');
 
 // State
-let captureIntervalId: NodeJS.Timeout | null = null;
+let fallbackTimerId: NodeJS.Timeout | null = null;
 const screenshotCallbacks: OnScreenshotCallback[] = [];
 let isCapturing = false;
 
@@ -74,6 +76,8 @@ export async function captureNow(reason?: CaptureReason): Promise<Screenshot> {
     trigger: captureReason,
   };
 
+  console.log(`[Capture] Screenshot saved: ${filename} (reason: ${captureReason.type})`);
+
   // Notify all registered callbacks
   screenshotCallbacks.forEach((callback) => {
     try {
@@ -91,41 +95,53 @@ export async function captureNow(reason?: CaptureReason): Promise<Screenshot> {
  */
 export function startCapture(): void {
   if (isCapturing) {
-    console.log('Capture already running');
+    console.log('[Capture] Already running');
     return;
   }
 
-  console.log('Starting screenshot capture (visual change + fallback timer only)');
+  console.log('[Capture] Starting screenshot capture with coordinator + visual detection + interaction monitoring');
   isCapturing = true;
 
-  // Register callback for visual change detection
-  visualDetector.onChangeDetected((confidence) => {
-    const reason: CaptureReason = {
-      type: confidence > 0 ? 'visual_change' : 'timer',
-      confidence: confidence > 0 ? confidence : undefined,
-    };
-
-    captureNow(reason).catch((error) => {
-      console.error('Failed to capture screenshot:', error);
+  // Setup coordinator callbacks
+  coordinator.onCaptureApproved(() => {
+    captureNow({ type: 'visual_change' }).catch((error) => {
+      console.error('[Capture] Failed to capture screenshot:', error);
     });
+  });
+
+  coordinator.onImmediateCheckRequested(() => {
+    visualDetector.triggerImmediateCheck();
+  });
+
+  // Register visual detector callback
+  visualDetector.onChangeDetected(() => {
+    console.log('[Capture] Visual change callback received');
+    coordinator.registerVisualChange();
+  });
+
+  // Register interaction monitor callback
+  interactionMonitor.onInteraction((context) => {
+    console.log(`[Capture] Interaction callback received: ${context.type}`);
+    coordinator.registerInteraction();
   });
 
   // Start visual detection
   visualDetector.startVisualDetection();
 
-  // Capture immediately on start
-  captureNow({ type: 'manual' }).catch((error) => {
-    console.error('Failed to capture initial screenshot:', error);
-  });
+  // Start interaction monitoring
+  interactionMonitor.startInteractionMonitoring();
 
-  // Keep legacy timer as ultimate fallback (if visual detector is disabled)
-  captureIntervalId = setInterval(() => {
-    if (!visualDetector.isDetecting()) {
+  // Start fallback timer (5 minutes)
+  fallbackTimerId = setInterval(() => {
+    const timeSinceLastCapture = coordinator.getTimeSinceLastCapture();
+    if (timeSinceLastCapture >= VISUAL_DETECTOR_CONFIG.FALLBACK_TIMER_MS) {
+      console.log(`[Capture] Fallback timer fired (${(timeSinceLastCapture / 1000).toFixed(0)}s since last capture)`);
+      coordinator.registerTimerTrigger();
       captureNow({ type: 'timer' }).catch((error) => {
-        console.error('Failed to capture screenshot:', error);
+        console.error('[Capture] Failed to capture screenshot:', error);
       });
     }
-  }, CAPTURE_INTERVAL_MS);
+  }, VISUAL_DETECTOR_CONFIG.FALLBACK_TIMER_MS);
 }
 
 /**
@@ -133,20 +149,27 @@ export function startCapture(): void {
  */
 export function stopCapture(): void {
   if (!isCapturing) {
-    console.log('Capture not running');
+    console.log('[Capture] Not running');
     return;
   }
 
-  console.log('Stopping screenshot capture');
+  console.log('[Capture] Stopping screenshot capture');
   isCapturing = false;
 
   // Stop visual detection
   visualDetector.stopVisualDetection();
 
-  if (captureIntervalId) {
-    clearInterval(captureIntervalId);
-    captureIntervalId = null;
+  // Stop interaction monitoring
+  interactionMonitor.stopInteractionMonitoring();
+
+  // Stop fallback timer
+  if (fallbackTimerId) {
+    clearInterval(fallbackTimerId);
+    fallbackTimerId = null;
   }
+
+  // Reset coordinator
+  coordinator.reset();
 }
 
 /**

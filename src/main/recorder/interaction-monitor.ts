@@ -1,11 +1,10 @@
-import { uIOhook, UiohookMouseEvent, UiohookKeyboardEvent } from 'uiohook-napi';
-import { INTERACTION_MONITOR_CONFIG } from '../shared/constants';
-import { InteractionContext } from '../shared/types';
+import { uIOhook, UiohookMouseEvent } from 'uiohook-napi';
+import { INTERACTION_MONITOR_CONFIG } from '../../shared/constants';
+import { InteractionContext } from '../../shared/types';
 
 // State
 let isRunning = false;
-let lastInteractionTime = 0;
-let debounceTimeoutId: NodeJS.Timeout | null = null;
+let clickDebounceTimeoutId: NodeJS.Timeout | null = null;
 let typingSessionTimeoutId: NodeJS.Timeout | null = null;
 let isTyping = false;
 let typingSessionKeyCount = 0;
@@ -23,28 +22,18 @@ function handleMouseClick(event: UiohookMouseEvent): void {
     return;
   }
 
-  const now = Date.now();
+  console.log('[Interaction Monitor] Mouse click detected:', { x: event.x, y: event.y, button: event.button });
 
-  // Check if we're within debounce period
-  if (now - lastInteractionTime < INTERACTION_MONITOR_CONFIG.DEBOUNCE_MS) {
-    console.log('Interaction debounced - too soon after last interaction');
-    return;
+  // Clear any existing click debounce timeout
+  if (clickDebounceTimeoutId) {
+    clearTimeout(clickDebounceTimeoutId);
   }
 
-  console.log('Mouse click detected:', { x: event.x, y: event.y, button: event.button });
-
-  // Clear any existing debounce timeout
-  if (debounceTimeoutId) {
-    clearTimeout(debounceTimeoutId);
-  }
-
-  // Schedule capture after delay (to let UI update)
-  debounceTimeoutId = setTimeout(() => {
-    lastInteractionTime = Date.now();
-
+  // Schedule notification after delay (to let UI update)
+  clickDebounceTimeoutId = setTimeout(() => {
     const context: InteractionContext = {
       type: 'click',
-      timestamp: lastInteractionTime,
+      timestamp: Date.now(),
       clickPosition: {
         x: event.x,
         y: event.y,
@@ -66,17 +55,12 @@ function handleMouseClick(event: UiohookMouseEvent): void {
  * Handle keyboard events (if enabled)
  * Tracks "typing sessions" - emits event when user pauses typing
  */
-function handleKeyboard(event: UiohookKeyboardEvent): void {
+function handleKeyboard(): void {
   if (!INTERACTION_MONITOR_CONFIG.TRACK_KEYBOARD) {
     return;
   }
 
   const now = Date.now();
-
-  // Check if we're within debounce period from last interaction event
-  if (now - lastInteractionTime < INTERACTION_MONITOR_CONFIG.DEBOUNCE_MS) {
-    return;
-  }
 
   // Clear any existing typing session timeout
   if (typingSessionTimeoutId) {
@@ -88,7 +72,7 @@ function handleKeyboard(event: UiohookKeyboardEvent): void {
     isTyping = true;
     typingSessionKeyCount = 0;
     typingSessionStartTime = now;
-    console.log('Typing session started');
+    console.log('[Interaction Monitor] Typing session started');
   }
 
   // Increment key count
@@ -101,9 +85,8 @@ function handleKeyboard(event: UiohookKeyboardEvent): void {
     isTyping = false;
     const endTime = Date.now();
     const durationMs = endTime - typingSessionStartTime;
-    lastInteractionTime = endTime;
 
-    console.log(`Typing session ended: ${typingSessionKeyCount} keys over ${durationMs}ms`);
+    console.log(`[Interaction Monitor] Typing session ended: ${typingSessionKeyCount} keys over ${durationMs}ms`);
 
     const context: InteractionContext = {
       type: 'keyboard',
@@ -132,17 +115,17 @@ function handleKeyboard(event: UiohookKeyboardEvent): void {
  */
 export function startInteractionMonitoring(): void {
   if (isRunning) {
-    console.log('Interaction monitoring already running');
+    console.log('[Interaction Monitor] Already running');
     return;
   }
 
   if (!INTERACTION_MONITOR_CONFIG.ENABLED) {
-    console.log('Interaction monitoring is disabled');
+    console.log('[Interaction Monitor] Disabled in config');
     return;
   }
 
   try {
-    console.log('Starting interaction monitoring');
+    console.log('[Interaction Monitor] Starting');
     isRunning = true;
 
     // Register event handlers
@@ -152,14 +135,13 @@ export function startInteractionMonitoring(): void {
 
     if (INTERACTION_MONITOR_CONFIG.TRACK_KEYBOARD) {
       uIOhook.on('keydown', handleKeyboard);
-      console.log('Keyboard event handler registered');
     }
 
     // Start the hook
     uIOhook.start();
-    console.log('uiohook started successfully');
+    console.log('[Interaction Monitor] uiohook started successfully');
   } catch (error) {
-    console.error('Failed to start interaction monitoring:', error);
+    console.error('[Interaction Monitor] Failed to start:', error);
     isRunning = false;
     throw error;
   }
@@ -170,21 +152,21 @@ export function startInteractionMonitoring(): void {
  */
 export function stopInteractionMonitoring(): void {
   if (!isRunning) {
-    console.log('Interaction monitoring not running');
+    console.log('[Interaction Monitor] Not running');
     return;
   }
 
   try {
-    console.log('Stopping interaction monitoring');
+    console.log('[Interaction Monitor] Stopping');
     isRunning = false;
     isTyping = false;
     typingSessionKeyCount = 0;
     typingSessionStartTime = 0;
 
-    // Clear any pending debounce
-    if (debounceTimeoutId) {
-      clearTimeout(debounceTimeoutId);
-      debounceTimeoutId = null;
+    // Clear any pending click debounce
+    if (clickDebounceTimeoutId) {
+      clearTimeout(clickDebounceTimeoutId);
+      clickDebounceTimeoutId = null;
     }
 
     // Clear any pending typing session timeout
@@ -199,7 +181,7 @@ export function stopInteractionMonitoring(): void {
     // Remove event listeners
     uIOhook.removeAllListeners();
   } catch (error) {
-    console.error('Failed to stop interaction monitoring:', error);
+    console.error('[Interaction Monitor] Failed to stop:', error);
   }
 }
 

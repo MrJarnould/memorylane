@@ -1,16 +1,20 @@
-export const CAPTURE_INTERVAL_MS = 30_000; // 30 seconds
+export const CAPTURE_INTERVAL_MS = 30_000; // 30 seconds (legacy fallback)
 
-// Visual Change Detection Configuration
+// Visual Change Detection Configuration (Simplified)
 export const VISUAL_DETECTOR_CONFIG = {
   ENABLED: true,
-  SAMPLE_INTERVAL_MS: 500,           // Check every 500ms
-  CHANGE_THRESHOLD_PERCENT: 7.5,      // 7.5% confidence threshold
-  HIGH_CONFIDENCE_THRESHOLD: 20,      // Above this = capture immediately (no debounce)
-  SAMPLE_WIDTH: 320,                   // Downscale for performance
+  SAMPLE_INTERVAL_MS: 2000,           // Check every 2s (reduced frequency, less noise)
+  DHASH_THRESHOLD_PERCENT: 15,        // Single threshold: 15% hamming distance = changed
+  SAMPLE_WIDTH: 320,                  // Downscale for performance
   SAMPLE_HEIGHT: 180,
-  FALLBACK_TO_TIMER: true,            // Capture after N seconds regardless
   FALLBACK_TIMER_MS: 300_000,         // 5 minutes max between captures
-  DEBOUNCE_MS: 15_000,                // 15 seconds debounce for low confidence changes
+};
+
+// Capture Coordinator Configuration (Global Debouncing)
+export const CAPTURE_COORDINATOR_CONFIG = {
+  GLOBAL_DEBOUNCE_MS: 10_000,                    // 10s minimum between captures (all triggers)
+  INTERACTION_SENSITIVITY_WINDOW_MS: 5_000,      // 5s window after interaction for bypass
+  INTERACTION_TRIGGERS_IMMEDIATE_CHECK: true,    // Trigger visual check on interaction
 };
 
 // User Interaction Monitoring Configuration
@@ -19,7 +23,6 @@ export const INTERACTION_MONITOR_CONFIG = {
   TRACK_CLICKS: true,
   TRACK_KEYBOARD: true,               // Track typing sessions
   TRACK_SCROLL: false,                // Covered by visual detector
-  DEBOUNCE_MS: 2000,                  // 2s between captures
   CAPTURE_DELAY_MS: 500,              // Wait 500ms after click (for UI update)
   TYPING_SESSION_TIMEOUT_MS: 2000,    // Consider typing stopped after 2s of no keys
 };
