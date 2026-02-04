@@ -100,23 +100,25 @@ Add a minimal MCP server to MemoryLane that exposes one `search_context` tool, p
 
 ---
 
-### 5. MCP Server: Electron Integration
+### 5. MCP Server: Electron Integration (Dual Mode)
 
-**Summary**: Run the MCP server as part of the Electron application.
+**Summary**: Implement "Dual Mode" in the main Electron executable to support both Recorder and MCP Server roles.
 
-**Why**: The MCP server needs to run whenever the app is running so AI assistants can connect.
+**Why**: Enables a single application installation to serve as both the user-facing recorder and the background MCP server for AI assistants.
 
 **Acceptance Criteria**:
-- [ ] MCP server starts automatically when Electron app starts
-- [ ] Server shuts down cleanly when app quits
-- [ ] Server has access to the same database as the main app
-- [ ] Connection info available for client configuration
+- [ ] App accepts `--mcp` flag to start in "Server Mode"
+- [ ] "Server Mode" behaves invisibly (no Tray, no Dock icon)
+- [ ] "Server Mode" only initializes Search/Storage services (no Recorder/OCR)
+- [ ] "Server Mode" strictly uses `stderr` for logs and `stdout` ONLY for MCP JSON
+- [ ] Packaged application works successfully with `verify-electron-mcp.ts` script
+- [ ] Standard "Recorder Mode" (no flag) continues to work as before
 
 **Technical Notes**:
-- Option A: Run in main process (simpler, shares services)
-- Option B: Spawn as child process (isolated, but needs IPC)
-- Recommend Option A for MVP
-- May need to refactor `StorageService`/`EmbeddingService` initialization to share instances
+- Use `process.argv` to detect `--mcp` flag
+- In MCP mode, redirect `console.log` to `console.error` immediately
+- Conditionally import/initialize heavy modules (Recorder, OCR) only in Recorder mode
+- Ensure shared database access works (Read-Only for MCP recommended if possible, or concurrent Read/Write)
 
 **Estimate**: Medium (~2-3 hours)
 
