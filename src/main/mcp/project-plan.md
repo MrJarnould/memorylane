@@ -100,19 +100,19 @@ Add a minimal MCP server to MemoryLane that exposes one `search_context` tool, p
 
 ---
 
-### 5. MCP Server: Electron Integration (Dual Mode)
+### 5. MCP Server: Electron Integration (Dual Mode) ✅
 
 **Summary**: Implement "Dual Mode" in the main Electron executable to support both Recorder and MCP Server roles.
 
 **Why**: Enables a single application installation to serve as both the user-facing recorder and the background MCP server for AI assistants.
 
 **Acceptance Criteria**:
-- [ ] App accepts `--mcp` flag to start in "Server Mode"
-- [ ] "Server Mode" behaves invisibly (no Tray, no Dock icon)
-- [ ] "Server Mode" only initializes Search/Storage services (no Recorder/OCR)
-- [ ] "Server Mode" strictly uses `stderr` for logs and `stdout` ONLY for MCP JSON
-- [ ] Packaged application works successfully with `verify-electron-mcp.ts` script
-- [ ] Standard "Recorder Mode" (no flag) continues to work as before
+- [x] App accepts `--mcp` flag to start in "Server Mode"
+- [x] "Server Mode" behaves invisibly (no Tray, no Dock icon)
+- [x] "Server Mode" only initializes Search/Storage services (no Recorder/OCR)
+- [x] "Server Mode" strictly uses `stderr` for logs and `stdout` ONLY for MCP JSON
+- [x] Packaged application works successfully with `verify-electron-mcp.ts` script
+- [x] Standard "Recorder Mode" (no flag) continues to work as before
 
 **Technical Notes**:
 - Use `process.argv` to detect `--mcp` flag
