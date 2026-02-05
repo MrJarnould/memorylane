@@ -9,6 +9,21 @@
 // Detect MCP mode FIRST, before any heavy imports
 const isMCPMode = process.argv.includes('--mcp');
 
+// In MCP mode, capture the real stdout IMMEDIATELY and redirect process.stdout
+// to stderr. The MCP stdio protocol owns stdout exclusively — this prevents ANY
+// module (dotenv, native addons, etc.) from polluting the transport channel.
+import { Writable } from 'node:stream';
+let mcpStdout: Writable | undefined;
+if (isMCPMode) {
+  const realWrite = process.stdout.write.bind(process.stdout);
+  mcpStdout = new Writable({
+    write(chunk, encoding, callback): void {
+      realWrite(chunk, encoding as BufferEncoding, callback);
+    },
+  });
+  process.stdout.write = process.stderr.write.bind(process.stderr) as typeof process.stdout.write;
+}
+
 import { app, Tray, Menu, nativeImage } from 'electron';
 import log, { configureMCPMode } from './logger';
 
@@ -67,8 +82,7 @@ if (isMCPMode) {
       const { MemoryLaneMCPServer } = await import('./mcp/server');
       const mcpServer = new MemoryLaneMCPServer(processor);
 
-      // Start the server (this will use stdio transport)
-      await mcpServer.start();
+      await mcpServer.start(undefined, mcpStdout);
 
       log.info('[MCP Mode] MCP Server started successfully');
     } catch (error) {

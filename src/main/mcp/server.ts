@@ -10,6 +10,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 // eslint-disable-next-line import/no-unresolved
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { Writable } from 'node:stream';
 import * as fs from 'fs';
 import { EventProcessor } from '../processor/index';
 import { StorageService, StoredEvent } from '../processor/storage';
@@ -306,15 +307,20 @@ export class MemoryLaneMCPServer {
 
   /**
    * Start the MCP server with stdio transport.
-   * This is the main entry point for standalone execution.
+   * 
+   * @param dbPath - Optional database path override.
+   * @param stdout - Optional writable stream for the transport's stdout.
+   *                 When provided, the transport writes JSON-RPC to this stream
+   *                 instead of process.stdout, allowing the caller to redirect
+   *                 process.stdout to stderr so no other module can pollute
+   *                 the MCP channel.
    */
-  public async start(dbPath?: string): Promise<void> {
+  public async start(dbPath?: string, stdout?: Writable): Promise<void> {
     await this.initializeServices(dbPath);
 
-    const transport = new StdioServerTransport();
+    const transport = new StdioServerTransport(process.stdin, stdout ?? process.stdout);
     await this.server.connect(transport);
     
-    // Log to stderr so it doesn't interfere with MCP protocol on stdout
     log.error(`${SERVER_NAME} MCP server started`);
   }
 
