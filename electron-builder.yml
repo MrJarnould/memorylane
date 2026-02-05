@@ -28,6 +28,11 @@ asarUnpack:
 
 mac:
   category: public.app-category.productivity
+  identity: "MemoryLane-dev"
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
   target:
     - target: dmg
       arch:
