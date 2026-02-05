@@ -5,7 +5,8 @@ import { getDefaultDbPath } from '../paths';
 export interface StoredEvent extends Record<string, unknown> {
   id: string;
   timestamp: number;
-  text: string;
+  text: string;       // OCR extracted text
+  summary: string;    // LLM-generated activity summary
   vector: number[];
 }
 

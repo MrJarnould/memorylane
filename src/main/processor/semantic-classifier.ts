@@ -31,6 +31,8 @@ export class SemanticClassifierService {
       // Build the prompt with context
       const prompt = this.formatPrompt(input);
 
+      console.log(`[SemanticClassifier] Prompt: ${prompt}`);
+
       // Convert screenshots to base64
       const startImageData = this.imageToBase64(startScreenshot.filepath);
       const endImageData = this.imageToBase64(endScreenshot.filepath);
@@ -92,11 +94,24 @@ export class SemanticClassifierService {
   private formatPrompt(input: ClassificationInput): string {
     const { events } = input;
 
-    let prompt = 'You are analyzing user activity between two screenshots (START and END).\n\n';
+    let prompt = 'You are analyzing two screenshots of a user\'s screen.\n\n';
 
-    // Add previous context summaries if available
+    // Primary task
+    prompt += '## Task\n';
+    prompt += 'Compare the START and END screenshots. Describe what changed visually, then infer what the user accomplished in 5-10 words.\n\n';
+
+    // Events as hints
+    if (events.length > 0) {
+      prompt += '## Hints (events that occurred between screenshots)\n';
+      events.forEach((event) => {
+        prompt += this.formatEvent(event) + '\n';
+      });
+      prompt += '\n';
+    }
+
+    // Previous context for continuity
     if (this.summaryHistory.length > 0) {
-      prompt += '## Previous Context (for continuity):\n';
+      prompt += '## Previous context (for continuity)\n';
       this.summaryHistory.forEach((result) => {
         const timeAgo = this.formatTimeAgo(Date.now() - result.timestamp);
         prompt += `- ${timeAgo} ago: "${result.summary}"\n`;
@@ -104,23 +119,19 @@ export class SemanticClassifierService {
       prompt += '\n';
     }
 
-    // Add events that occurred
-    if (events.length > 0) {
-      prompt += '## Events that occurred:\n';
-      events.forEach((event) => {
-        prompt += this.formatEvent(event) + '\n';
-      });
-      prompt += '\n';
-    }
-
     // Instructions
-    prompt += '## Task:\n';
-    prompt += 'Describe what the user accomplished in 5-10 words.\n';
-    prompt += 'Focus on the substantive action, not the mechanics.\n';
-    prompt += 'Example: "User filled in revenue numbers in Q2 report"\n';
-    prompt += 'Example: "User reviewed pull request comments in GitHub"\n';
-    prompt += 'Example: "User edited TypeScript code in VS Code"\n\n';
-    prompt += 'Your response should be ONLY the summary, nothing else.';
+    prompt += '## Instructions\n';
+    prompt += '- Focus on visual differences: What content appeared, disappeared, or changed?\n';
+    prompt += '- Use the events as hints to understand HOW the change happened\n';
+    prompt += '- BE SPECIFIC: Extract actual names, identifiers, and context visible in the screenshots\n';
+    prompt += '- Include: function/file names, document titles, specific UI elements, data labels\n';
+    prompt += '- Summarize the substantive action, not the mechanics\n';
+    prompt += '- Response format: ONLY the summary (5-15 words)\n\n';
+    prompt += 'Examples:\n';
+    prompt += '- "Implemented parseUserInput function in utils.ts"\n';
+    prompt += '- "Filled in Q2 revenue numbers for Marketing department"\n';
+    prompt += '- "Reviewed PR #142 comments on authentication refactor"\n';
+    prompt += '- "Replied to email from John about project deadline"';
 
     return prompt;
   }
@@ -136,8 +147,15 @@ export class SemanticClassifierService {
         return `- keyboard: ${event.keyCount} keys over ${event.durationMs}ms`;
       case 'scroll':
         return `- scroll: ${event.scrollDirection}, ${event.scrollAmount} rotation`;
-      case 'app_change':
-        return `- app changed from "${event.previousWindow?.processName}" to "${event.activeWindow?.processName}"`;
+      case 'app_change': {
+        const from = event.previousWindow;
+        const to = event.activeWindow;
+        if (from?.processName === to?.processName) {
+          // Same app, different window/tab
+          return `- switched tab: "${from?.title}" → "${to?.title}"`;
+        }
+        return `- switched app: "${from?.title}" (${from?.processName}) → "${to?.title}" (${to?.processName})`;
+      }
       default:
         return `- ${event.type}`;
     }

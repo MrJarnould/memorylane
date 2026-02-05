@@ -16,6 +16,7 @@ export class EventProcessor {
   // Classification state - track START screenshot for START/END pairs
   private startScreenshot: Screenshot | null = null;
   private startEvents: InteractionContext[] = [];
+  private startOcrText = '';
 
   constructor(embeddingService: EmbeddingService, storageService: StorageService, classifierService?: SemanticClassifierService) {
     this.embeddingService = embeddingService;
@@ -49,6 +50,7 @@ export class EventProcessor {
     const events = [...this.pendingEvents];
     this.pendingEvents = [];
     console.log(`[EventProcessor] Processing screenshot ${id} with ${events.length} accumulated events`);
+    console.log(`[EventProcessor] Events: ${JSON.stringify(events)}`);
     
     try {
       // 1. OCR - needs the file to exist
@@ -56,58 +58,69 @@ export class EventProcessor {
           console.warn(`File not found for screenshot ${id}: ${filepath}`);
           return;
       }
-      
+
       const text = await extractText(filepath);
-      console.log(`OCR complete for ${id}. Text length: ${text.length}`);
+      console.log(`[EventProcessor] OCR complete for ${id}. Text length: ${text.length}`);
 
-      // 2. Embedding
-      const vector = await this.embeddingService.generateEmbedding(text);
-      console.log(`Embedding generated for ${id}.`);
-
-      // 3. Store
-      const storedEvent: StoredEvent = {
-        id,
-        timestamp,
-        text,
-        vector
-      };
-      
-      await this.storageService.addEvent(storedEvent);
-      console.log(`Event stored for ${id}.`);
-
-      // 4. Semantic Classification (START/END pair tracking)
+      // 2. Semantic Classification (START/END pair tracking)
       if (this.classifierService) {
         if (!this.startScreenshot) {
-          // This is the START screenshot - keep file for classification
+          // This is the START screenshot - keep file and OCR for classification
           this.startScreenshot = screenshot;
           this.startEvents = events;
-          console.log(`[EventProcessor] START screenshot set: ${id} (file retained for classification)`);
+          this.startOcrText = text;
         } else {
-          // This is the END screenshot - trigger classification then cleanup
-          console.log(`[EventProcessor] END screenshot: ${id} - triggering classification`);
-          
           const allEvents = [...this.startEvents, ...events];
-          
+
+          console.log(`[EventProcessor] START screenshot: ${this.startScreenshot.id}`);
+          console.log(`[EventProcessor] END screenshot: ${screenshot.id}`);
+
+          let summary = '';
           try {
             // Classification needs both screenshot files
-            await this.classifierService.classify({
+            summary = await this.classifierService.classify({
               startScreenshot: this.startScreenshot,
               endScreenshot: screenshot,
               events: allEvents,
             });
+            console.log(`[EventProcessor] Classification summary: ${summary}`);
           } catch (classificationError) {
             console.error('[EventProcessor] Classification failed:', classificationError);
+            summary = 'Classification failed';
           }
-          
-          // Delete START screenshot (classification done or failed, no longer needed)
+
+          // 3. Store START screenshot's data (OCR + summary)
+          const vector = await this.embeddingService.generateEmbedding(this.startOcrText);
+          const storedEvent: StoredEvent = {
+            id: this.startScreenshot.id,
+            timestamp: this.startScreenshot.timestamp,
+            text: this.startOcrText,
+            summary,
+            vector
+          };
+          await this.storageService.addEvent(storedEvent);
+          console.log(`[EventProcessor] Stored event for ${this.startScreenshot.id}`);
+
+          // Delete START screenshot (classification done, no longer needed)
           this.deleteScreenshot(this.startScreenshot.filepath);
-          
+
           // END becomes new START (keep its file for next classification)
           this.startScreenshot = screenshot;
           this.startEvents = events;
+          this.startOcrText = text;
         }
       } else {
-        // No classifier - delete immediately after OCR (original behavior)
+        // No classifier - store OCR only with empty summary, then delete
+        const vector = await this.embeddingService.generateEmbedding(text);
+        const storedEvent: StoredEvent = {
+          id,
+          timestamp,
+          text,
+          summary: '',
+          vector
+        };
+        await this.storageService.addEvent(storedEvent);
+        console.log(`[EventProcessor] Stored event for ${id} (no classifier)`);
         this.deleteScreenshot(filepath);
       }
       
