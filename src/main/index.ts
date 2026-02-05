@@ -27,7 +27,8 @@ import { EmbeddingService } from './processor/embedding';
 import { StorageService } from './processor/storage';
 import { SemanticClassifierService } from './processor/semantic-classifier';
 import { ApiKeyManager } from './settings/api-key-manager';
-import { initSettingsIPC, openSettingsWindow } from './settings/settings-window';
+import { CaptureSettingsManager } from './settings/capture-settings-manager';
+import { initSettingsIPC, initCaptureSettingsIPC, openSettingsWindow } from './settings/settings-window';
 import { Screenshot } from '../shared/types';
 import dotenv from 'dotenv';
 
@@ -97,14 +98,23 @@ if (isMCPMode) {
   let tray: Tray | null = null;
   let processor: EventProcessor | null = null;
   let apiKeyManager: ApiKeyManager | null = null;
+  let captureSettingsManager: CaptureSettingsManager | null = null;
 
   const initRecorderMode = async () => {
     // Dynamic imports for recorder-specific modules
     recorder = await import('./recorder/recorder');
     interactionMonitor = await import('./recorder/interaction-monitor');
+    const visualDetector = await import('./recorder/visual-detector');
 
     // Initialize API key manager for secure key storage
     apiKeyManager = new ApiKeyManager();
+
+    // Initialize capture settings manager
+    captureSettingsManager = new CaptureSettingsManager();
+
+    // Initialize recorder modules with settings manager
+    visualDetector.initVisualDetector(captureSettingsManager);
+    interactionMonitor.initInteractionMonitor(captureSettingsManager);
 
     // Initialize Processor Services
     const embeddingService = new EmbeddingService();
@@ -114,6 +124,7 @@ if (isMCPMode) {
 
     // Initialize settings IPC handlers (pass classifier so it can be updated when key changes)
     initSettingsIPC(apiKeyManager, classifierService);
+    initCaptureSettingsIPC(captureSettingsManager);
   };
 
   const createTray = () => {

@@ -1,10 +1,56 @@
 import { uIOhook, UiohookMouseEvent, UiohookWheelEvent } from 'uiohook-napi';
 import activeWin from 'active-win';
-import { INTERACTION_MONITOR_CONFIG } from '../../shared/constants';
-import { InteractionContext } from '../../shared/types';
+import { DEFAULT_INTERACTION_MONITOR_CONFIG } from '../../shared/constants';
+import { InteractionContext, CaptureSettings } from '../../shared/types';
+import { CaptureSettingsManager } from '../settings/capture-settings-manager';
 
 // State
 let isRunning = false;
+let settingsManager: CaptureSettingsManager | null = null;
+
+/**
+ * Initialize interaction monitor with settings manager
+ */
+export function initInteractionMonitor(manager: CaptureSettingsManager): void {
+  settingsManager = manager;
+
+  // Subscribe to settings changes to restart interval if needed
+  manager.on('changed', (settings: CaptureSettings) => {
+    if (isRunning) {
+      // Restart app change polling with new interval if it's running
+      if (appChangeIntervalId && DEFAULT_INTERACTION_MONITOR_CONFIG.TRACK_APP_CHANGE) {
+        clearInterval(appChangeIntervalId);
+        appChangeIntervalId = setInterval(() => {
+          checkAppChange().catch(console.error);
+        }, DEFAULT_INTERACTION_MONITOR_CONFIG.APP_CHANGE_POLL_MS);
+        console.log('[Interaction Monitor] App change polling restarted with updated settings');
+      }
+    }
+    console.log('[Interaction Monitor] Settings changed:', settings);
+  });
+
+  console.log('[Interaction Monitor] Initialized with settings manager');
+}
+
+/**
+ * Get current interaction monitor settings
+ */
+function getConfig() {
+  if (settingsManager) {
+    const settings = settingsManager.getSettings();
+    return {
+      ENABLED: settings.interactionMonitor.enabled,
+      TRACK_CLICKS: DEFAULT_INTERACTION_MONITOR_CONFIG.TRACK_CLICKS,
+      TRACK_KEYBOARD: DEFAULT_INTERACTION_MONITOR_CONFIG.TRACK_KEYBOARD,
+      TRACK_SCROLL: DEFAULT_INTERACTION_MONITOR_CONFIG.TRACK_SCROLL,
+      TRACK_APP_CHANGE: DEFAULT_INTERACTION_MONITOR_CONFIG.TRACK_APP_CHANGE,
+      TYPING_SESSION_TIMEOUT_MS: settings.interactionMonitor.typingSessionTimeoutMs,
+      SCROLL_SESSION_TIMEOUT_MS: settings.interactionMonitor.scrollSessionTimeoutMs,
+      APP_CHANGE_POLL_MS: DEFAULT_INTERACTION_MONITOR_CONFIG.APP_CHANGE_POLL_MS,
+    };
+  }
+  return DEFAULT_INTERACTION_MONITOR_CONFIG;
+}
 let typingSessionTimeoutId: NodeJS.Timeout | null = null;
 let isTyping = false;
 let typingSessionKeyCount = 0;
@@ -30,7 +76,8 @@ const interactionCallbacks: OnInteractionCallback[] = [];
  * Not debounced because we would loose chronological order of events
  */
 function handleMouseClick(event: UiohookMouseEvent): void {
-  if (!INTERACTION_MONITOR_CONFIG.TRACK_CLICKS) {
+  const config = getConfig();
+  if (!config.TRACK_CLICKS) {
     return;
   }
 
@@ -59,7 +106,8 @@ function handleMouseClick(event: UiohookMouseEvent): void {
  * Tracks "typing sessions" - emits event when user pauses typing
  */
 function handleKeyboard(): void {
-  if (!INTERACTION_MONITOR_CONFIG.TRACK_KEYBOARD) {
+  const config = getConfig();
+  if (!config.TRACK_KEYBOARD) {
     return;
   }
 
@@ -81,13 +129,16 @@ function handleKeyboard(): void {
   // Increment key count
   typingSessionKeyCount++;
 
+  // Get current timeout value (reads live setting)
+  const typingTimeout = getConfig().TYPING_SESSION_TIMEOUT_MS;
+
   // Set timeout to detect when typing stops
   typingSessionTimeoutId = setTimeout(() => {
     if (!isTyping) return;
 
     isTyping = false;
-    const endTime = Date.now() - INTERACTION_MONITOR_CONFIG.TYPING_SESSION_TIMEOUT_MS;
-    const durationMs = endTime - typingSessionStartTime - INTERACTION_MONITOR_CONFIG.TYPING_SESSION_TIMEOUT_MS;
+    const endTime = Date.now() - typingTimeout;
+    const durationMs = endTime - typingSessionStartTime - typingTimeout;
 
     console.log(`[Interaction Monitor] Typing session ended: ${typingSessionKeyCount} keys over ${durationMs}ms`);
 
@@ -110,7 +161,7 @@ function handleKeyboard(): void {
     // Reset session tracking
     typingSessionKeyCount = 0;
     typingSessionStartTime = 0;
-  }, INTERACTION_MONITOR_CONFIG.TYPING_SESSION_TIMEOUT_MS);
+  }, typingTimeout);
 }
 
 /**
@@ -118,7 +169,8 @@ function handleKeyboard(): void {
  * Tracks "scroll sessions" - emits event when user pauses scrolling
  */
 function handleScroll(event: UiohookWheelEvent): void {
-  if (!INTERACTION_MONITOR_CONFIG.TRACK_SCROLL) {
+  const config = getConfig();
+  if (!config.TRACK_SCROLL) {
     return;
   }
 
@@ -141,12 +193,15 @@ function handleScroll(event: UiohookWheelEvent): void {
   // Accumulate scroll amount
   scrollSessionAmount += event.rotation;
 
+  // Get current timeout value (reads live setting)
+  const scrollTimeout = getConfig().SCROLL_SESSION_TIMEOUT_MS;
+
   // Set timeout to detect when scrolling stops
   scrollSessionTimeoutId = setTimeout(() => {
     if (!isScrolling) return;
 
     isScrolling = false;
-    const endTime = Date.now() - INTERACTION_MONITOR_CONFIG.SCROLL_SESSION_TIMEOUT_MS;
+    const endTime = Date.now() - scrollTimeout;
     const durationMs = endTime - scrollSessionStartTime;
 
     console.log(`[Interaction Monitor] Scroll session ended: ${scrollSessionAmount} rotation over ${durationMs}ms`);
@@ -170,7 +225,7 @@ function handleScroll(event: UiohookWheelEvent): void {
     // Reset session tracking
     scrollSessionAmount = 0;
     scrollSessionStartTime = 0;
-  }, INTERACTION_MONITOR_CONFIG.SCROLL_SESSION_TIMEOUT_MS);
+  }, scrollTimeout);
 }
 
 /**
@@ -178,7 +233,8 @@ function handleScroll(event: UiohookWheelEvent): void {
  * Called periodically by interval timer
  */
 async function checkAppChange(): Promise<void> {
-  if (!INTERACTION_MONITOR_CONFIG.TRACK_APP_CHANGE) {
+  const config = getConfig();
+  if (!config.TRACK_APP_CHANGE) {
     return;
   }
 
@@ -234,7 +290,8 @@ export function startInteractionMonitoring(): void {
     return;
   }
 
-  if (!INTERACTION_MONITOR_CONFIG.ENABLED) {
+  const config = getConfig();
+  if (!config.ENABLED) {
     console.log('[Interaction Monitor] Disabled in config');
     return;
   }
@@ -244,15 +301,15 @@ export function startInteractionMonitoring(): void {
     isRunning = true;
 
     // Register event handlers
-    if (INTERACTION_MONITOR_CONFIG.TRACK_CLICKS) {
+    if (config.TRACK_CLICKS) {
       uIOhook.on('click', handleMouseClick);
     }
 
-    if (INTERACTION_MONITOR_CONFIG.TRACK_KEYBOARD) {
+    if (config.TRACK_KEYBOARD) {
       uIOhook.on('keydown', handleKeyboard);
     }
 
-    if (INTERACTION_MONITOR_CONFIG.TRACK_SCROLL) {
+    if (config.TRACK_SCROLL) {
       uIOhook.on('wheel', handleScroll);
     }
 
@@ -261,13 +318,13 @@ export function startInteractionMonitoring(): void {
     console.log('[Interaction Monitor] uiohook started successfully');
 
     // Start app change polling
-    if (INTERACTION_MONITOR_CONFIG.TRACK_APP_CHANGE) {
+    if (config.TRACK_APP_CHANGE) {
       // Initialize current window
       checkAppChange().catch(console.error);
-      
+
       appChangeIntervalId = setInterval(() => {
         checkAppChange().catch(console.error);
-      }, INTERACTION_MONITOR_CONFIG.APP_CHANGE_POLL_MS);
+      }, config.APP_CHANGE_POLL_MS);
       console.log('[Interaction Monitor] App change polling started');
     }
   } catch (error) {

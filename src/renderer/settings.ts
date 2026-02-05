@@ -17,8 +17,35 @@ interface SettingsAPI {
   openExternal: (url: string) => Promise<void>;
 }
 
+interface CaptureSettings {
+  visualDetector: {
+    enabled: boolean;
+    dhashThresholdPercent: number;
+  };
+  interactionMonitor: {
+    enabled: boolean;
+    typingSessionTimeoutMs: number;
+    scrollSessionTimeoutMs: number;
+  };
+}
+
+interface CaptureSettingsResponse {
+  settings: CaptureSettings;
+  defaults: CaptureSettings;
+}
+
+interface CaptureSettingsAPI {
+  get: () => Promise<CaptureSettingsResponse>;
+  save: (partialSettings: Partial<CaptureSettings>) => Promise<SaveResult>;
+  reset: () => Promise<SaveResult>;
+}
+
 function getSettingsAPI(): SettingsAPI | undefined {
   return (window as unknown as { settingsAPI?: SettingsAPI }).settingsAPI;
+}
+
+function getCaptureSettingsAPI(): CaptureSettingsAPI | undefined {
+  return (window as unknown as { captureSettingsAPI?: CaptureSettingsAPI }).captureSettingsAPI;
 }
 
 const apiKeyInput = document.getElementById('api-key-input') as HTMLInputElement;
@@ -152,3 +179,129 @@ apiKeyInput.addEventListener('keydown', (e) => {
 window.addEventListener('focus', () => loadKeyStatus());
 
 loadKeyStatus();
+
+// ============================================
+// Capture Settings UI
+// ============================================
+
+const dhashThresholdSlider = document.getElementById('dhash-threshold') as HTMLInputElement;
+const dhashThresholdValue = document.getElementById('dhash-threshold-value') as HTMLSpanElement;
+const typingTimeoutSlider = document.getElementById('typing-timeout') as HTMLInputElement;
+const typingTimeoutValue = document.getElementById('typing-timeout-value') as HTMLSpanElement;
+const scrollTimeoutSlider = document.getElementById('scroll-timeout') as HTMLInputElement;
+const scrollTimeoutValue = document.getElementById('scroll-timeout-value') as HTMLSpanElement;
+const saveCaptureSettingsBtn = document.getElementById('save-capture-settings') as HTMLButtonElement;
+const resetCaptureSettingsBtn = document.getElementById('reset-capture-settings') as HTMLButtonElement;
+const captureSettingsMessageDiv = document.getElementById('capture-settings-message') as HTMLDivElement;
+
+function showCaptureSettingsMessage(text: string, type: 'success' | 'error'): void {
+  captureSettingsMessageDiv.textContent = text;
+  const baseClasses = 'mt-3 text-sm font-medium min-h-[20px]';
+  captureSettingsMessageDiv.className = `${baseClasses} ${type === 'success' ? 'text-zinc-300' : 'text-zinc-400'}`;
+
+  setTimeout(() => {
+    captureSettingsMessageDiv.textContent = '';
+    captureSettingsMessageDiv.className = baseClasses;
+  }, 3000);
+}
+
+function updateSliderDisplay(): void {
+  dhashThresholdValue.textContent = `${dhashThresholdSlider.value}%`;
+  typingTimeoutValue.textContent = `${typingTimeoutSlider.value}ms`;
+  scrollTimeoutValue.textContent = `${scrollTimeoutSlider.value}ms`;
+}
+
+async function loadCaptureSettings(retryCount = 0): Promise<void> {
+  const api = getCaptureSettingsAPI();
+  if (!api) {
+    if (retryCount < 3) {
+      setTimeout(() => loadCaptureSettings(retryCount + 1), 100);
+      return;
+    }
+    showCaptureSettingsMessage('Capture settings API unavailable', 'error');
+    return;
+  }
+
+  try {
+    const response = await api.get();
+    currentCaptureSettings = response.settings;
+    defaultCaptureSettings = response.defaults;
+
+    // Update sliders with current values
+    dhashThresholdSlider.value = String(response.settings.visualDetector.dhashThresholdPercent);
+    typingTimeoutSlider.value = String(response.settings.interactionMonitor.typingSessionTimeoutMs);
+    scrollTimeoutSlider.value = String(response.settings.interactionMonitor.scrollSessionTimeoutMs);
+
+    updateSliderDisplay();
+  } catch {
+    showCaptureSettingsMessage('Failed to load capture settings', 'error');
+  }
+}
+
+// Slider change event listeners
+dhashThresholdSlider.addEventListener('input', updateSliderDisplay);
+typingTimeoutSlider.addEventListener('input', updateSliderDisplay);
+scrollTimeoutSlider.addEventListener('input', updateSliderDisplay);
+
+// Save capture settings
+saveCaptureSettingsBtn.addEventListener('click', async () => {
+  const api = getCaptureSettingsAPI();
+  if (!api) {
+    showCaptureSettingsMessage('Capture settings API unavailable', 'error');
+    return;
+  }
+
+  saveCaptureSettingsBtn.disabled = true;
+  saveCaptureSettingsBtn.textContent = 'Saving...';
+
+  const partialSettings: Partial<CaptureSettings> = {
+    visualDetector: {
+      enabled: true,
+      dhashThresholdPercent: parseInt(dhashThresholdSlider.value, 10),
+    },
+    interactionMonitor: {
+      enabled: true,
+      typingSessionTimeoutMs: parseInt(typingTimeoutSlider.value, 10),
+      scrollSessionTimeoutMs: parseInt(scrollTimeoutSlider.value, 10),
+    },
+  };
+
+  const result = await api.save(partialSettings);
+
+  saveCaptureSettingsBtn.disabled = false;
+  saveCaptureSettingsBtn.textContent = 'Save';
+
+  if (result.success) {
+    showCaptureSettingsMessage('Capture settings saved', 'success');
+    await loadCaptureSettings();
+  } else {
+    showCaptureSettingsMessage(result.error || 'Failed to save settings', 'error');
+  }
+});
+
+// Reset to defaults
+resetCaptureSettingsBtn.addEventListener('click', async () => {
+  const api = getCaptureSettingsAPI();
+  if (!api) {
+    showCaptureSettingsMessage('Capture settings API unavailable', 'error');
+    return;
+  }
+
+  resetCaptureSettingsBtn.disabled = true;
+  resetCaptureSettingsBtn.textContent = 'Resetting...';
+
+  const result = await api.reset();
+
+  resetCaptureSettingsBtn.disabled = false;
+  resetCaptureSettingsBtn.textContent = 'Reset to Defaults';
+
+  if (result.success) {
+    showCaptureSettingsMessage('Settings reset to defaults', 'success');
+    await loadCaptureSettings();
+  } else {
+    showCaptureSettingsMessage(result.error || 'Failed to reset settings', 'error');
+  }
+});
+
+// Load capture settings on page load
+loadCaptureSettings();

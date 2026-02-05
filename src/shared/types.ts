@@ -66,3 +66,15 @@ export interface SearchFilters {
 export interface SearchOptions extends SearchFilters {
   limit?: number;
 }
+
+export interface CaptureSettings {
+  visualDetector: {
+    enabled: boolean;
+    dhashThresholdPercent: number;
+  };
+  interactionMonitor: {
+    enabled: boolean;
+    typingSessionTimeoutMs: number;
+    scrollSessionTimeoutMs: number;
+  };
+}

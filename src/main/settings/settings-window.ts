@@ -1,7 +1,9 @@
 import { BrowserWindow, ipcMain, IpcMainInvokeEvent } from 'electron';
 import path from 'node:path';
 import { ApiKeyManager } from './api-key-manager';
+import { CaptureSettingsManager } from './capture-settings-manager';
 import { SemanticClassifierService } from '../processor/semantic-classifier';
+import { CaptureSettings } from '../../shared/types';
 
 let settingsWindow: BrowserWindow | null = null;
 
@@ -93,6 +95,44 @@ export function initSettingsIPC(apiKeyManager: ApiKeyManager, classifier?: Seman
   ipcMain.on('settings:close', () => {
     if (settingsWindow && !settingsWindow.isDestroyed()) {
       settingsWindow.close();
+    }
+  });
+}
+
+/**
+ * Initialize IPC handlers for capture settings
+ */
+export function initCaptureSettingsIPC(captureSettingsManager: CaptureSettingsManager): void {
+  console.log('[SettingsIPC] Initializing capture settings IPC handlers...');
+
+  // Get current capture settings
+  ipcMain.handle('capture-settings:get', () => {
+    console.log('[SettingsIPC] capture-settings:get handler called');
+    const settings = captureSettingsManager.getSettings();
+    const defaults = captureSettingsManager.getDefaultSettings();
+    console.log('[SettingsIPC] Returning capture settings:', settings);
+    return { settings, defaults };
+  });
+
+  // Save capture settings (partial update)
+  ipcMain.handle('capture-settings:save', (_event: IpcMainInvokeEvent, partialSettings: Partial<CaptureSettings>) => {
+    try {
+      captureSettingsManager.saveSettings(partialSettings);
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: message };
+    }
+  });
+
+  // Reset capture settings to defaults
+  ipcMain.handle('capture-settings:reset', () => {
+    try {
+      captureSettingsManager.resetToDefaults();
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: message };
     }
   });
 }

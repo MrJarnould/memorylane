@@ -18,3 +18,15 @@ contextBridge.exposeInMainWorld('settingsAPI', {
 });
 
 console.log('[Preload] settingsAPI exposed to renderer');
+
+// Expose capture settings API to renderer
+contextBridge.exposeInMainWorld('captureSettingsAPI', {
+  get: () => {
+    console.log('[Preload] captureSettings.get called, invoking IPC...');
+    return ipcRenderer.invoke('capture-settings:get');
+  },
+  save: (partialSettings: unknown) => ipcRenderer.invoke('capture-settings:save', partialSettings),
+  reset: () => ipcRenderer.invoke('capture-settings:reset'),
+});
+
+console.log('[Preload] captureSettingsAPI exposed to renderer');

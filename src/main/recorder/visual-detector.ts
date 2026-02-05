@@ -1,9 +1,35 @@
 import { desktopCapturer } from 'electron';
-import { VISUAL_DETECTOR_CONFIG } from '../../shared/constants';
+import { DEFAULT_VISUAL_DETECTOR_CONFIG } from '../../shared/constants';
+import { CaptureSettingsManager } from '../settings/capture-settings-manager';
 
 // State
 let baselineHash: string | null = null;
 let isRunning = false;
+let settingsManager: CaptureSettingsManager | null = null;
+
+/**
+ * Initialize visual detector with settings manager
+ */
+export function initVisualDetector(manager: CaptureSettingsManager): void {
+  settingsManager = manager;
+  console.log('[Visual Detector] Initialized with settings manager');
+}
+
+/**
+ * Get current visual detector settings
+ */
+function getConfig() {
+  if (settingsManager) {
+    const settings = settingsManager.getSettings();
+    return {
+      ENABLED: settings.visualDetector.enabled,
+      DHASH_THRESHOLD_PERCENT: settings.visualDetector.dhashThresholdPercent,
+      SAMPLE_WIDTH: DEFAULT_VISUAL_DETECTOR_CONFIG.SAMPLE_WIDTH,
+      SAMPLE_HEIGHT: DEFAULT_VISUAL_DETECTOR_CONFIG.SAMPLE_HEIGHT,
+    };
+  }
+  return DEFAULT_VISUAL_DETECTOR_CONFIG;
+}
 
 /**
  * Calculate difference hash (dHash) for perceptual comparison
@@ -52,11 +78,12 @@ function hammingDistance(hash1: string | null, hash2: string | null): number {
  * Capture a lightweight sample of the screen for comparison
  */
 async function captureSample(): Promise<Buffer> {
+  const config = getConfig();
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
     thumbnailSize: {
-      width: VISUAL_DETECTOR_CONFIG.SAMPLE_WIDTH,
-      height: VISUAL_DETECTOR_CONFIG.SAMPLE_HEIGHT,
+      width: config.SAMPLE_WIDTH,
+      height: config.SAMPLE_HEIGHT,
     },
   });
 
@@ -88,21 +115,22 @@ export async function checkAgainstBaseline(): Promise<{changed: boolean, differe
   }
 
   try {
+    const config = getConfig();
     const currentImageData = await captureSample();
     const currentHash = calculateDHash(
       currentImageData,
-      VISUAL_DETECTOR_CONFIG.SAMPLE_WIDTH,
-      VISUAL_DETECTOR_CONFIG.SAMPLE_HEIGHT
+      config.SAMPLE_WIDTH,
+      config.SAMPLE_HEIGHT
     );
 
     const difference = hammingDistance(baselineHash, currentHash);
 
     console.log(`[Visual Detector] Baseline comparison: ${difference.toFixed(1)}%`);
 
-    const changed = difference >= VISUAL_DETECTOR_CONFIG.DHASH_THRESHOLD_PERCENT;
-    
+    const changed = difference >= config.DHASH_THRESHOLD_PERCENT;
+
     if (changed) {
-      console.log(`[Visual Detector] Significant change detected (>=${VISUAL_DETECTOR_CONFIG.DHASH_THRESHOLD_PERCENT}%)`);
+      console.log(`[Visual Detector] Significant change detected (>=${config.DHASH_THRESHOLD_PERCENT}%)`);
     }
 
     return { changed, difference };
@@ -123,11 +151,12 @@ export async function updateBaseline(): Promise<void> {
   }
 
   try {
+    const config = getConfig();
     const currentImageData = await captureSample();
     baselineHash = calculateDHash(
       currentImageData,
-      VISUAL_DETECTOR_CONFIG.SAMPLE_WIDTH,
-      VISUAL_DETECTOR_CONFIG.SAMPLE_HEIGHT
+      config.SAMPLE_WIDTH,
+      config.SAMPLE_HEIGHT
     );
     console.log('[Visual Detector] Baseline updated');
   } catch (error) {
@@ -144,12 +173,13 @@ export function startVisualDetection(): void {
     return;
   }
 
-  if (!VISUAL_DETECTOR_CONFIG.ENABLED) {
+  const config = getConfig();
+  if (!config.ENABLED) {
     console.log('[Visual Detector] Disabled in config');
     return;
   }
 
-  console.log(`[Visual Detector] Starting (threshold: ${VISUAL_DETECTOR_CONFIG.DHASH_THRESHOLD_PERCENT}%)`);
+  console.log(`[Visual Detector] Starting (threshold: ${config.DHASH_THRESHOLD_PERCENT}%)`);
   isRunning = true;
   baselineHash = null;
 }
