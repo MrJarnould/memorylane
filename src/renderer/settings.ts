@@ -224,8 +224,6 @@ async function loadCaptureSettings(retryCount = 0): Promise<void> {
 
   try {
     const response = await api.get();
-    currentCaptureSettings = response.settings;
-    defaultCaptureSettings = response.defaults;
 
     // Update sliders with current values
     dhashThresholdSlider.value = String(response.settings.visualDetector.dhashThresholdPercent);
