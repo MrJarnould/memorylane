@@ -102,14 +102,14 @@ if (isMCPMode) {
     // Initialize API key manager for secure key storage
     apiKeyManager = new ApiKeyManager();
 
-    // Initialize settings IPC handlers
-    initSettingsIPC(apiKeyManager);
-
     // Initialize Processor Services
     const embeddingService = new EmbeddingService();
     const storageService = new StorageService(StorageService.getDefaultDbPath());
     const classifierService = new SemanticClassifierService(apiKeyManager.getApiKey() || undefined);
     processor = new EventProcessor(embeddingService, storageService, classifierService);
+
+    // Initialize settings IPC handlers (pass classifier so it can be updated when key changes)
+    initSettingsIPC(apiKeyManager, classifierService);
   };
 
   const createTray = () => {
@@ -144,6 +144,8 @@ if (isMCPMode) {
         try {
           await processor.processScreenshot(screenshot);
           console.log(`[Main] Screenshot processed successfully: ${screenshot.id}`);
+          // Refresh tray menu to show updated usage stats
+          void updateTrayMenu();
         } catch (error) {
           console.error(`[Main] Error processing screenshot ${screenshot.id}:`, error);
         }

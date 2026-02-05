@@ -27,9 +27,9 @@ export class SemanticClassifierService {
   private usageTracker: UsageTracker;
 
   constructor(apiKey?: string, model = 'mistralai/mistral-small-3.2-24b-instruct', maxHistorySize = 5, usageTracker?: UsageTracker) {
-    const key = apiKey || process.env.OPENROUTER_API_KEY;
-    if (key) {
-      this.client = new OpenRouter({ apiKey: key });
+    // Use provided key directly - caller (ApiKeyManager) handles env fallback
+    if (apiKey) {
+      this.client = new OpenRouter({ apiKey });
       console.log('[SemanticClassifier] Initialized with API key');
     } else {
       console.warn('[SemanticClassifier] No API key provided - classification disabled');
@@ -51,6 +51,8 @@ export class SemanticClassifierService {
    */
   public updateApiKey(apiKey: string | null): void {
     if (apiKey) {
+      // Clear env var to prevent SDK from reading it and potentially duplicating keys
+      delete process.env.OPENROUTER_API_KEY;
       this.client = new OpenRouter({ apiKey });
       console.log('[SemanticClassifier] API key updated');
     } else {
@@ -76,8 +78,6 @@ export class SemanticClassifierService {
 
       // Build the prompt with context
       const prompt = this.formatPrompt(input);
-
-      console.log(`[SemanticClassifier] Prompt: ${prompt}`);
 
       // Convert screenshots to base64
       const startImageData = this.imageToBase64(startScreenshot.filepath);
@@ -115,17 +115,17 @@ export class SemanticClassifierService {
       const summary = typeof messageContent === 'string' ? messageContent.trim() : 'No summary generated';
       console.log(`[SemanticClassifier] Summary: ${summary}`);
 
-      if (response.usage) {
-        const promptTokens = response.usage.promptTokens || 0;
-        const completionTokens = response.usage.completionTokens || 0;
-        const cost = (promptTokens / 1_000_000) * MODEL_COSTS[this.model].input_tokens_per_million + (completionTokens / 1_000_000) * MODEL_COSTS[this.model].completion_tokens_per_million;
-        this.usageTracker.recordUsage({
-          prompt_tokens: promptTokens,
-          completion_tokens: completionTokens,
-          cost: cost,
-        });
-        console.log(`[SemanticClassifier] Usage tracked - Tokens: ${response.usage.promptTokens}/${response.usage.completionTokens}, Cost: $${((response.usage as any).cost)?.toFixed(4) || 0}`);
-      }
+      // Track usage - always increment request count for successful calls
+      const promptTokens = response.usage?.promptTokens || 0;
+      const completionTokens = response.usage?.completionTokens || 0;
+      const cost = (promptTokens / 1_000_000) * MODEL_COSTS[this.model].input_tokens_per_million + (completionTokens / 1_000_000) * MODEL_COSTS[this.model].completion_tokens_per_million;
+      this.usageTracker.recordUsage({
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        cost: cost,
+      });
+      console.log(`[SemanticClassifier] Usage tracked - Tokens: ${promptTokens}/${completionTokens}, Cost: $${cost.toFixed(6)}`);
+      console.log(`[SemanticClassifier] Total stats: ${JSON.stringify(this.usageTracker.getStats())}`);
 
       // Store in history
       const result: ClassificationResult = {

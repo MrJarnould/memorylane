@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain, IpcMainInvokeEvent } from 'electron';
 import path from 'node:path';
 import { ApiKeyManager } from './api-key-manager';
+import { SemanticClassifierService } from '../processor/semantic-classifier';
 
 let settingsWindow: BrowserWindow | null = null;
 
@@ -41,10 +42,14 @@ export function openSettingsWindow(): void {
   });
 }
 
+let classifierService: SemanticClassifierService | null = null;
+
 /**
  * Initialize IPC handlers for settings
  */
-export function initSettingsIPC(apiKeyManager: ApiKeyManager): void {
+export function initSettingsIPC(apiKeyManager: ApiKeyManager, classifier?: SemanticClassifierService): void {
+  classifierService = classifier || null;
+
   // Get current key status
   ipcMain.handle('settings:getKeyStatus', () => {
     return apiKeyManager.getKeyStatus();
@@ -54,6 +59,10 @@ export function initSettingsIPC(apiKeyManager: ApiKeyManager): void {
   ipcMain.handle('settings:saveApiKey', (_event: IpcMainInvokeEvent, key: string) => {
     try {
       apiKeyManager.saveApiKey(key);
+      // Update the classifier with the new API key
+      if (classifierService) {
+        classifierService.updateApiKey(key);
+      }
       return { success: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -65,6 +74,10 @@ export function initSettingsIPC(apiKeyManager: ApiKeyManager): void {
   ipcMain.handle('settings:deleteApiKey', () => {
     try {
       apiKeyManager.deleteApiKey();
+      // Clear the API key from the classifier
+      if (classifierService) {
+        classifierService.updateApiKey(null);
+      }
       return { success: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
