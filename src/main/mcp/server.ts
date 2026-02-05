@@ -15,6 +15,7 @@ import { EventProcessor } from '../processor/index';
 import { StorageService, StoredEvent } from '../processor/storage';
 import { EmbeddingService } from '../processor/embedding';
 import { getDefaultDbPath } from '../paths';
+import log from '../logger';
 
 const SERVER_NAME = 'memorylane';
 const SERVER_VERSION = '1.0.0';
@@ -215,7 +216,7 @@ export class MemoryLaneMCPServer {
         ],
       };
     } catch (error) {
-      console.error('Error searching context:', error);
+      log.error('Error searching context:', error);
       return {
         content: [
           {
@@ -284,10 +285,10 @@ export class MemoryLaneMCPServer {
     try {
       if (!fs.existsSync(resolvedPath)) {
         // Just a warning, not an error - database might be created on first write
-        console.error(`Warning: Database path does not exist: ${resolvedPath}`);
+        log.error(`Warning: Database path does not exist: ${resolvedPath}`);
       }
 
-      console.error(`Initializing services with DB path: ${resolvedPath}`);
+      log.error(`Initializing services with DB path: ${resolvedPath}`);
       
       const storageService = new StorageService(resolvedPath);
       await storageService.init();
@@ -296,9 +297,9 @@ export class MemoryLaneMCPServer {
       await embeddingService.init();
 
       this.eventProcessor = new EventProcessor(embeddingService, storageService);
-      console.error('Services initialized successfully');
+      log.error('Services initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize services:', error);
+      log.error('Failed to initialize services:', error);
       // We allow the server to start even if services fail, but tools will report errors
     }
   }
@@ -314,7 +315,7 @@ export class MemoryLaneMCPServer {
     await this.server.connect(transport);
     
     // Log to stderr so it doesn't interfere with MCP protocol on stdout
-    console.error(`${SERVER_NAME} MCP server started`);
+    log.error(`${SERVER_NAME} MCP server started`);
   }
 
   /**
