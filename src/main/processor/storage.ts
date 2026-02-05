@@ -183,8 +183,9 @@ export class StorageService {
     }
     if (filters.appName !== undefined) {
       // Escape single quotes in app name
+      // Use backticks around column name to preserve case (LanceDB normalizes unquoted names to lowercase)
       const escapedAppName = filters.appName.replace(/'/g, "''");
-      conditions.push(`appName = '${escapedAppName}'`);
+      conditions.push(`\`appName\` = '${escapedAppName}'`);
     }
 
     return conditions.length > 0 ? conditions.join(' AND ') : null;
