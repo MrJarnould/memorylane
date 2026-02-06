@@ -31,6 +31,7 @@ if (isMCPMode) {
   configureMCPMode()
 }
 import path from 'node:path'
+import fs from 'node:fs'
 import { EventProcessor } from './processor/index'
 import { EmbeddingService } from './processor/embedding'
 import { StorageService } from './processor/storage'
@@ -364,8 +365,23 @@ if (isMCPMode) {
     tray.setContextMenu(contextMenu)
   }
 
-  // This method will be called when Electron has finished initialization
+  const cleanupOldLanceDbDirs = (): void => {
+    const userDataPath = app.getPath('userData')
+    for (const dirName of ['lancedb', 'lancedb-dev']) {
+      const dirPath = path.join(userDataPath, dirName)
+      if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+        try {
+          fs.rmSync(dirPath, { recursive: true, force: true })
+          log.info(`Removed old LanceDB directory: ${dirPath}`)
+        } catch (error) {
+          log.warn(`Failed to remove old LanceDB directory ${dirPath}:`, error)
+        }
+      }
+    }
+  }
+
   app.on('ready', async () => {
+    cleanupOldLanceDbDirs()
     await initRecorderMode()
     createTray()
     log.info('MemoryLane started. Screenshots will be saved to:', recorder.getScreenshotsDir())

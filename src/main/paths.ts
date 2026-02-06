@@ -2,22 +2,20 @@ import * as path from 'path'
 import * as os from 'os'
 
 /**
- * Gets the default path for the LanceDB database.
- * This is primarily used when running outside of the main Electron process (e.g. CLI tools, MCP server standalone).
+ * Gets the default path for the SQLite database file.
+ * Used when running outside of the main Electron process (e.g. CLI tools, MCP server standalone).
  * In the main Electron process, it is preferred to use app.getPath('userData').
  */
 export function getDefaultDbPath(): string {
-  const dbDir = isDev() ? 'lancedb-dev' : 'lancedb'
+  const dbFile = isDev() ? 'memorylane-dev.db' : 'memorylane.db'
 
-  // Check if running in Electron (using process.versions.electron)
   if (process.versions.electron) {
     try {
-      // Dynamic import would be ideal, but this is a synchronous function.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { app } = require('electron')
       if (app) {
         const userDataPath = app.getPath('userData')
-        return path.join(userDataPath, dbDir)
+        return path.join(userDataPath, dbFile)
       }
     } catch {
       // Ignore error if electron module is not available or app is not ready
@@ -26,13 +24,12 @@ export function getDefaultDbPath(): string {
 
   // Fallback for CLI / Standalone mode (mimic Electron's default paths)
   if (process.platform === 'darwin') {
-    return path.join(os.homedir(), 'Library', 'Application Support', 'memorylane', dbDir)
+    return path.join(os.homedir(), 'Library', 'Application Support', 'memorylane', dbFile)
   }
   if (process.platform === 'win32') {
-    return path.join(process.env.APPDATA || '', 'memorylane', dbDir)
+    return path.join(process.env.APPDATA || '', 'memorylane', dbFile)
   }
-  // Linux and others
-  return path.join(os.homedir(), '.config', 'memorylane', dbDir)
+  return path.join(os.homedir(), '.config', 'memorylane', dbFile)
 }
 
 function isDev(): boolean {
