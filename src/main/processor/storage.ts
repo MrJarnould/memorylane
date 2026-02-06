@@ -1,4 +1,5 @@
-import * as lancedb from '@lancedb/lancedb'
+import Database from 'better-sqlite3'
+import * as sqliteVec from 'sqlite-vec'
 import * as fs from 'fs'
 import * as path from 'path'
 import { getDefaultDbPath } from '../paths'
@@ -8,20 +9,33 @@ import log from '../logger'
 export interface StoredEvent extends Record<string, unknown> {
   id: string
   timestamp: number
-  text: string // OCR extracted text
-  summary: string // LLM-generated activity summary
-  appName: string // Active app (e.g., "VS Code", "Chrome")
+  text: string
+  summary: string
+  appName: string
   vector: number[]
+}
+
+interface StorageOptions {
+  readonly vectorDimensions?: number
+}
+
+interface CountRow {
+  readonly count: number
+}
+
+interface DateRangeRow {
+  readonly oldest: number | null
+  readonly newest: number | null
 }
 
 export class StorageService {
   private dbPath: string
-  private dbInstance: lancedb.Connection | null = null
-  private tableInstance: lancedb.Table | null = null
-  private readonly TABLE_NAME = 'context_events'
+  private db: Database.Database | null = null
+  private readonly vectorDimensions: number
 
-  constructor(dbPath: string) {
+  constructor(dbPath: string, options?: StorageOptions) {
     this.dbPath = dbPath
+    this.vectorDimensions = options?.vectorDimensions ?? 384
   }
 
   /**
@@ -32,158 +46,163 @@ export class StorageService {
   }
 
   /**
-   * Initializes the connection and ensures the directory exists.
+   * Initializes the SQLite database, creates tables and indexes.
    */
   public async init(): Promise<void> {
-    if (this.dbInstance) return
+    if (this.db) return
 
-    // Ensure directory exists
-    if (!fs.existsSync(this.dbPath)) {
-      fs.mkdirSync(this.dbPath, { recursive: true })
+    const dir = path.dirname(this.dbPath)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
     }
 
-    log.info(`Initializing LanceDB at: ${this.dbPath}`)
-    this.dbInstance = await lancedb.connect(this.dbPath)
+    log.info(`Initializing SQLite database at: ${this.dbPath}`)
+    this.db = new Database(this.dbPath)
 
-    // Check if table exists
-    const tableNames = await this.dbInstance.tableNames()
-    if (tableNames.includes(this.TABLE_NAME)) {
-      this.tableInstance = await this.dbInstance.openTable(this.TABLE_NAME)
-    } else {
-      log.info(`Table '${this.TABLE_NAME}' does not exist. It will be created on first insertion.`)
-    }
+    this.db.pragma('journal_mode = WAL')
+
+    sqliteVec.load(this.db)
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS context_events (
+        id TEXT PRIMARY KEY,
+        timestamp INTEGER NOT NULL,
+        text TEXT NOT NULL DEFAULT '',
+        summary TEXT NOT NULL DEFAULT '',
+        appName TEXT NOT NULL DEFAULT '',
+        vector BLOB
+      )
+    `)
+
+    this.db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_context_events_timestamp ON context_events(timestamp)',
+    )
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_context_events_appName ON context_events(appName)')
+
+    this.db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS context_events_fts USING fts5(
+        text,
+        summary,
+        content='context_events',
+        content_rowid='rowid'
+      )
+    `)
+
+    this.db.exec(`
+      CREATE TRIGGER IF NOT EXISTS context_events_ai AFTER INSERT ON context_events BEGIN
+        INSERT INTO context_events_fts(rowid, text, summary)
+          VALUES (new.rowid, new.text, new.summary);
+      END
+    `)
+
+    this.db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS context_events_vec USING vec0(
+        id TEXT PRIMARY KEY,
+        embedding float[${this.vectorDimensions}]
+      )
+    `)
+
+    log.info('SQLite database initialized successfully')
   }
 
   /**
    * Adds an event to the storage.
    */
   public async addEvent(event: StoredEvent): Promise<void> {
-    if (!this.dbInstance) {
+    if (!this.db) {
       await this.init()
     }
+    if (!this.db) throw new Error('Failed to initialize SQLite database')
 
-    if (!this.dbInstance) throw new Error('Failed to initialize LanceDB connection')
+    const vectorBlob = this.vectorToBlob(event.vector)
 
-    const data = [event]
+    const insert = this.db.transaction(() => {
+      this.db!.prepare(
+        `INSERT INTO context_events (id, timestamp, text, summary, appName, vector)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(event.id, event.timestamp, event.text, event.summary, event.appName, vectorBlob)
 
-    if (!this.tableInstance) {
-      // Check again if table exists (race condition check)
-      const tableNames = await this.dbInstance.tableNames()
-      if (tableNames.includes(this.TABLE_NAME)) {
-        this.tableInstance = await this.dbInstance.openTable(this.TABLE_NAME)
-        await this.tableInstance.add(data)
-      } else {
-        // Create table
-        this.tableInstance = await this.dbInstance.createTable(this.TABLE_NAME, data)
+      this.db!.prepare(
+        `INSERT INTO context_events_vec (id, embedding)
+         VALUES (?, ?)`,
+      ).run(event.id, vectorBlob)
+    })
 
-        // Create FTS index on the 'text' column
-        await this.tableInstance.createIndex('text', {
-          config: lancedb.Index.fts(),
-          replace: true,
-        })
-        log.info('Created FTS index on "text" column.')
-
-        // Create FTS index on the 'summary' column
-        await this.tableInstance.createIndex('summary', {
-          config: lancedb.Index.fts(),
-          replace: true,
-        })
-        log.info('Created FTS index on "summary" column.')
-      }
-    } else {
-      await this.tableInstance.add(data)
-    }
+    insert()
   }
 
   /**
-   * Helper to normalize a record's vector to a plain number array.
-   */
-  private normalizeVector(record: Record<string, unknown>): StoredEvent {
-    const rawVector = record.vector
-    let vector: number[] = []
-    if (Array.isArray(rawVector)) {
-      vector = rawVector as number[]
-    } else if (
-      rawVector !== null &&
-      rawVector !== undefined &&
-      typeof (rawVector as Record<string, unknown>).toArray === 'function'
-    ) {
-      vector = (rawVector as { toArray: () => number[] }).toArray()
-    } else if (rawVector !== null && rawVector !== undefined) {
-      vector = Array.from(rawVector as Iterable<number>)
-    }
-
-    return {
-      ...record,
-      vector,
-    } as StoredEvent
-  }
-
-  /**
-   * Retrieves an event by ID (helper for testing/verification).
+   * Retrieves an event by ID.
    */
   public async getEventById(id: string): Promise<StoredEvent | null> {
-    if (!this.tableInstance) return null
+    if (!this.db) {
+      await this.init()
+    }
+    if (!this.db) return null
 
-    const results = await this.tableInstance.query().where(`id = '${id}'`).limit(1).toArray()
+    const row = this.db
+      .prepare(
+        'SELECT id, timestamp, text, summary, appName, vector FROM context_events WHERE id = ?',
+      )
+      .get(id) as Record<string, unknown> | undefined
 
-    if (results.length === 0) return null
-
-    return this.normalizeVector(results[0])
+    if (!row) return null
+    return this.rowToStoredEvent(row)
   }
 
   /**
-   * Full-text search using FTS index.
+   * Full-text search across text and summary columns.
    */
   public async searchFTS(query: string, limit = 5): Promise<StoredEvent[]> {
-    if (!this.tableInstance) {
+    if (!this.db) {
       await this.init()
     }
+    if (!this.db) return []
 
-    if (!this.tableInstance) return []
+    const count = this.getRowCount()
+    if (count === 0) return []
 
-    const results = await this.tableInstance.search(query).limit(limit).toArray()
+    const rows = this.db
+      .prepare(
+        `SELECT ce.id, ce.timestamp, ce.text, ce.summary, ce.appName, ce.vector
+         FROM context_events_fts fts
+         JOIN context_events ce ON ce.rowid = fts.rowid
+         WHERE context_events_fts MATCH ?
+         LIMIT ?`,
+      )
+      .all(query, limit) as Record<string, unknown>[]
 
-    return results.map((record) => this.normalizeVector(record))
+    return rows.map((row) => this.rowToStoredEvent(row))
   }
 
   /**
    * Vector similarity search.
    */
   public async searchVectors(queryVector: number[], limit = 5): Promise<StoredEvent[]> {
-    if (!this.tableInstance) {
+    if (!this.db) {
       await this.init()
     }
+    if (!this.db) return []
 
-    if (!this.tableInstance) return []
+    const count = this.getRowCount()
+    if (count === 0) return []
 
-    const results = await this.tableInstance.vectorSearch(queryVector).limit(limit).toArray()
+    const vectorBlob = this.vectorToBlob(queryVector)
 
-    return results.map((record) => this.normalizeVector(record))
-  }
+    const rows = this.db
+      .prepare(
+        `SELECT ce.id, ce.timestamp, ce.text, ce.summary, ce.appName, ce.vector
+         FROM (
+           SELECT id, distance
+           FROM context_events_vec
+           WHERE embedding MATCH ?
+           AND k = ?
+         ) vec
+         JOIN context_events ce ON ce.id = vec.id`,
+      )
+      .all(vectorBlob, limit) as Record<string, unknown>[]
 
-  /**
-   * Builds a WHERE clause string from search filters.
-   */
-  private buildWhereClause(filters?: SearchFilters): string | null {
-    if (!filters) return null
-
-    const conditions: string[] = []
-
-    if (filters.startTime !== undefined) {
-      conditions.push(`timestamp >= ${filters.startTime}`)
-    }
-    if (filters.endTime !== undefined) {
-      conditions.push(`timestamp <= ${filters.endTime}`)
-    }
-    if (filters.appName !== undefined) {
-      // Escape single quotes in app name
-      // Use backticks around column name to preserve case (LanceDB normalizes unquoted names to lowercase)
-      const escapedAppName = filters.appName.replace(/'/g, "''")
-      conditions.push(`\`appName\` = '${escapedAppName}'`)
-    }
-
-    return conditions.length > 0 ? conditions.join(' AND ') : null
+    return rows.map((row) => this.rowToStoredEvent(row))
   }
 
   /**
@@ -194,159 +213,156 @@ export class StorageService {
     limit = 5,
     filters?: SearchFilters,
   ): Promise<StoredEvent[]> {
-    if (!this.tableInstance) {
+    if (!this.db) {
       await this.init()
     }
+    if (!this.db) return []
 
-    if (!this.tableInstance) return []
+    const count = this.getRowCount()
+    if (count === 0) return []
 
-    let query = this.tableInstance.vectorSearch(queryVector)
+    const hasFilters =
+      filters &&
+      (filters.startTime !== undefined ||
+        filters.endTime !== undefined ||
+        filters.appName !== undefined)
 
-    const whereClause = this.buildWhereClause(filters)
-    if (whereClause) {
-      query = query.where(whereClause)
+    if (!hasFilters) {
+      return this.searchVectors(queryVector, limit)
     }
 
-    const results = await query.limit(limit).toArray()
+    const vectorBlob = this.vectorToBlob(queryVector)
+    const overFetchLimit = Math.max(limit * 10, count)
+    const { conditions, params } = this.buildFilterConditions(filters)
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
-    return results.map((record) => this.normalizeVector(record))
+    const rows = this.db
+      .prepare(
+        `SELECT ce.id, ce.timestamp, ce.text, ce.summary, ce.appName, ce.vector
+         FROM (
+           SELECT id, distance
+           FROM context_events_vec
+           WHERE embedding MATCH ?
+           AND k = ?
+         ) vec
+         JOIN context_events ce ON ce.id = vec.id
+         ${whereClause}
+         ORDER BY vec.distance
+         LIMIT ?`,
+      )
+      .all(vectorBlob, overFetchLimit, ...params, limit) as Record<string, unknown>[]
+
+    return rows.map((row) => this.rowToStoredEvent(row))
   }
 
   /**
-   * FTS search on text and summary columns with optional filters.
-   * LanceDB FTS indexes are per-column, so we search both and merge results.
+   * FTS search across text and summary columns with optional filters.
    */
   public async searchFTSWithFilters(
     searchQuery: string,
     limit = 5,
     filters?: SearchFilters,
   ): Promise<StoredEvent[]> {
-    if (!this.tableInstance) {
+    if (!this.db) {
       await this.init()
     }
+    if (!this.db) return []
 
-    if (!this.tableInstance) return []
+    const count = this.getRowCount()
+    if (count === 0) return []
 
-    const whereClause = this.buildWhereClause(filters)
-    const uniqueResults = new Map<string, StoredEvent>()
+    const { conditions, params } = this.buildFilterConditions(filters)
+    const filterClause = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : ''
 
-    // Search on 'text' column (OCR)
-    try {
-      let textQuery = this.tableInstance.search(searchQuery)
-      if (whereClause) {
-        textQuery = textQuery.where(whereClause)
-      }
-      const textResults = await textQuery.limit(limit).toArray()
-      textResults.forEach((record) => {
-        const normalized = this.normalizeVector(record)
-        uniqueResults.set(normalized.id, normalized)
-      })
-    } catch (error) {
-      log.warn('FTS search on text column failed:', error)
-    }
+    const rows = this.db
+      .prepare(
+        `SELECT ce.id, ce.timestamp, ce.text, ce.summary, ce.appName, ce.vector
+         FROM context_events_fts fts
+         JOIN context_events ce ON ce.rowid = fts.rowid
+         WHERE context_events_fts MATCH ?
+         ${filterClause}
+         LIMIT ?`,
+      )
+      .all(searchQuery, ...params, limit) as Record<string, unknown>[]
 
-    // Search on 'summary' column
-    try {
-      let summaryQuery = this.tableInstance.search(searchQuery, 'summary')
-      if (whereClause) {
-        summaryQuery = summaryQuery.where(whereClause)
-      }
-      const summaryResults = await summaryQuery.limit(limit).toArray()
-      summaryResults.forEach((record) => {
-        const normalized = this.normalizeVector(record)
-        if (!uniqueResults.has(normalized.id)) {
-          uniqueResults.set(normalized.id, normalized)
-        }
-      })
-    } catch (error) {
-      log.warn('FTS search on summary column failed:', error)
-    }
-
-    // Return up to limit results
-    return Array.from(uniqueResults.values()).slice(0, limit)
+    return rows.map((row) => this.rowToStoredEvent(row))
   }
 
   /**
-   * Returns the total number of events in the database.
-   */
-  public async countRows(): Promise<number> {
-    if (!this.tableInstance) {
-      await this.init()
-    }
-
-    if (!this.tableInstance) return 0
-
-    return await this.tableInstance.countRows()
-  }
-
-  /**
-   * Returns the date range (oldest and newest timestamps) in the database.
-   */
-  public async getDateRange(): Promise<{ oldest: number | null; newest: number | null }> {
-    if (!this.tableInstance) {
-      await this.init()
-    }
-
-    if (!this.tableInstance) return { oldest: null, newest: null }
-
-    const allTimestamps = await this.tableInstance.query().select(['timestamp']).toArray()
-
-    if (allTimestamps.length === 0) {
-      return { oldest: null, newest: null }
-    }
-
-    const timestamps = allTimestamps.map((r) => r.timestamp as number)
-    return {
-      oldest: Math.min(...timestamps),
-      newest: Math.max(...timestamps),
-    }
-  }
-
-  /**
-   * Lightweight event type for time-based queries (no vector/text).
+   * Returns events within a time range, sorted by timestamp ascending.
    */
   public async getEventsByTimeRange(
     startTime: number | null = null,
     endTime: number | null = null,
     options?: { includeText?: boolean },
   ): Promise<Omit<StoredEvent, 'vector'>[]> {
-    if (!this.tableInstance) {
+    if (!this.db) {
       await this.init()
     }
-
-    if (!this.tableInstance) return []
+    if (!this.db) return []
 
     const includeText = options?.includeText ?? false
-    const selectFields = includeText
-      ? ['id', 'timestamp', 'summary', 'appName', 'text']
-      : ['id', 'timestamp', 'summary', 'appName']
-
-    let query = this.tableInstance.query().select(selectFields)
-
-    // Build where clause only for provided time bounds
     const conditions: string[] = []
+    const params: unknown[] = []
+
     if (startTime !== null) {
-      conditions.push(`timestamp >= ${startTime}`)
+      conditions.push('timestamp >= ?')
+      params.push(startTime)
     }
     if (endTime !== null) {
-      conditions.push(`timestamp <= ${endTime}`)
-    }
-    if (conditions.length > 0) {
-      query = query.where(conditions.join(' AND '))
+      conditions.push('timestamp <= ?')
+      params.push(endTime)
     }
 
-    const results = await query.toArray()
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
-    // Sort by timestamp ascending
-    const sorted = results.sort((a, b) => (a.timestamp as number) - (b.timestamp as number))
+    const rows = this.db
+      .prepare(
+        `SELECT id, timestamp, summary, appName${includeText ? ', text' : ''}
+         FROM context_events
+         ${whereClause}
+         ORDER BY timestamp ASC`,
+      )
+      .all(...params) as Record<string, unknown>[]
 
-    return sorted.map((record) => ({
-      id: record.id as string,
-      timestamp: record.timestamp as number,
-      summary: record.summary as string,
-      appName: record.appName as string,
-      text: includeText ? (record.text as string) : '',
+    return rows.map((row) => ({
+      id: row.id as string,
+      timestamp: row.timestamp as number,
+      summary: row.summary as string,
+      appName: row.appName as string,
+      text: includeText ? (row.text as string) : '',
     }))
+  }
+
+  /**
+   * Returns the total number of events in the database.
+   */
+  public async countRows(): Promise<number> {
+    if (!this.db) {
+      await this.init()
+    }
+    if (!this.db) return 0
+
+    return this.getRowCount()
+  }
+
+  /**
+   * Returns the date range (oldest and newest timestamps) in the database.
+   */
+  public async getDateRange(): Promise<{ oldest: number | null; newest: number | null }> {
+    if (!this.db) {
+      await this.init()
+    }
+    if (!this.db) return { oldest: null, newest: null }
+
+    const result = this.db
+      .prepare('SELECT MIN(timestamp) as oldest, MAX(timestamp) as newest FROM context_events')
+      .get() as DateRangeRow
+
+    return {
+      oldest: result.oldest ?? null,
+      newest: result.newest ?? null,
+    }
   }
 
   /**
@@ -357,38 +373,80 @@ export class StorageService {
   }
 
   /**
-   * Returns the total size of the database directory in bytes.
+   * Returns the size of the database file in bytes.
    */
   public getDbSize(): number {
     if (!fs.existsSync(this.dbPath)) return 0
-
-    const getDirectorySize = (dirPath: string): number => {
-      let totalSize = 0
-
-      const items = fs.readdirSync(dirPath)
-
-      for (const item of items) {
-        const itemPath = path.join(dirPath, item)
-        const stats = fs.statSync(itemPath)
-
-        if (stats.isDirectory()) {
-          totalSize += getDirectorySize(itemPath)
-        } else {
-          totalSize += stats.size
-        }
-      }
-
-      return totalSize
-    }
-
-    return getDirectorySize(this.dbPath)
+    return fs.statSync(this.dbPath).size
   }
 
   /**
-   * Closes the connection (mostly for cleanup/testing).
+   * Closes the database connection.
    */
   public async close(): Promise<void> {
-    this.dbInstance = null
-    this.tableInstance = null
+    if (this.db) {
+      this.db.close()
+      this.db = null
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  private getRowCount(): number {
+    if (!this.db) return 0
+    const result = this.db.prepare('SELECT COUNT(*) as count FROM context_events').get() as CountRow
+    return result.count
+  }
+
+  private vectorToBlob(vector: number[]): Buffer {
+    const float32 = new Float32Array(vector)
+    return Buffer.from(float32.buffer, float32.byteOffset, float32.byteLength)
+  }
+
+  private blobToVector(blob: Buffer): number[] {
+    const float32 = new Float32Array(
+      blob.buffer,
+      blob.byteOffset,
+      blob.byteLength / Float32Array.BYTES_PER_ELEMENT,
+    )
+    return Array.from(float32)
+  }
+
+  private rowToStoredEvent(row: Record<string, unknown>): StoredEvent {
+    return {
+      id: row.id as string,
+      timestamp: row.timestamp as number,
+      text: row.text as string,
+      summary: row.summary as string,
+      appName: row.appName as string,
+      vector: row.vector ? this.blobToVector(row.vector as Buffer) : [],
+    }
+  }
+
+  private buildFilterConditions(filters?: SearchFilters): {
+    conditions: string[]
+    params: unknown[]
+  } {
+    const conditions: string[] = []
+    const params: unknown[] = []
+
+    if (!filters) return { conditions, params }
+
+    if (filters.startTime !== undefined) {
+      conditions.push('ce.timestamp >= ?')
+      params.push(filters.startTime)
+    }
+    if (filters.endTime !== undefined) {
+      conditions.push('ce.timestamp <= ?')
+      params.push(filters.endTime)
+    }
+    if (filters.appName !== undefined) {
+      conditions.push('ce.appName = ?')
+      params.push(filters.appName)
+    }
+
+    return { conditions, params }
   }
 }
