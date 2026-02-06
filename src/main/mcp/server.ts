@@ -75,10 +75,10 @@ export class MemoryLaneMCPServer {
     appName,
   }: {
     query: string;
-    limit?: number;
-    startTime?: string;
-    endTime?: string;
-    appName?: string;
+    limit?: number | undefined;
+    startTime?: string | undefined;
+    endTime?: string | undefined;
+    appName?: string | undefined;
   }) {
     if (!this.eventProcessor) {
       return {

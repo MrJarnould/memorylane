@@ -48,7 +48,7 @@ export type OnScreenshotCallback = (screenshot: Screenshot) => void;
 
 export interface ClassificationInput {
   startScreenshot: Screenshot;
-  endScreenshot?: Screenshot;  // Optional for single-image mode (app change)
+  endScreenshot?: Screenshot | undefined;  // Optional for single-image mode (app change)
   events: InteractionContext[];
 }
 
@@ -58,13 +58,13 @@ export interface ClassificationResult {
 }
 
 export interface SearchFilters {
-  startTime?: number;  // Unix ms
-  endTime?: number;    // Unix ms
-  appName?: string;    // Exact match
+  startTime?: number | undefined;  // Unix ms
+  endTime?: number | undefined;    // Unix ms
+  appName?: string | undefined;    // Exact match
 }
 
 export interface SearchOptions extends SearchFilters {
-  limit?: number;
+  limit?: number | undefined;
 }
 
 export interface CaptureSettings {

@@ -4,30 +4,35 @@ import { ClassificationInput, ClassificationResult, InteractionContext } from '.
 import { UsageTracker } from '../services/usage-tracker';
 import log from '../logger';
 
-const MODEL_CHOICES: string[] = [
-  'mistralai/mistral-small-3.2-24b-instruct',
-];
-
-interface ModelCost {
-  input_tokens_per_million: number;
-  completion_tokens_per_million: number;
-}
-
-const MODEL_COSTS: Record<string, ModelCost> = {
+const SUPPORTED_MODELS = {
   'mistralai/mistral-small-3.2-24b-instruct': {
-    input_tokens_per_million: 0.06,
-    completion_tokens_per_million: 0.18,
-  }
-}
+    input_tokens_per_million: 0.08,
+    completion_tokens_per_million: 0.2,
+  },
+  'openai/gpt-5-nano': {
+    input_tokens_per_million: 0.05,
+    completion_tokens_per_million: 0.4,
+  },
+  'x-ai/grok-4.1-fast': {
+    input_tokens_per_million: 0.05,
+    completion_tokens_per_million: 0.4,
+  },
+  'google/gemini-2.5-flash-lite': {
+    input_tokens_per_million: 0.1,
+    completion_tokens_per_million: 0.4,
+  },
+} as const satisfies Record<string, { input_tokens_per_million: number; completion_tokens_per_million: number }>;
+
+export type ModelChoice = keyof typeof SUPPORTED_MODELS;
 
 export class SemanticClassifierService {
   private summaryHistory: ClassificationResult[] = [];
   private client: OpenRouter | null = null;
-  private model: string;
+  private model: ModelChoice;
   private maxHistorySize: number;
   private usageTracker: UsageTracker;
 
-  constructor(apiKey?: string, model = 'mistralai/mistral-small-3.2-24b-instruct', maxHistorySize = 5, usageTracker?: UsageTracker) {
+  constructor(apiKey?: string, model: ModelChoice = 'mistralai/mistral-small-3.2-24b-instruct', maxHistorySize = 5, usageTracker?: UsageTracker) {
     // Use provided key directly - caller (ApiKeyManager) handles env fallback
     if (apiKey) {
       this.client = new OpenRouter({ apiKey });
@@ -130,7 +135,8 @@ export class SemanticClassifierService {
       // Track usage - always increment request count for successful calls
       const promptTokens = response.usage?.promptTokens || 0;
       const completionTokens = response.usage?.completionTokens || 0;
-      const cost = (promptTokens / 1_000_000) * MODEL_COSTS[this.model].input_tokens_per_million + (completionTokens / 1_000_000) * MODEL_COSTS[this.model].completion_tokens_per_million;
+      const modelCost = SUPPORTED_MODELS[this.model];
+      const cost = (promptTokens / 1_000_000) * modelCost.input_tokens_per_million + (completionTokens / 1_000_000) * modelCost.completion_tokens_per_million;
       this.usageTracker.recordUsage({
         prompt_tokens: promptTokens,
         completion_tokens: completionTokens,
