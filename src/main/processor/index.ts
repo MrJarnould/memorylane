@@ -1,27 +1,31 @@
-import * as fs from 'fs';
-import { extractText } from './ocr';
-import { EmbeddingService } from './embedding';
-import { StorageService, StoredEvent } from './storage';
-import { Screenshot, InteractionContext, SearchOptions, SearchFilters } from '../../shared/types';
-import { SemanticClassifierService } from './semantic-classifier';
-import log from '../logger';
+import * as fs from 'fs'
+import { extractText } from './ocr'
+import { EmbeddingService } from './embedding'
+import { StorageService, StoredEvent } from './storage'
+import { Screenshot, InteractionContext, SearchOptions, SearchFilters } from '../../shared/types'
+import { SemanticClassifierService } from './semantic-classifier'
+import log from '../logger'
 
 export class EventProcessor {
-  private embeddingService: EmbeddingService;
-  private storageService: StorageService;
-  private classifierService: SemanticClassifierService | null = null;
-  
-  // Event aggregation state (moved from recorder for separation of concerns)
-  private pendingEvents: InteractionContext[] = [];
-  
-  // Classification state - track START screenshot for START/END pairs
-  private startScreenshot: Screenshot | null = null;
-  private startOcrText = '';
+  private embeddingService: EmbeddingService
+  private storageService: StorageService
+  private classifierService: SemanticClassifierService | null = null
 
-  constructor(embeddingService: EmbeddingService, storageService: StorageService, classifierService?: SemanticClassifierService) {
-    this.embeddingService = embeddingService;
-    this.storageService = storageService;
-    this.classifierService = classifierService || null;
+  // Event aggregation state (moved from recorder for separation of concerns)
+  private pendingEvents: InteractionContext[] = []
+
+  // Classification state - track START screenshot for START/END pairs
+  private startScreenshot: Screenshot | null = null
+  private startOcrText = ''
+
+  constructor(
+    embeddingService: EmbeddingService,
+    storageService: StorageService,
+    classifierService?: SemanticClassifierService,
+  ) {
+    this.embeddingService = embeddingService
+    this.storageService = storageService
+    this.classifierService = classifierService || null
   }
 
   /**
@@ -29,12 +33,12 @@ export class EventProcessor {
    * Events are aggregated here and associated with screenshots during processing.
    */
   public addInteractionEvent(event: InteractionContext): void {
-    this.pendingEvents.push(event);
+    this.pendingEvents.push(event)
   }
 
   /**
    * Main pipeline: OCR -> Embed -> Store -> Classification -> Cleanup
-   * 
+   *
    * Flow:
    * 1. OCR extracts text from screenshot (needs file)
    * 2. Generate embedding from text
@@ -44,55 +48,62 @@ export class EventProcessor {
    * 6. Delete screenshot files after classification (or immediately if no classifier)
    */
   public async processScreenshot(screenshot: Screenshot): Promise<void> {
-    const { filepath, id } = screenshot;
-    
+    const { filepath, id } = screenshot
+
     // Grab pending events and reset for next screenshot
-    const events = [...this.pendingEvents];
-    this.pendingEvents = [];
-    log.info(`[EventProcessor] Processing screenshot ${id} with ${events.length} accumulated events`);
-    log.info(`[EventProcessor] Events: ${JSON.stringify(events)}`);
-    
+    const events = [...this.pendingEvents]
+    this.pendingEvents = []
+    log.info(
+      `[EventProcessor] Processing screenshot ${id} with ${events.length} accumulated events`,
+    )
+    log.info(`[EventProcessor] Events: ${JSON.stringify(events)}`)
+
     try {
       // 1. OCR - needs the file to exist
       if (!fs.existsSync(filepath)) {
-          log.warn(`File not found for screenshot ${id}: ${filepath}`);
-          return;
+        log.warn(`File not found for screenshot ${id}: ${filepath}`)
+        return
       }
 
-      const text = await extractText(filepath);
-      log.info(`[EventProcessor] OCR complete for ${id}. Text length: ${text.length}`);
+      const text = await extractText(filepath)
+      log.info(`[EventProcessor] OCR complete for ${id}. Text length: ${text.length}`)
 
       // 2. Semantic Classification (START/END pair tracking)
       if (this.classifierService) {
         if (!this.startScreenshot) {
           // This is the START screenshot - keep file and OCR for classification
-          this.setStartState(screenshot, text);
+          this.setStartState(screenshot, text)
         } else {
           // Check if app changed between START and END
-          const appChanged = this.hasAppChange(events);
+          const appChanged = this.hasAppChange(events)
 
           if (appChanged) {
             // App change: use single-image classification for START only
-            log.info(`[EventProcessor] App change detected, using single-image classification`);
-            const summary = await this.runClassification(this.startScreenshot, undefined, events);
-            await this.storeAndCleanup(this.startScreenshot, this.startOcrText, summary, events, 'app change, single-image');
+            log.info(`[EventProcessor] App change detected, using single-image classification`)
+            const summary = await this.runClassification(this.startScreenshot, undefined, events)
+            await this.storeAndCleanup(
+              this.startScreenshot,
+              this.startOcrText,
+              summary,
+              events,
+              'app change, single-image',
+            )
           } else {
             // Normal flow: two-image classification (same app)
-            const summary = await this.runClassification(this.startScreenshot, screenshot, events);
-            await this.storeAndCleanup(this.startScreenshot, this.startOcrText, summary, events);
+            const summary = await this.runClassification(this.startScreenshot, screenshot, events)
+            await this.storeAndCleanup(this.startScreenshot, this.startOcrText, summary, events)
           }
 
           // END becomes new START (keep its file for next classification)
-          this.setStartState(screenshot, text);
+          this.setStartState(screenshot, text)
         }
       } else {
         // No classifier - store OCR only with empty summary, then delete
-        await this.storeAndCleanup(screenshot, text, '', events, 'no classifier');
+        await this.storeAndCleanup(screenshot, text, '', events, 'no classifier')
       }
-      
     } catch (error) {
-      log.error(`Error processing screenshot ${id}:`, error);
-      throw error;
+      log.error(`Error processing screenshot ${id}:`, error)
+      throw error
     }
   }
 
@@ -102,11 +113,11 @@ export class EventProcessor {
   private async runClassification(
     startScreenshot: Screenshot,
     endScreenshot: Screenshot | undefined,
-    events: InteractionContext[]
+    events: InteractionContext[],
   ): Promise<string> {
-    log.info(`[EventProcessor] START screenshot: ${startScreenshot.id}`);
+    log.info(`[EventProcessor] START screenshot: ${startScreenshot.id}`)
     if (endScreenshot) {
-      log.info(`[EventProcessor] END screenshot: ${endScreenshot.id}`);
+      log.info(`[EventProcessor] END screenshot: ${endScreenshot.id}`)
     }
 
     try {
@@ -114,12 +125,12 @@ export class EventProcessor {
         startScreenshot,
         endScreenshot,
         events,
-      });
-      log.info(`[EventProcessor] Classification summary: ${summary}`);
-      return summary;
+      })
+      log.info(`[EventProcessor] Classification summary: ${summary}`)
+      return summary
     } catch (error) {
-      log.error('[EventProcessor] Classification failed:', error);
-      return 'Classification failed';
+      log.error('[EventProcessor] Classification failed:', error)
+      return 'Classification failed'
     }
   }
 
@@ -131,32 +142,32 @@ export class EventProcessor {
     ocrText: string,
     summary: string,
     events: InteractionContext[],
-    logSuffix?: string
+    logSuffix?: string,
   ): Promise<void> {
-    const vector = await this.embeddingService.generateEmbedding(summary || ocrText);
-    const appName = this.extractAppName(events);
+    const vector = await this.embeddingService.generateEmbedding(summary || ocrText)
+    const appName = this.extractAppName(events)
     const storedEvent: StoredEvent = {
       id: screenshot.id,
       timestamp: screenshot.timestamp,
       text: ocrText,
       summary,
       appName,
-      vector
-    };
-    await this.storageService.addEvent(storedEvent);
-    
-    const suffix = logSuffix ? ` (${logSuffix}, app: ${appName})` : ` (app: ${appName})`;
-    log.info(`[EventProcessor] Stored event for ${screenshot.id}${suffix}`);
-    
-    this.deleteScreenshot(screenshot.filepath);
+      vector,
+    }
+    await this.storageService.addEvent(storedEvent)
+
+    const suffix = logSuffix ? ` (${logSuffix}, app: ${appName})` : ` (app: ${appName})`
+    log.info(`[EventProcessor] Stored event for ${screenshot.id}${suffix}`)
+
+    this.deleteScreenshot(screenshot.filepath)
   }
 
   /**
    * Update the START state for the next classification pair.
    */
   private setStartState(screenshot: Screenshot, ocrText: string): void {
-    this.startScreenshot = screenshot;
-    this.startOcrText = ocrText;
+    this.startScreenshot = screenshot
+    this.startOcrText = ocrText
   }
 
   /**
@@ -167,8 +178,8 @@ export class EventProcessor {
     return events.some(
       (event) =>
         event.type === 'app_change' &&
-        event.previousWindow?.processName !== event.activeWindow?.processName
-    );
+        event.previousWindow?.processName !== event.activeWindow?.processName,
+    )
   }
 
   /**
@@ -178,23 +189,23 @@ export class EventProcessor {
    * For example the you have split screen with two apps and you switch between them.
    */
   private extractAppName(events: InteractionContext[]): string {
-    const counts = new Map<string, number>();
+    const counts = new Map<string, number>()
     for (const event of events) {
-      const name = event.activeWindow?.processName;
+      const name = event.activeWindow?.processName
       if (name) {
-        counts.set(name, (counts.get(name) ?? 0) + 1);
+        counts.set(name, (counts.get(name) ?? 0) + 1)
       }
     }
 
-    let mostCommon = '';
-    let maxCount = 0;
+    let mostCommon = ''
+    let maxCount = 0
     for (const [name, count] of counts) {
       if (count > maxCount) {
-        mostCommon = name;
-        maxCount = count;
+        mostCommon = name
+        maxCount = count
       }
     }
-    return mostCommon;
+    return mostCommon
   }
 
   /**
@@ -203,11 +214,11 @@ export class EventProcessor {
   private deleteScreenshot(filepath: string): void {
     try {
       if (fs.existsSync(filepath)) {
-        fs.unlinkSync(filepath);
-        log.info(`[EventProcessor] Deleted screenshot: ${filepath}`);
+        fs.unlinkSync(filepath)
+        log.info(`[EventProcessor] Deleted screenshot: ${filepath}`)
       }
     } catch (error) {
-      log.error(`[EventProcessor] Failed to delete screenshot ${filepath}:`, error);
+      log.error(`[EventProcessor] Failed to delete screenshot ${filepath}:`, error)
     }
   }
 
@@ -217,38 +228,42 @@ export class EventProcessor {
   // TODO: review the vibecoded logic here - in searhc as well as in storage.ts
   public async search(
     query: string,
-    options: SearchOptions = {}
+    options: SearchOptions = {},
   ): Promise<{ fts: StoredEvent[]; vector: StoredEvent[] }> {
-    const { limit = 5, startTime, endTime, appName } = options;
-    const filters: SearchFilters = { startTime, endTime, appName };
+    const { limit = 5, startTime, endTime, appName } = options
+    const filters: SearchFilters = { startTime, endTime, appName }
 
-    log.info(`[Search] Query: "${query}" (Limit: ${limit}, Filters: ${JSON.stringify(filters)})`);
+    log.info(`[Search] Query: "${query}" (Limit: ${limit}, Filters: ${JSON.stringify(filters)})`)
 
     // 1. Generate embedding for vector search
-    const queryVector = await this.embeddingService.generateEmbedding(query);
+    const queryVector = await this.embeddingService.generateEmbedding(query)
 
     // 2. Vector search with filters
-    const vectorResults = await this.storageService.searchVectorsWithFilters(queryVector, limit, filters);
-    log.info(`[Search] Vector results: ${vectorResults.length}`);
+    const vectorResults = await this.storageService.searchVectorsWithFilters(
+      queryVector,
+      limit,
+      filters,
+    )
+    log.info(`[Search] Vector results: ${vectorResults.length}`)
 
     // 3. FTS search with filters
-    const ftsResults = await this.storageService.searchFTSWithFilters(query, limit, filters);
-    log.info(`[Search] FTS results: ${ftsResults.length}`);
+    const ftsResults = await this.storageService.searchFTSWithFilters(query, limit, filters)
+    log.info(`[Search] FTS results: ${ftsResults.length}`)
 
-    return { fts: ftsResults, vector: vectorResults };
+    return { fts: ftsResults, vector: vectorResults }
   }
 
   /**
    * Get the storage service instance
    */
   public getStorageService(): StorageService {
-    return this.storageService;
+    return this.storageService
   }
 
   /**
    * Get the classifier service instance
    */
   public getClassifierService(): SemanticClassifierService | null {
-    return this.classifierService;
+    return this.classifierService
   }
 }

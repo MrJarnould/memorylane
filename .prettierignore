@@ -1,0 +1,8 @@
+node_modules/
+out/
+dist/
+dist-ssr/
+dist-electron/
+release/
+coverage/
+*.tsbuildinfo

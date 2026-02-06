@@ -1,5 +1,5 @@
-import * as path from 'path';
-import * as os from 'os';
+import * as path from 'path'
+import * as os from 'os'
 
 /**
  * Gets the default path for the LanceDB database.
@@ -7,43 +7,43 @@ import * as os from 'os';
  * In the main Electron process, it is preferred to use app.getPath('userData').
  */
 export function getDefaultDbPath(): string {
-  const dbDir = isDev() ? 'lancedb-dev' : 'lancedb';
+  const dbDir = isDev() ? 'lancedb-dev' : 'lancedb'
 
   // Check if running in Electron (using process.versions.electron)
   if (process.versions.electron) {
     try {
-      // Dynamic require to avoid issues when running outside Electron (e.g., CLI tools)
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { app } = require('electron');
-      // If app is available (main process), use it
+      // Dynamic import would be ideal, but this is a synchronous function.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { app } = require('electron')
       if (app) {
-        const userDataPath = app.getPath('userData');
-        return path.join(userDataPath, dbDir);
+        const userDataPath = app.getPath('userData')
+        return path.join(userDataPath, dbDir)
       }
-    } catch (e) {
+    } catch {
       // Ignore error if electron module is not available or app is not ready
     }
   }
 
   // Fallback for CLI / Standalone mode (mimic Electron's default paths)
   if (process.platform === 'darwin') {
-    return path.join(os.homedir(), 'Library', 'Application Support', 'memorylane', dbDir);
+    return path.join(os.homedir(), 'Library', 'Application Support', 'memorylane', dbDir)
   }
   if (process.platform === 'win32') {
-    return path.join(process.env.APPDATA || '', 'memorylane', dbDir);
+    return path.join(process.env.APPDATA || '', 'memorylane', dbDir)
   }
   // Linux and others
-  return path.join(os.homedir(), '.config', 'memorylane', dbDir);
+  return path.join(os.homedir(), '.config', 'memorylane', dbDir)
 }
 
 function isDev(): boolean {
   if (process.versions.electron) {
     try {
-      const { app } = require('electron');
-      if (app) return !app.isPackaged;
-    } catch (e) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { app } = require('electron')
+      if (app) return !app.isPackaged
+    } catch {
       // Fall through to env check
     }
   }
-  return process.env.NODE_ENV !== 'production';
+  return process.env.NODE_ENV !== 'production'
 }

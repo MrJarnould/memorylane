@@ -14,27 +14,27 @@ extraResources:
   - from: assets
     to: assets
     filter:
-      - "**/*"
+      - '**/*'
   - from: src/main/processor/swift
     to: swift
     filter:
-      - "*.swift"
+      - '*.swift'
 
 asar: true
 asarUnpack:
-  - "node_modules/uiohook-napi/**/*"
-  - "node_modules/sharp/**/*"
-  - "node_modules/@lancedb/**/*"
-  - "node_modules/@img/**/*"
-  - "node_modules/onnxruntime-node/**/*"
-  - "node_modules/active-win/**/*"
-  - "**/*.node"
+  - 'node_modules/uiohook-napi/**/*'
+  - 'node_modules/sharp/**/*'
+  - 'node_modules/@lancedb/**/*'
+  - 'node_modules/@img/**/*'
+  - 'node_modules/onnxruntime-node/**/*'
+  - 'node_modules/active-win/**/*'
+  - '**/*.node'
 
 afterSign: build/notarize.js
 
 mac:
   category: public.app-category.productivity
-  identity: "Filip Kubis (ZN3J54N7AP)"
+  identity: 'Filip Kubis (ZN3J54N7AP)'
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist

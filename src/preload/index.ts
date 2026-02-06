@@ -1,32 +1,32 @@
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 
-import { contextBridge, ipcRenderer, shell } from 'electron';
+import { contextBridge, ipcRenderer, shell } from 'electron'
 
-console.log('[Preload] Script loading...');
+console.log('[Preload] Script loading...')
 
 // Expose settings API to renderer
 contextBridge.exposeInMainWorld('settingsAPI', {
   getKeyStatus: () => {
-    console.log('[Preload] getKeyStatus called, invoking IPC...');
-    return ipcRenderer.invoke('settings:getKeyStatus');
+    console.log('[Preload] getKeyStatus called, invoking IPC...')
+    return ipcRenderer.invoke('settings:getKeyStatus')
   },
   saveApiKey: (key: string) => ipcRenderer.invoke('settings:saveApiKey', key),
   deleteApiKey: () => ipcRenderer.invoke('settings:deleteApiKey'),
   close: () => ipcRenderer.send('settings:close'),
   openExternal: (url: string) => shell.openExternal(url),
-});
+})
 
-console.log('[Preload] settingsAPI exposed to renderer');
+console.log('[Preload] settingsAPI exposed to renderer')
 
 // Expose capture settings API to renderer
 contextBridge.exposeInMainWorld('captureSettingsAPI', {
   get: () => {
-    console.log('[Preload] captureSettings.get called, invoking IPC...');
-    return ipcRenderer.invoke('capture-settings:get');
+    console.log('[Preload] captureSettings.get called, invoking IPC...')
+    return ipcRenderer.invoke('capture-settings:get')
   },
   save: (partialSettings: unknown) => ipcRenderer.invoke('capture-settings:save', partialSettings),
   reset: () => ipcRenderer.invoke('capture-settings:reset'),
-});
+})
 
-console.log('[Preload] captureSettingsAPI exposed to renderer');
+console.log('[Preload] captureSettingsAPI exposed to renderer')

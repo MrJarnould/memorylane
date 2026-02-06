@@ -1,8 +1,8 @@
-import log from 'electron-log/main';
+import log from 'electron-log/main'
 
-log.transports.file.level = 'info';
-log.transports.console.level = 'info';
-log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}] [{level}] {text}';
+log.transports.file.level = 'info'
+log.transports.console.level = 'info'
+log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}] [{level}] {text}'
 
 /**
  * Configure logger for MCP mode.
@@ -11,8 +11,8 @@ log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}] [{level}] {text}';
  */
 export function configureMCPMode(): void {
   log.transports.console.writeFn = ({ message }) => {
-    process.stderr.write(message + '\n');
-  };
+    process.stderr.write(message + '\n')
+  }
 }
 
-export default log;
+export default log

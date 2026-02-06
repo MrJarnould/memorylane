@@ -32,6 +32,12 @@ npm run make:linux
 # Lint TypeScript files
 npm run lint
 
+# Format code with Prettier
+npm run format
+
+# Check formatting without writing (CI-friendly)
+npm run format:check
+
 # Run tests
 npm run test
 ```
@@ -104,6 +110,7 @@ This project uses several native Node.js modules that require special handling:
 - `onnxruntime-node` - ML inference
 
 These are:
+
 1. Externalized in Vite (not bundled)
 2. Rebuilt for Electron via `postinstall` script
 3. Unpacked from ASAR via electron-builder config
@@ -140,6 +147,7 @@ isCapturingNow(): boolean    // Check if currently capturing
 ### Screenshot Data Structure
 
 Each captured screenshot provides:
+
 - `id`: UUID for the screenshot
 - `filepath`: Absolute path to the PNG file
 - `timestamp`: Unix timestamp in milliseconds

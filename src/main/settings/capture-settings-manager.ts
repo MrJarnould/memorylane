@@ -1,25 +1,25 @@
-import { app } from 'electron';
-import { EventEmitter } from 'events';
-import * as fs from 'fs';
-import * as path from 'path';
-import { CaptureSettings } from '../../shared/types';
+import { app } from 'electron'
+import { EventEmitter } from 'events'
+import * as fs from 'fs'
+import * as path from 'path'
+import { CaptureSettings } from '../../shared/types'
 import {
   DEFAULT_VISUAL_DETECTOR_CONFIG,
   DEFAULT_INTERACTION_MONITOR_CONFIG,
-} from '../../shared/constants';
-import log from '../logger';
+} from '../../shared/constants'
+import log from '../logger'
 
 export interface CaptureSettingsManagerEvents {
-  changed: (settings: CaptureSettings) => void;
+  changed: (settings: CaptureSettings) => void
 }
 
 export class CaptureSettingsManager extends EventEmitter {
-  private configPath: string;
-  private cachedSettings: CaptureSettings | null = null;
+  private configPath: string
+  private cachedSettings: CaptureSettings | null = null
 
   constructor() {
-    super();
-    this.configPath = path.join(app.getPath('userData'), 'capture-settings.json');
+    super()
+    this.configPath = path.join(app.getPath('userData'), 'capture-settings.json')
   }
 
   /**
@@ -36,7 +36,7 @@ export class CaptureSettingsManager extends EventEmitter {
         typingSessionTimeoutMs: DEFAULT_INTERACTION_MONITOR_CONFIG.TYPING_SESSION_TIMEOUT_MS,
         scrollSessionTimeoutMs: DEFAULT_INTERACTION_MONITOR_CONFIG.SCROLL_SESSION_TIMEOUT_MS,
       },
-    };
+    }
   }
 
   /**
@@ -44,11 +44,11 @@ export class CaptureSettingsManager extends EventEmitter {
    */
   public getSettings(): CaptureSettings {
     if (this.cachedSettings) {
-      return this.cachedSettings;
+      return this.cachedSettings
     }
 
-    const defaults = this.getDefaultSettings();
-    const stored = this.loadStoredSettings();
+    const defaults = this.getDefaultSettings()
+    const stored = this.loadStoredSettings()
 
     // Deep merge stored settings into defaults
     const merged: CaptureSettings = {
@@ -60,17 +60,17 @@ export class CaptureSettingsManager extends EventEmitter {
         ...defaults.interactionMonitor,
         ...stored?.interactionMonitor,
       },
-    };
+    }
 
-    this.cachedSettings = merged;
-    return merged;
+    this.cachedSettings = merged
+    return merged
   }
 
   /**
    * Save settings (partial update supported)
    */
   public saveSettings(partialSettings: Partial<CaptureSettings>): void {
-    const current = this.getSettings();
+    const current = this.getSettings()
 
     // Merge partial settings into current
     const updated: CaptureSettings = {
@@ -82,16 +82,16 @@ export class CaptureSettingsManager extends EventEmitter {
         ...current.interactionMonitor,
         ...partialSettings.interactionMonitor,
       },
-    };
+    }
 
     // Save to disk
-    fs.writeFileSync(this.configPath, JSON.stringify(updated, null, 2));
-    this.cachedSettings = updated;
+    fs.writeFileSync(this.configPath, JSON.stringify(updated, null, 2))
+    this.cachedSettings = updated
 
-    log.info('[CaptureSettingsManager] Settings saved');
+    log.info('[CaptureSettingsManager] Settings saved')
 
     // Emit change event
-    this.emit('changed', updated);
+    this.emit('changed', updated)
   }
 
   /**
@@ -99,22 +99,22 @@ export class CaptureSettingsManager extends EventEmitter {
    */
   public resetToDefaults(): void {
     if (fs.existsSync(this.configPath)) {
-      fs.unlinkSync(this.configPath);
-      log.info('[CaptureSettingsManager] Settings reset to defaults');
+      fs.unlinkSync(this.configPath)
+      log.info('[CaptureSettingsManager] Settings reset to defaults')
     }
 
-    this.cachedSettings = null;
-    const defaults = this.getSettings();
+    this.cachedSettings = null
+    const defaults = this.getSettings()
 
     // Emit change event with defaults
-    this.emit('changed', defaults);
+    this.emit('changed', defaults)
   }
 
   /**
    * Check if custom settings exist
    */
   public hasCustomSettings(): boolean {
-    return fs.existsSync(this.configPath);
+    return fs.existsSync(this.configPath)
   }
 
   /**
@@ -122,30 +122,30 @@ export class CaptureSettingsManager extends EventEmitter {
    */
   private loadStoredSettings(): Partial<CaptureSettings> | null {
     if (!fs.existsSync(this.configPath)) {
-      return null;
+      return null
     }
 
     try {
-      const data = fs.readFileSync(this.configPath, 'utf-8');
-      return JSON.parse(data) as Partial<CaptureSettings>;
+      const data = fs.readFileSync(this.configPath, 'utf-8')
+      return JSON.parse(data) as Partial<CaptureSettings>
     } catch (error) {
-      log.error('[CaptureSettingsManager] Error reading stored settings:', error);
-      return null;
+      log.error('[CaptureSettingsManager] Error reading stored settings:', error)
+      return null
     }
   }
 
   // Type-safe event emitter methods
   public override on<K extends keyof CaptureSettingsManagerEvents>(
     event: K,
-    listener: CaptureSettingsManagerEvents[K]
+    listener: CaptureSettingsManagerEvents[K],
   ): this {
-    return super.on(event, listener);
+    return super.on(event, listener)
   }
 
   public override emit<K extends keyof CaptureSettingsManagerEvents>(
     event: K,
     ...args: Parameters<CaptureSettingsManagerEvents[K]>
   ): boolean {
-    return super.emit(event, ...args);
+    return super.emit(event, ...args)
   }
 }

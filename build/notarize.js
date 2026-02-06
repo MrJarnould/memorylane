@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
-require('dotenv').config();
-const { notarize } = require('@electron/notarize');
+require('dotenv').config()
+const { notarize } = require('@electron/notarize')
 
 exports.default = async function notarizing(context) {
-  const { electronPlatformName, appOutDir } = context;
-  if (electronPlatformName !== 'darwin') return;
+  const { electronPlatformName, appOutDir } = context
+  if (electronPlatformName !== 'darwin') return
 
-  const appName = context.packager.appInfo.productFilename;
+  const appName = context.packager.appInfo.productFilename
 
-  console.log(`Notarizing ${appName}...`);
+  console.log(`Notarizing ${appName}...`)
 
   await notarize({
     appBundleId: 'com.memorylane.app',
@@ -16,7 +16,7 @@ exports.default = async function notarizing(context) {
     appleId: process.env.APPLE_ID,
     appleIdPassword: process.env.APPLE_APP_PASSWORD,
     teamId: 'ZN3J54N7AP',
-  });
+  })
 
-  console.log('Notarization complete.');
-};
+  console.log('Notarization complete.')
+}

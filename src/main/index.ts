@@ -1,60 +1,64 @@
 /**
  * MemoryLane - Main Process Entry Point
- * 
+ *
  * Supports two modes:
  * - Recorder Mode (default): Full tray app with screenshot capture and processing
  * - MCP Server Mode (--mcp flag): Headless server for AI assistant integration
  */
 
 // Detect MCP mode FIRST, before any heavy imports
-const isMCPMode = process.argv.includes('--mcp');
+const isMCPMode = process.argv.includes('--mcp')
 
 // In MCP mode, capture the real stdout IMMEDIATELY and redirect process.stdout
 // to stderr. The MCP stdio protocol owns stdout exclusively — this prevents ANY
 // module (dotenv, native addons, etc.) from polluting the transport channel.
-import { Writable } from 'node:stream';
-let mcpStdout: Writable | undefined;
+import { Writable } from 'node:stream'
+let mcpStdout: Writable | undefined
 if (isMCPMode) {
-  const realWrite = process.stdout.write.bind(process.stdout);
+  const realWrite = process.stdout.write.bind(process.stdout)
   mcpStdout = new Writable({
     write(chunk, encoding, callback): void {
-      realWrite(chunk, encoding as BufferEncoding, callback);
+      realWrite(chunk, encoding as BufferEncoding, callback)
     },
-  });
-  process.stdout.write = process.stderr.write.bind(process.stderr) as typeof process.stdout.write;
+  })
+  process.stdout.write = process.stderr.write.bind(process.stderr) as typeof process.stdout.write
 }
 
-import { app, Tray, Menu, nativeImage } from 'electron';
-import log, { configureMCPMode } from './logger';
+import { app, Tray, Menu, nativeImage } from 'electron'
+import log, { configureMCPMode } from './logger'
 
 if (isMCPMode) {
-  configureMCPMode();
+  configureMCPMode()
 }
-import path from 'node:path';
-import { EventProcessor } from './processor/index';
-import { EmbeddingService } from './processor/embedding';
-import { StorageService } from './processor/storage';
-import { SemanticClassifierService } from './processor/semantic-classifier';
-import { ApiKeyManager } from './settings/api-key-manager';
-import { CaptureSettingsManager } from './settings/capture-settings-manager';
-import { initSettingsIPC, initCaptureSettingsIPC, openSettingsWindow } from './settings/settings-window';
-import { Screenshot } from '../shared/types';
-import dotenv from 'dotenv';
+import path from 'node:path'
+import { EventProcessor } from './processor/index'
+import { EmbeddingService } from './processor/embedding'
+import { StorageService } from './processor/storage'
+import { SemanticClassifierService } from './processor/semantic-classifier'
+import { ApiKeyManager } from './settings/api-key-manager'
+import { CaptureSettingsManager } from './settings/capture-settings-manager'
+import {
+  initSettingsIPC,
+  initCaptureSettingsIPC,
+  openSettingsWindow,
+} from './settings/settings-window'
+import { Screenshot } from '../shared/types'
+import dotenv from 'dotenv'
 
 try {
-  dotenv.config();
-} catch (e) {
+  dotenv.config()
+} catch {
   // cwd might not be available in packaged app context — expected, we don't need .env there
 }
 
 // Prevent app from quitting when all windows are closed (tray app or MCP server)
 app.on('window-all-closed', () => {
   // Don't quit - this is a tray app or MCP server
-});
+})
 
 // macOS: Hide dock icon (for both modes - tray app and MCP server)
 if (process.platform === 'darwin') {
-  app.dock?.hide();
+  app.dock?.hide()
 }
 
 if (isMCPMode) {
@@ -64,241 +68,240 @@ if (isMCPMode) {
   // Headless mode - no tray, no recorder, just search services
 
   app.on('ready', async () => {
-    log.info('[MCP Mode] Starting MemoryLane MCP Server...');
+    log.info('[MCP Mode] Starting MemoryLane MCP Server...')
 
     try {
       // Initialize API key manager for secure key storage
-      const apiKeyManager = new ApiKeyManager();
+      const apiKeyManager = new ApiKeyManager()
 
       // Initialize only the services needed for search
-      const embeddingService = new EmbeddingService();
-      const storageService = new StorageService(StorageService.getDefaultDbPath());
-      const classifierService = new SemanticClassifierService(apiKeyManager.getApiKey() || undefined);
-      const processor = new EventProcessor(embeddingService, storageService, classifierService);
+      const embeddingService = new EmbeddingService()
+      const storageService = new StorageService(StorageService.getDefaultDbPath())
+      const classifierService = new SemanticClassifierService(
+        apiKeyManager.getApiKey() || undefined,
+      )
+      const processor = new EventProcessor(embeddingService, storageService, classifierService)
 
-      log.info('[MCP Mode] Services initialized');
+      log.info('[MCP Mode] Services initialized')
 
       // Dynamically import MCP server to avoid loading it in recorder mode
-      const { MemoryLaneMCPServer } = await import('./mcp/server');
-      const mcpServer = new MemoryLaneMCPServer(processor);
+      const { MemoryLaneMCPServer } = await import('./mcp/server')
+      const mcpServer = new MemoryLaneMCPServer(processor)
 
-      await mcpServer.start(undefined, mcpStdout);
+      await mcpServer.start(undefined, mcpStdout)
 
-      log.info('[MCP Mode] MCP Server started successfully');
+      log.info('[MCP Mode] MCP Server started successfully')
     } catch (error) {
-      log.error('[MCP Mode] Fatal error starting MCP server:', error);
-      app.quit();
-      process.exit(1);
+      log.error('[MCP Mode] Fatal error starting MCP server:', error)
+      app.quit()
+      process.exit(1)
     }
-  });
-
+  })
 } else {
   // ============================================
   // RECORDER MODE (Default)
   // ============================================
   // Full tray app with screenshot capture and processing
-  
+
   // Dynamically import recorder modules only in recorder mode
   // This avoids loading heavy modules (OCR, interaction monitor) in MCP mode
-  let recorder: typeof import('./recorder/recorder');
-  let interactionMonitor: typeof import('./recorder/interaction-monitor');
+  let recorder: typeof import('./recorder/recorder')
+  let interactionMonitor: typeof import('./recorder/interaction-monitor')
 
-  let tray: Tray | null = null;
-  let processor: EventProcessor | null = null;
-  let apiKeyManager: ApiKeyManager | null = null;
-  let captureSettingsManager: CaptureSettingsManager | null = null;
+  let tray: Tray | null = null
+  let processor: EventProcessor | null = null
+  let apiKeyManager: ApiKeyManager | null = null
+  let captureSettingsManager: CaptureSettingsManager | null = null
 
   const initRecorderMode = async () => {
     // Dynamic imports for recorder-specific modules
-    recorder = await import('./recorder/recorder');
-    interactionMonitor = await import('./recorder/interaction-monitor');
-    const visualDetector = await import('./recorder/visual-detector');
+    recorder = await import('./recorder/recorder')
+    interactionMonitor = await import('./recorder/interaction-monitor')
+    const visualDetector = await import('./recorder/visual-detector')
 
     // Initialize API key manager for secure key storage
-    apiKeyManager = new ApiKeyManager();
+    apiKeyManager = new ApiKeyManager()
 
     // Initialize capture settings manager
-    captureSettingsManager = new CaptureSettingsManager();
+    captureSettingsManager = new CaptureSettingsManager()
 
     // Initialize recorder modules with settings manager
-    visualDetector.initVisualDetector(captureSettingsManager);
-    interactionMonitor.initInteractionMonitor(captureSettingsManager);
+    visualDetector.initVisualDetector(captureSettingsManager)
+    interactionMonitor.initInteractionMonitor(captureSettingsManager)
 
     // Initialize Processor Services
-    const embeddingService = new EmbeddingService();
-    const storageService = new StorageService(StorageService.getDefaultDbPath());
-    const classifierService = new SemanticClassifierService(apiKeyManager.getApiKey() || undefined);
-    processor = new EventProcessor(embeddingService, storageService, classifierService);
+    const embeddingService = new EmbeddingService()
+    const storageService = new StorageService(StorageService.getDefaultDbPath())
+    const classifierService = new SemanticClassifierService(apiKeyManager.getApiKey() || undefined)
+    processor = new EventProcessor(embeddingService, storageService, classifierService)
 
     // Initialize settings IPC handlers (pass classifier so it can be updated when key changes)
-    initSettingsIPC(apiKeyManager, classifierService);
-    initCaptureSettingsIPC(captureSettingsManager);
-  };
+    initSettingsIPC(apiKeyManager, classifierService)
+    initCaptureSettingsIPC(captureSettingsManager)
+  }
 
   const createTray = () => {
     // Try to load custom icon, fall back to default
     // In dev: __dirname is out/main, assets is at ../../assets
     // In production: assets are in resources/assets
-    const isDev = !app.isPackaged;
+    const isDev = !app.isPackaged
     const iconPath = isDev
       ? path.join(__dirname, '../../assets/tray-icon.png')
-      : path.join(process.resourcesPath, 'assets/tray-icon.png');
-    let icon: Electron.NativeImage;
+      : path.join(process.resourcesPath, 'assets/tray-icon.png')
+    let icon: Electron.NativeImage
 
     try {
-      icon = nativeImage.createFromPath(iconPath);
+      icon = nativeImage.createFromPath(iconPath)
       if (icon.isEmpty()) {
-        icon = nativeImage.createEmpty();
+        icon = nativeImage.createEmpty()
       }
     } catch {
-      icon = nativeImage.createEmpty();
+      icon = nativeImage.createEmpty()
     }
 
-    tray = new Tray(icon);
-    tray.setToolTip('MemoryLane - Screen Capture');
+    tray = new Tray(icon)
+    tray.setToolTip('MemoryLane - Screen Capture')
 
-    void updateTrayMenu();
+    void updateTrayMenu()
 
     // Register a callback to process screenshots
     recorder.onScreenshot(async (screenshot: Screenshot) => {
-      log.info(`[Main] Screenshot captured: ${screenshot.id}`);
+      log.info(`[Main] Screenshot captured: ${screenshot.id}`)
 
       if (processor) {
         try {
-          await processor.processScreenshot(screenshot);
-          log.info(`[Main] Screenshot processed successfully: ${screenshot.id}`);
+          await processor.processScreenshot(screenshot)
+          log.info(`[Main] Screenshot processed successfully: ${screenshot.id}`)
           // Refresh tray menu to show updated usage stats
-          void updateTrayMenu();
+          void updateTrayMenu()
         } catch (error) {
-          log.error(`[Main] Error processing screenshot ${screenshot.id}:`, error);
+          log.error(`[Main] Error processing screenshot ${screenshot.id}:`, error)
         }
       }
-    });
+    })
 
     // Subscribe to interaction events - pass them to the processor for aggregation
     interactionMonitor.onInteraction((event) => {
       if (processor) {
-        processor.addInteractionEvent(event);
+        processor.addInteractionEvent(event)
       }
-    });
-  };
+    })
+  }
 
   const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
+    if (bytes === 0) return '0 Bytes'
+
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
 
   const formatNumber = (num: number): string => {
-    return num.toLocaleString();
-  };
+    return num.toLocaleString()
+  }
 
   const buildUsageStatsSubmenu = async (): Promise<Electron.MenuItemConstructorOptions[]> => {
-    const submenu: Electron.MenuItemConstructorOptions[] = [];
+    const submenu: Electron.MenuItemConstructorOptions[] = []
 
     if (!processor) {
       submenu.push({
         label: 'Stats not available',
-        enabled: false
-      });
-      return submenu;
+        enabled: false,
+      })
+      return submenu
     }
 
-    const classifier = processor.getClassifierService();
-    const storage = processor.getStorageService();
+    const classifier = processor.getClassifierService()
+    const storage = processor.getStorageService()
 
     if (classifier) {
-      const usageTracker = classifier.getUsageTracker();
-      const stats = usageTracker.getStats();
+      const usageTracker = classifier.getUsageTracker()
+      const stats = usageTracker.getStats()
 
       submenu.push(
         {
           label: `API Requests: ${formatNumber(stats.requestCount)}`,
-          enabled: false
+          enabled: false,
         },
         {
           label: `Tokens: ${formatNumber(stats.promptTokens)} (prompt) / ${formatNumber(stats.completionTokens)} (completion)`,
-          enabled: false
+          enabled: false,
         },
         {
           label: `Est. Cost: $${stats.totalCost.toFixed(4)}`,
-          enabled: false
-        }
-      );
+          enabled: false,
+        },
+      )
     } else {
-      submenu.push(
-        {
-          label: 'API tracking unavailable (no API key)',
-          enabled: false
-        }
-      );
+      submenu.push({
+        label: 'API tracking unavailable (no API key)',
+        enabled: false,
+      })
     }
 
-    submenu.push({ type: 'separator' });
+    submenu.push({ type: 'separator' })
 
     try {
-      const screenshotCount = await storage.countRows();
-      const dbSize = storage.getDbSize();
+      const screenshotCount = await storage.countRows()
+      const dbSize = storage.getDbSize()
 
       submenu.push(
         {
           label: `Screenshots: ${formatNumber(screenshotCount)}`,
-          enabled: false
+          enabled: false,
         },
         {
           label: `Database: ${formatBytes(dbSize)}`,
-          enabled: false
-        }
-      );
+          enabled: false,
+        },
+      )
     } catch (error) {
-      log.error('Error fetching storage stats:', error);
+      log.error('Error fetching storage stats:', error)
       submenu.push({
         label: 'Storage stats unavailable',
-        enabled: false
-      });
+        enabled: false,
+      })
     }
 
-    return submenu;
-  };
+    return submenu
+  }
 
   const updateTrayMenu = async () => {
-    if (!tray) return;
+    if (!tray) return
 
-    const isCapturing = recorder.isCapturingNow();
+    const isCapturing = recorder.isCapturingNow()
 
-    const usageStatsSubmenu = await buildUsageStatsSubmenu();
+    const usageStatsSubmenu = await buildUsageStatsSubmenu()
 
     const contextMenu = Menu.buildFromTemplate([
       {
         label: isCapturing ? 'Stop Capture' : 'Start Capture',
         click: () => {
           if (isCapturing) {
-            recorder.stopCapture();
-            interactionMonitor.stopInteractionMonitoring();
+            recorder.stopCapture()
+            interactionMonitor.stopInteractionMonitoring()
           } else {
-            recorder.startCapture();
+            recorder.startCapture()
             try {
-              interactionMonitor.startInteractionMonitoring();
+              interactionMonitor.startInteractionMonitoring()
             } catch (error) {
-              log.error('Failed to start interaction monitoring:', error);
-              log.info('Continuing without interaction monitoring');
+              log.error('Failed to start interaction monitoring:', error)
+              log.info('Continuing without interaction monitoring')
             }
           }
-          void updateTrayMenu();
+          void updateTrayMenu()
         },
       },
       {
         label: 'Capture Now',
         click: async () => {
           try {
-            const screenshot = await recorder.captureNow();
-            log.info('Manual capture successful:', screenshot.id);
+            const screenshot = await recorder.captureNow()
+            log.info('Manual capture successful:', screenshot.id)
           } catch (error) {
-            log.error('Manual capture failed:', error);
+            log.error('Manual capture failed:', error)
           }
         },
       },
@@ -306,61 +309,65 @@ if (isMCPMode) {
         label: 'Test Search: "MemoryLane"',
         click: async () => {
           if (!processor) {
-            log.error('[Test Search] Processor not initialized');
-            return;
+            log.error('[Test Search] Processor not initialized')
+            return
           }
 
           try {
-            log.info('[Test Search] Starting search for "MemoryLane"...');
-            const results = await processor.search('MemoryLane');
+            log.info('[Test Search] Starting search for "MemoryLane"...')
+            const results = await processor.search('MemoryLane')
 
-            log.info('\n=== FTS Results ===');
+            log.info('\n=== FTS Results ===')
             results.fts.forEach((event, idx) => {
-              log.info(`${idx + 1}. [${event.id}] ${new Date(event.timestamp).toISOString()}`);
-              log.info(`   Text: ${event.text.substring(0, 100)}${event.text.length > 100 ? '...' : ''}`);
-            });
+              log.info(`${idx + 1}. [${event.id}] ${new Date(event.timestamp).toISOString()}`)
+              log.info(
+                `   Text: ${event.text.substring(0, 100)}${event.text.length > 100 ? '...' : ''}`,
+              )
+            })
 
-            log.info('\n=== Vector Results ===');
+            log.info('\n=== Vector Results ===')
             results.vector.forEach((event, idx) => {
-              log.info(`${idx + 1}. [${event.id}] ${new Date(event.timestamp).toISOString()}`);
-              log.info(`   Text: ${event.text.substring(0, 100)}${event.text.length > 100 ? '...' : ''}`);
-            });
+              log.info(`${idx + 1}. [${event.id}] ${new Date(event.timestamp).toISOString()}`)
+              log.info(
+                `   Text: ${event.text.substring(0, 100)}${event.text.length > 100 ? '...' : ''}`,
+              )
+            })
 
-            log.info('\n[Test Search] Complete\n');
+            log.info('\n[Test Search] Complete\n')
           } catch (error) {
-            log.error('[Test Search] Error:', error);
+            log.error('[Test Search] Error:', error)
           }
         },
       },
       { type: 'separator' },
       {
         label: 'Usage Stats',
-        submenu: usageStatsSubmenu
+        submenu: usageStatsSubmenu,
       },
       {
         label: 'Settings...',
         click: () => {
-          openSettingsWindow();
+          openSettingsWindow()
         },
       },
       { type: 'separator' },
       {
         label: 'Quit',
         click: () => {
-          recorder.stopCapture();
-          interactionMonitor.stopInteractionMonitoring();
-          app.quit();
+          recorder.stopCapture()
+          interactionMonitor.stopInteractionMonitoring()
+          app.quit()
         },
       },
-    ]);
+    ])
 
-    tray.setContextMenu(contextMenu);
-  };
+    tray.setContextMenu(contextMenu)
+  }
 
   // This method will be called when Electron has finished initialization
   app.on('ready', async () => {
-    await initRecorderMode();
-    createTray();
-    log.info('MemoryLane started. Screenshots will be saved to:', recorder.getScreenshotsDir());
-  });
+    await initRecorderMode()
+    createTray()
+    log.info('MemoryLane started. Screenshots will be saved to:', recorder.getScreenshotsDir())
+  })
 }

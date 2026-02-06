@@ -1,141 +1,140 @@
 #!/usr/bin/env npx tsx
 /**
  * CLI tool to search the MemoryLane database.
- * 
+ *
  * Usage:
  *   npm run db:search "your search query"
  *   npm run db:search "your search query" --limit 10
  *   npm run db:search "your search query" --db-path /custom/path
  */
 
-import * as fs from 'fs';
-import { StorageService } from '../src/main/processor/storage';
-import { EmbeddingService } from '../src/main/processor/embedding';
-import { getDefaultDbPath } from '../src/main/paths';
+import * as fs from 'fs'
+import { StorageService } from '../src/main/processor/storage'
+import { EmbeddingService } from '../src/main/processor/embedding'
+import { getDefaultDbPath } from '../src/main/paths'
 
 interface CLIArgs {
-  query: string;
-  limit: number;
-  dbPath: string;
+  query: string
+  limit: number
+  dbPath: string
 }
 
 function parseArgs(): CLIArgs {
-  const args = process.argv.slice(2);
-  
-  let query = '';
-  let limit = 5;
-  let dbPath = getDefaultDbPath();
-  
+  const args = process.argv.slice(2)
+
+  let query = ''
+  let limit = 5
+  let dbPath = getDefaultDbPath()
+
   for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    
+    const arg = args[i]
+
     if (arg === '--limit' && args[i + 1]) {
-      limit = parseInt(args[i + 1], 10);
-      i++;
+      limit = parseInt(args[i + 1], 10)
+      i++
     } else if (arg === '--db-path' && args[i + 1]) {
-      dbPath = args[i + 1];
-      i++;
+      dbPath = args[i + 1]
+      i++
     } else if (!arg.startsWith('--')) {
-      query = arg;
+      query = arg
     }
   }
-  
-  return { query, limit, dbPath };
+
+  return { query, limit, dbPath }
 }
 
 function formatTimestamp(timestamp: number): string {
-  const date = new Date(timestamp);
-  return date.toLocaleString();
+  const date = new Date(timestamp)
+  return date.toLocaleString()
 }
 
 function truncateText(text: string, maxLength = 200): string {
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength) + '...';
+  if (text.length <= maxLength) return text
+  return text.substring(0, maxLength) + '...'
 }
 
 async function main() {
-  const { query, limit, dbPath } = parseArgs();
-  
+  const { query, limit, dbPath } = parseArgs()
+
   if (!query) {
-    console.error('Usage: npm run db:search "your search query" [--limit N] [--db-path PATH]');
-    console.error('');
-    console.error('Options:');
-    console.error('  --limit N        Number of results to return (default: 5)');
-    console.error('  --db-path PATH   Path to LanceDB directory');
-    console.error('');
-    console.error(`Default database path: ${getDefaultDbPath()}`);
-    process.exit(1);
+    console.error('Usage: npm run db:search "your search query" [--limit N] [--db-path PATH]')
+    console.error('')
+    console.error('Options:')
+    console.error('  --limit N        Number of results to return (default: 5)')
+    console.error('  --db-path PATH   Path to LanceDB directory')
+    console.error('')
+    console.error(`Default database path: ${getDefaultDbPath()}`)
+    process.exit(1)
   }
-  
+
   // Check if database exists
   if (!fs.existsSync(dbPath)) {
-    console.error(`Database not found at: ${dbPath}`);
-    console.error('');
-    console.error('Make sure the MemoryLane app has run and captured some data.');
-    console.error('Or specify a custom path with --db-path');
-    process.exit(1);
+    console.error(`Database not found at: ${dbPath}`)
+    console.error('')
+    console.error('Make sure the MemoryLane app has run and captured some data.')
+    console.error('Or specify a custom path with --db-path')
+    process.exit(1)
   }
-  
-  console.log(`Searching: "${query}"`);
-  console.log(`Database: ${dbPath}`);
-  console.log(`Limit: ${limit}`);
-  console.log('---');
-  
+
+  console.log(`Searching: "${query}"`)
+  console.log(`Database: ${dbPath}`)
+  console.log(`Limit: ${limit}`)
+  console.log('---')
+
   try {
     // Initialize services
-    const storageService = new StorageService(dbPath);
-    await storageService.init();
-    
-    const embeddingService = new EmbeddingService();
-    await embeddingService.init();
-    
+    const storageService = new StorageService(dbPath)
+    await storageService.init()
+
+    const embeddingService = new EmbeddingService()
+    await embeddingService.init()
+
     // Generate query embedding
-    console.log('Generating embedding...');
-    const queryVector = await embeddingService.generateEmbedding(query);
-    
+    console.log('Generating embedding...')
+    const queryVector = await embeddingService.generateEmbedding(query)
+
     // Run both searches
-    console.log('Searching...');
+    console.log('Searching...')
     const [vectorResults, ftsResults] = await Promise.all([
       storageService.searchVectors(queryVector, limit),
-      storageService.searchFTS(query, limit)
-    ]);
-    
+      storageService.searchFTS(query, limit),
+    ])
+
     // Display vector search results
-    console.log('\n=== Vector Search Results ===\n');
+    console.log('\n=== Vector Search Results ===\n')
     if (vectorResults.length === 0) {
-      console.log('No results found.');
+      console.log('No results found.')
     } else {
       vectorResults.forEach((result, index) => {
-        console.log(`[${index + 1}] ${formatTimestamp(result.timestamp)}`);
-        console.log(`    ID: ${result.id}`);
-        console.log(`    Text: ${truncateText(result.text)}`);
-        console.log('');
-      });
+        console.log(`[${index + 1}] ${formatTimestamp(result.timestamp)}`)
+        console.log(`    ID: ${result.id}`)
+        console.log(`    Text: ${truncateText(result.text)}`)
+        console.log('')
+      })
     }
-    
+
     // Display FTS results
-    console.log('=== Full-Text Search Results ===\n');
+    console.log('=== Full-Text Search Results ===\n')
     if (ftsResults.length === 0) {
-      console.log('No results found.');
+      console.log('No results found.')
     } else {
       ftsResults.forEach((result, index) => {
-        console.log(`[${index + 1}] ${formatTimestamp(result.timestamp)}`);
-        console.log(`    ID: ${result.id}`);
-        console.log(`    Text: ${truncateText(result.text)}`);
-        console.log('');
-      });
+        console.log(`[${index + 1}] ${formatTimestamp(result.timestamp)}`)
+        console.log(`    ID: ${result.id}`)
+        console.log(`    Text: ${truncateText(result.text)}`)
+        console.log('')
+      })
     }
-    
+
     // Summary
-    console.log('---');
-    console.log(`Vector results: ${vectorResults.length}, FTS results: ${ftsResults.length}`);
-    
-    await storageService.close();
-    
+    console.log('---')
+    console.log(`Vector results: ${vectorResults.length}, FTS results: ${ftsResults.length}`)
+
+    await storageService.close()
   } catch (error) {
-    console.error('Error:', error instanceof Error ? error.message : error);
-    process.exit(1);
+    console.error('Error:', error instanceof Error ? error.message : error)
+    process.exit(1)
   }
 }
 
-main();
+main()

@@ -7,12 +7,14 @@ Minimal Electron tray app that captures screenshots at fixed intervals.
 ## Scope
 
 **In scope:**
+
 - Tray app shell
-- Screenshot capture every `CAPTURE_INTERVAL_MS` 
+- Screenshot capture every `CAPTURE_INTERVAL_MS`
 - Save to disk
 - Expose clean interface for downstream processing
 
 **Out of scope (handled by colleague):**
+
 - LLM processing
 - Database / storage logic
 - Deduplication
@@ -28,17 +30,17 @@ The screen capture module emits screenshots. Downstream consumer subscribes to t
 // src/shared/types.ts
 
 interface Screenshot {
-  id: string;              // UUID
-  filepath: string;        // Absolute path to PNG
-  timestamp: number;       // Unix ms
+  id: string // UUID
+  filepath: string // Absolute path to PNG
+  timestamp: number // Unix ms
   display: {
-    id: number;
-    width: number;
-    height: number;
-  };
+    id: number
+    width: number
+    height: number
+  }
 }
 
-type OnScreenshotCallback = (screenshot: Screenshot) => void;
+type OnScreenshotCallback = (screenshot: Screenshot) => void
 ```
 
 ### API Surface
@@ -47,8 +49,8 @@ type OnScreenshotCallback = (screenshot: Screenshot) => void;
 // src/main/capture.ts
 
 // Configuration
-const CAPTURE_INTERVAL_MS = 30_000;  // 30 seconds
-const SCREENSHOTS_DIR = app.getPath('userData') + '/screenshots';
+const CAPTURE_INTERVAL_MS = 30_000 // 30 seconds
+const SCREENSHOTS_DIR = app.getPath('userData') + '/screenshots'
 
 // Methods
 function startCapture(): void
