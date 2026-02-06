@@ -10,7 +10,8 @@ export default defineConfig({
       rollupOptions: {
         external: [
           'uiohook-napi',
-          '@lancedb/lancedb',
+          'better-sqlite3',
+          'sqlite-vec',
           'onnxruntime-node',
           'onnxruntime-common',
           'sharp',
