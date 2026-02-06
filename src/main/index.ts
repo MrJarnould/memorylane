@@ -24,26 +24,19 @@ if (isMCPMode) {
   process.stdout.write = process.stderr.write.bind(process.stderr) as typeof process.stdout.write
 }
 
-import { app, Tray, Menu, nativeImage } from 'electron'
+import { app } from 'electron'
 import log, { configureMCPMode } from './logger'
 
 if (isMCPMode) {
   configureMCPMode()
 }
-import path from 'node:path'
-import fs from 'node:fs'
 import { EventProcessor } from './processor/index'
 import { EmbeddingService } from './processor/embedding'
 import { StorageService } from './processor/storage'
 import { SemanticClassifierService } from './processor/semantic-classifier'
 import { ApiKeyManager } from './settings/api-key-manager'
 import { CaptureSettingsManager } from './settings/capture-settings-manager'
-import {
-  initSettingsIPC,
-  initCaptureSettingsIPC,
-  openSettingsWindow,
-} from './settings/settings-window'
-import { Screenshot } from '../shared/types'
+import { initSettingsIPC, initCaptureSettingsIPC } from './settings/settings-window'
 import dotenv from 'dotenv'
 
 try {
@@ -109,7 +102,6 @@ if (isMCPMode) {
   let recorder: typeof import('./recorder/recorder')
   let interactionMonitor: typeof import('./recorder/interaction-monitor')
 
-  let tray: Tray | null = null
   let processor: EventProcessor | null = null
   let apiKeyManager: ApiKeyManager | null = null
   let captureSettingsManager: CaptureSettingsManager | null = null
@@ -141,249 +133,19 @@ if (isMCPMode) {
     initCaptureSettingsIPC(captureSettingsManager)
   }
 
-  const createTray = () => {
-    // Try to load custom icon, fall back to default
-    // In dev: __dirname is out/main, assets is at ../../assets
-    // In production: assets are in resources/assets
-    const isDev = !app.isPackaged
-    const iconPath = isDev
-      ? path.join(__dirname, '../../assets/tray-icon.png')
-      : path.join(process.resourcesPath, 'assets/tray-icon.png')
-    let icon: Electron.NativeImage
-
-    try {
-      icon = nativeImage.createFromPath(iconPath)
-      if (icon.isEmpty()) {
-        icon = nativeImage.createEmpty()
-      }
-    } catch {
-      icon = nativeImage.createEmpty()
-    }
-
-    tray = new Tray(icon)
-    tray.setToolTip('MemoryLane - Screen Capture')
-
-    void updateTrayMenu()
-
-    // Register a callback to process screenshots
-    recorder.onScreenshot(async (screenshot: Screenshot) => {
-      log.info(`[Main] Screenshot captured: ${screenshot.id}`)
-
-      if (processor) {
-        try {
-          await processor.processScreenshot(screenshot)
-          log.info(`[Main] Screenshot processed successfully: ${screenshot.id}`)
-          // Refresh tray menu to show updated usage stats
-          void updateTrayMenu()
-        } catch (error) {
-          log.error(`[Main] Error processing screenshot ${screenshot.id}:`, error)
-        }
-      }
-    })
-
-    // Subscribe to interaction events - pass them to the processor for aggregation
-    interactionMonitor.onInteraction((event) => {
-      if (processor) {
-        processor.addInteractionEvent(event)
-      }
-    })
-  }
-
-  const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes'
-
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
-
-  const formatNumber = (num: number): string => {
-    return num.toLocaleString()
-  }
-
-  const buildUsageStatsSubmenu = async (): Promise<Electron.MenuItemConstructorOptions[]> => {
-    const submenu: Electron.MenuItemConstructorOptions[] = []
-
-    if (!processor) {
-      submenu.push({
-        label: 'Stats not available',
-        enabled: false,
-      })
-      return submenu
-    }
-
-    const classifier = processor.getClassifierService()
-    const storage = processor.getStorageService()
-
-    if (classifier) {
-      const usageTracker = classifier.getUsageTracker()
-      const stats = usageTracker.getStats()
-
-      submenu.push(
-        {
-          label: `API Requests: ${formatNumber(stats.requestCount)}`,
-          enabled: false,
-        },
-        {
-          label: `Tokens: ${formatNumber(stats.promptTokens)} (prompt) / ${formatNumber(stats.completionTokens)} (completion)`,
-          enabled: false,
-        },
-        {
-          label: `Est. Cost: $${stats.totalCost.toFixed(4)}`,
-          enabled: false,
-        },
-      )
-    } else {
-      submenu.push({
-        label: 'API tracking unavailable (no API key)',
-        enabled: false,
-      })
-    }
-
-    submenu.push({ type: 'separator' })
-
-    try {
-      const screenshotCount = await storage.countRows()
-      const dbSize = storage.getDbSize()
-
-      submenu.push(
-        {
-          label: `Screenshots: ${formatNumber(screenshotCount)}`,
-          enabled: false,
-        },
-        {
-          label: `Database: ${formatBytes(dbSize)}`,
-          enabled: false,
-        },
-      )
-    } catch (error) {
-      log.error('Error fetching storage stats:', error)
-      submenu.push({
-        label: 'Storage stats unavailable',
-        enabled: false,
-      })
-    }
-
-    return submenu
-  }
-
-  const updateTrayMenu = async () => {
-    if (!tray) return
-
-    const isCapturing = recorder.isCapturingNow()
-
-    const usageStatsSubmenu = await buildUsageStatsSubmenu()
-
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: isCapturing ? 'Stop Capture' : 'Start Capture',
-        click: () => {
-          if (isCapturing) {
-            recorder.stopCapture()
-            interactionMonitor.stopInteractionMonitoring()
-          } else {
-            recorder.startCapture()
-            try {
-              interactionMonitor.startInteractionMonitoring()
-            } catch (error) {
-              log.error('Failed to start interaction monitoring:', error)
-              log.info('Continuing without interaction monitoring')
-            }
-          }
-          void updateTrayMenu()
-        },
-      },
-      {
-        label: 'Capture Now',
-        click: async () => {
-          try {
-            const screenshot = await recorder.captureNow()
-            log.info('Manual capture successful:', screenshot.id)
-          } catch (error) {
-            log.error('Manual capture failed:', error)
-          }
-        },
-      },
-      {
-        label: 'Test Search: "MemoryLane"',
-        click: async () => {
-          if (!processor) {
-            log.error('[Test Search] Processor not initialized')
-            return
-          }
-
-          try {
-            log.info('[Test Search] Starting search for "MemoryLane"...')
-            const results = await processor.search('MemoryLane')
-
-            log.info('\n=== FTS Results ===')
-            results.fts.forEach((event, idx) => {
-              log.info(`${idx + 1}. [${event.id}] ${new Date(event.timestamp).toISOString()}`)
-              log.info(
-                `   Text: ${event.text.substring(0, 100)}${event.text.length > 100 ? '...' : ''}`,
-              )
-            })
-
-            log.info('\n=== Vector Results ===')
-            results.vector.forEach((event, idx) => {
-              log.info(`${idx + 1}. [${event.id}] ${new Date(event.timestamp).toISOString()}`)
-              log.info(
-                `   Text: ${event.text.substring(0, 100)}${event.text.length > 100 ? '...' : ''}`,
-              )
-            })
-
-            log.info('\n[Test Search] Complete\n')
-          } catch (error) {
-            log.error('[Test Search] Error:', error)
-          }
-        },
-      },
-      { type: 'separator' },
-      {
-        label: 'Usage Stats',
-        submenu: usageStatsSubmenu,
-      },
-      {
-        label: 'Settings...',
-        click: () => {
-          openSettingsWindow()
-        },
-      },
-      { type: 'separator' },
-      {
-        label: 'Quit',
-        click: () => {
-          recorder.stopCapture()
-          interactionMonitor.stopInteractionMonitoring()
-          app.quit()
-        },
-      },
-    ])
-
-    tray.setContextMenu(contextMenu)
-  }
-
-  const cleanupOldLanceDbDirs = (): void => {
-    const userDataPath = app.getPath('userData')
-    for (const dirName of ['lancedb', 'lancedb-dev']) {
-      const dirPath = path.join(userDataPath, dirName)
-      if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-        try {
-          fs.rmSync(dirPath, { recursive: true, force: true })
-          log.info(`Removed old LanceDB directory: ${dirPath}`)
-        } catch (error) {
-          log.warn(`Failed to remove old LanceDB directory ${dirPath}:`, error)
-        }
-      }
-    }
-  }
-
+  // This method will be called when Electron has finished initialization
   app.on('ready', async () => {
-    cleanupOldLanceDbDirs()
+    const { ensurePermissions } = await import('./ui/permissions')
+    await ensurePermissions()
     await initRecorderMode()
-    createTray()
+
+    const { setupTray } = await import('./ui/tray')
+    setupTray({
+      recorder,
+      interactionMonitor,
+      processor: processor!,
+    })
+
     log.info('MemoryLane started. Screenshots will be saved to:', recorder.getScreenshotsDir())
   })
 }
