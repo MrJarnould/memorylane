@@ -6,6 +6,48 @@ import { getDefaultDbPath } from '../paths'
 import { SearchFilters } from '../../shared/types'
 import log from '../logger'
 
+/**
+ * Loads the sqlite-vec extension into the given database.
+ * Falls back to manual path resolution for packaged Electron apps where
+ * the platform-specific package may be nested or inside app.asar.unpacked.
+ */
+function loadSqliteVecExtension(db: Database.Database): void {
+  try {
+    sqliteVec.load(db)
+    return
+  } catch (defaultError) {
+    log.warn(`Default sqlite-vec loader failed, attempting manual resolution: ${defaultError}`)
+  }
+
+  const ext = process.platform === 'win32' ? 'dll' : process.platform === 'darwin' ? 'dylib' : 'so'
+  const platformName = process.platform === 'win32' ? 'windows' : process.platform
+  const packageName = `sqlite-vec-${platformName}-${process.arch}`
+  const filename = `vec0.${ext}`
+
+  const searchPaths: string[] = []
+
+  const resourcesPath = 'resourcesPath' in process ? (process.resourcesPath as string) : null
+  if (resourcesPath) {
+    const unpacked = path.join(resourcesPath, 'app.asar.unpacked', 'node_modules')
+    searchPaths.push(
+      path.join(unpacked, 'sqlite-vec', 'node_modules', packageName, filename),
+      path.join(unpacked, packageName, filename),
+    )
+  }
+
+  for (const candidate of searchPaths) {
+    if (fs.existsSync(candidate)) {
+      log.info(`Loading sqlite-vec extension from: ${candidate}`)
+      db.loadExtension(candidate)
+      return
+    }
+  }
+
+  throw new Error(
+    `sqlite-vec extension not found for ${packageName}. Searched: ${searchPaths.join(', ')}`,
+  )
+}
+
 export interface StoredEvent extends Record<string, unknown> {
   id: string
   timestamp: number
@@ -47,6 +89,8 @@ export class StorageService {
 
   /**
    * Initializes the SQLite database, creates tables and indexes.
+   * Only sets this.db after all setup steps succeed so that a partial
+   * failure does not leave the instance in an inconsistent state.
    */
   public async init(): Promise<void> {
     if (this.db) return
@@ -57,52 +101,58 @@ export class StorageService {
     }
 
     log.info(`Initializing SQLite database at: ${this.dbPath}`)
-    this.db = new Database(this.dbPath)
+    const db = new Database(this.dbPath)
 
-    this.db.pragma('journal_mode = WAL')
+    try {
+      db.pragma('journal_mode = WAL')
 
-    sqliteVec.load(this.db)
+      loadSqliteVecExtension(db)
 
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS context_events (
-        id TEXT PRIMARY KEY,
-        timestamp INTEGER NOT NULL,
-        text TEXT NOT NULL DEFAULT '',
-        summary TEXT NOT NULL DEFAULT '',
-        appName TEXT NOT NULL DEFAULT '',
-        vector BLOB
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS context_events (
+          id TEXT PRIMARY KEY,
+          timestamp INTEGER NOT NULL,
+          text TEXT NOT NULL DEFAULT '',
+          summary TEXT NOT NULL DEFAULT '',
+          appName TEXT NOT NULL DEFAULT '',
+          vector BLOB
+        )
+      `)
+
+      db.exec(
+        'CREATE INDEX IF NOT EXISTS idx_context_events_timestamp ON context_events(timestamp)',
       )
-    `)
+      db.exec('CREATE INDEX IF NOT EXISTS idx_context_events_appName ON context_events(appName)')
 
-    this.db.exec(
-      'CREATE INDEX IF NOT EXISTS idx_context_events_timestamp ON context_events(timestamp)',
-    )
-    this.db.exec('CREATE INDEX IF NOT EXISTS idx_context_events_appName ON context_events(appName)')
+      db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS context_events_fts USING fts5(
+          text,
+          summary,
+          content='context_events',
+          content_rowid='rowid'
+        )
+      `)
 
-    this.db.exec(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS context_events_fts USING fts5(
-        text,
-        summary,
-        content='context_events',
-        content_rowid='rowid'
-      )
-    `)
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS context_events_ai AFTER INSERT ON context_events BEGIN
+          INSERT INTO context_events_fts(rowid, text, summary)
+            VALUES (new.rowid, new.text, new.summary);
+        END
+      `)
 
-    this.db.exec(`
-      CREATE TRIGGER IF NOT EXISTS context_events_ai AFTER INSERT ON context_events BEGIN
-        INSERT INTO context_events_fts(rowid, text, summary)
-          VALUES (new.rowid, new.text, new.summary);
-      END
-    `)
+      db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS context_events_vec USING vec0(
+          id TEXT PRIMARY KEY,
+          embedding float[${this.vectorDimensions}]
+        )
+      `)
 
-    this.db.exec(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS context_events_vec USING vec0(
-        id TEXT PRIMARY KEY,
-        embedding float[${this.vectorDimensions}]
-      )
-    `)
-
-    log.info('SQLite database initialized successfully')
+      this.db = db
+      log.info('SQLite database initialized successfully')
+    } catch (error) {
+      db.close()
+      throw error
+    }
   }
 
   /**
