@@ -37,10 +37,10 @@ import { SemanticClassifierService } from './processor/semantic-classifier'
 import { ApiKeyManager } from './settings/api-key-manager'
 import { CaptureSettingsManager } from './settings/capture-settings-manager'
 import { initSettingsIPC, initCaptureSettingsIPC } from './settings/settings-window'
-import dotenv from 'dotenv'
+import { config as loadEnv } from 'dotenv'
 
 try {
-  dotenv.config()
+  loadEnv()
 } catch {
   // cwd might not be available in packaged app context — expected, we don't need .env there
 }

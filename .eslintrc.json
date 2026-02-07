@@ -14,5 +14,12 @@
     "prettier"
   ],
   "parser": "@typescript-eslint/parser",
-  "ignorePatterns": ["*.config.ts", "build/"] // because we use dynamic imports in paths.ts
+  "ignorePatterns": ["*.config.ts", "build/", "dist/"], // because we use dynamic imports in paths.ts
+  "settings": {
+    "import/resolver": {
+      "typescript": {
+        "project": ["./tsconfig.json", "./tsconfig.web.json", "./tsconfig.node.json"]
+      }
+    }
+  }
 }
