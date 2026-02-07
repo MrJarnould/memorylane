@@ -51,7 +51,7 @@ export class MemoryLaneMCPServer {
       'search_context',
       {
         description:
-          'Search your personal context vault by meaning. Use for specific questions like "when did I work on auth?" Returns compact summaries (id, timestamp, app, summary). When query is omitted but time filters are set, returns events in that range ordered by time (like browse_timeline). Use get_event_details to fetch full OCR text for specific entries.',
+          'Semantic search over recorded screen activity. MemoryLane captures periodic screenshots — each entry has an AI-generated summary, OCR text, app name, and timestamp. Use this for targeted questions (e.g. "when did I review PR #142?", "find my work on the auth module"). Returns compact summaries only (id, time, app, summary) — call get_event_details for full OCR text. If query is omitted, returns events chronologically (requires startTime or endTime).',
         inputSchema: {
           query: z
             .string()
@@ -59,7 +59,10 @@ export class MemoryLaneMCPServer {
             .describe(
               'Semantic search query. When provided, results are ranked by relevance. When omitted, results are returned chronologically (requires at least startTime or endTime).',
             ),
-          limit: z.number().optional().describe('Maximum number of results to return (default: 5)'),
+          limit: z
+            .number()
+            .optional()
+            .describe('Maximum number of results to return (default: 100)'),
           startTime: z
             .string()
             .optional()
@@ -87,7 +90,7 @@ export class MemoryLaneMCPServer {
       'browse_timeline',
       {
         description:
-          'Browse what happened during a time period. Best for broad questions like "what did I do today?" or "show me this morning\'s activity." Returns lightweight summaries (id, timestamp, app, summary) -- no OCR text. Supports uniform sampling to scan long ranges efficiently. Use get_event_details to drill into specific entries.',
+          'List activity during a time period — best for broad questions like "what did I do today?" Each result is a one-line summary (~20 tokens), so use higher limits (30-50) to get a full picture. Supports uniform sampling to cover long ranges without returning everything. Returns id, timestamp, app, and summary — call get_event_details for full OCR text.',
         inputSchema: {
           startTime: z
             .string()
@@ -108,7 +111,7 @@ export class MemoryLaneMCPServer {
           limit: z
             .number()
             .optional()
-            .describe('Maximum number of results to return (default: 20)'),
+            .describe('Maximum number of results to return (default: 100)'),
           sampling: z
             .enum(['uniform', 'recent_first'])
             .optional()
@@ -124,12 +127,12 @@ export class MemoryLaneMCPServer {
       'get_event_details',
       {
         description:
-          'Fetch full details for specific events by ID, including the raw OCR screen text. This is the only tool that returns OCR content. Use after search_context or browse_timeline to get the full picture for entries of interest.',
+          'Fetch full event details by ID, including the raw OCR screen text. This is the only tool that returns OCR content. Use after browse_timeline or search_context to read what was actually on screen.',
         inputSchema: {
           ids: z
             .array(z.string())
             .min(1)
-            .max(20)
+            .max(100)
             .describe('Event IDs to fetch (from search_context or browse_timeline results)'),
         },
       },
@@ -166,7 +169,7 @@ export class MemoryLaneMCPServer {
     }
 
     try {
-      const effectiveLimit = limit ?? 5
+      const effectiveLimit = limit ?? 100
 
       // Parse time strings
       const startTime = startTimeStr ? parseTimeString(startTimeStr) : undefined
@@ -357,7 +360,7 @@ export class MemoryLaneMCPServer {
         }
       }
 
-      const effectiveLimit = limit ?? 20
+      const effectiveLimit = limit ?? 100
       const effectiveSampling = sampling ?? 'uniform'
       const sampled = this.sampleEvents(allEvents, effectiveLimit, effectiveSampling)
 
