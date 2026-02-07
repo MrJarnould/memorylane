@@ -90,7 +90,25 @@ export function BringYourOwnKeyColumn({
         </Button>
 
         <p className="text-xs text-muted-foreground text-center">
-          Your key is encrypted and stored locally.
+          We use{' '}
+          <a
+            href="https://openrouter.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground"
+          >
+            OpenRouter
+          </a>{' '}
+          because they are transparent about{' '}
+          <a
+            href="https://openrouter.ai/models?order=newest&supported_parameters=reasoning&fmt=free%2Cfixed%2Cinput%2Coutput&policies=ZDR"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground"
+          >
+            Zero Data Retention
+          </a>{' '}
+          policies. Your key is encrypted and stored locally.
         </p>
       </CardContent>
     </Card>
