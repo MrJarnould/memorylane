@@ -1,4 +1,4 @@
-import { desktopCapturer, NativeImage } from 'electron'
+import { desktopCapturer } from 'electron'
 import { DEFAULT_VISUAL_DETECTOR_CONFIG } from '@constants'
 import { CaptureSettingsManager } from '../settings/capture-settings-manager'
 import log from '../logger'
@@ -140,13 +140,10 @@ export async function checkAgainstBaseline(): Promise<{ changed: boolean; differ
 }
 
 /**
- * Update the baseline hash.
- *
- * When a NativeImage is provided (e.g. from a just-captured full-res screenshot),
- * the hash is derived by resizing it in-memory — no extra desktopCapturer call.
- * When called without an argument, falls back to capturing a lightweight sample.
+ * Update the baseline to the current screen state
+ * Call this after capturing a screenshot or on startup
  */
-export async function updateBaseline(image?: NativeImage): Promise<void> {
+export async function updateBaseline(): Promise<void> {
   if (!isRunning) {
     log.info('[Visual Detector] Cannot update baseline - not running')
     return
@@ -154,18 +151,8 @@ export async function updateBaseline(image?: NativeImage): Promise<void> {
 
   try {
     const config = getConfig()
-
-    if (image !== undefined) {
-      const resized = image.resize({
-        width: config.SAMPLE_WIDTH,
-        height: config.SAMPLE_HEIGHT,
-      })
-      baselineHash = calculateDHash(resized.toBitmap(), config.SAMPLE_WIDTH, config.SAMPLE_HEIGHT)
-    } else {
-      const sampleData = await captureSample()
-      baselineHash = calculateDHash(sampleData, config.SAMPLE_WIDTH, config.SAMPLE_HEIGHT)
-    }
-
+    const currentImageData = await captureSample()
+    baselineHash = calculateDHash(currentImageData, config.SAMPLE_WIDTH, config.SAMPLE_HEIGHT)
     log.info('[Visual Detector] Baseline updated')
   } catch (error) {
     log.error('Error updating baseline:', error)
