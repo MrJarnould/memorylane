@@ -25,10 +25,12 @@ MemoryLane is a macOS system tray app that captures your screen activity, proces
 
 1. Download `MemoryLane-0.1.0-arm64.dmg`
 2. Open the DMG and drag MemoryLane to Applications
-3. Right-click the app → Open (required since the app is not yet notarized)
-4. Grant Screen Recording permission when prompted
-5. Set your OpenRouter API key in the app window
-6. Optionally register the MCP server with Claude Desktop or Cursor
+3. Double-click the app to open it — you'll see a warning that it can't be opened because Apple cannot check it for malicious software
+4. Go to **System Settings → Privacy & Security**, scroll down, and click **"Open Anyway"** next to the MemoryLane message
+5. Authenticate with your password or Touch ID and confirm the final dialog
+6. Grant Screen Recording permission when prompted
+7. Set your OpenRouter API key in the app window
+8. Optionally register the MCP server with Claude Desktop or Cursor
 
 ## Full Changelog
 
