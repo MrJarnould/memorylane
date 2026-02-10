@@ -1,9 +1,10 @@
 import * as React from 'react'
 import { Card, CardContent } from '@components/ui/card'
-import type { MainWindowStats } from '@types'
+import type { KeyStatus, MainWindowStats } from '@types'
 
 interface StatsDisplayProps {
   stats: MainWindowStats | null
+  keyStatus: KeyStatus | null
 }
 
 function formatBytes(bytes: number): string {
@@ -18,7 +19,7 @@ function formatNumber(n: number): string {
   return n.toLocaleString()
 }
 
-export function StatsDisplay({ stats }: StatsDisplayProps): React.JSX.Element {
+export function StatsDisplay({ stats, keyStatus }: StatsDisplayProps): React.JSX.Element {
   if (!stats) {
     return (
       <Card>
@@ -31,10 +32,12 @@ export function StatsDisplay({ stats }: StatsDisplayProps): React.JSX.Element {
     )
   }
 
+  const isManaged = keyStatus?.source === 'managed'
+
   return (
     <Card>
       <CardContent className="py-3">
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className={`grid ${isManaged ? 'grid-cols-2' : 'grid-cols-3'} gap-4 text-center`}>
           <div>
             <div className="text-lg font-semibold">{formatNumber(stats.screenshotCount)}</div>
             <div className="text-xs text-muted-foreground">Screenshots</div>
@@ -43,12 +46,14 @@ export function StatsDisplay({ stats }: StatsDisplayProps): React.JSX.Element {
             <div className="text-lg font-semibold">{formatBytes(stats.dbSize)}</div>
             <div className="text-xs text-muted-foreground">Storage</div>
           </div>
-          <div>
-            <div className="text-lg font-semibold">
-              {stats.apiUsage ? `$${stats.apiUsage.totalCost.toFixed(2)}` : '-'}
+          {!isManaged && (
+            <div>
+              <div className="text-lg font-semibold">
+                {stats.apiUsage ? `$${stats.apiUsage.totalCost.toFixed(2)}` : '-'}
+              </div>
+              <div className="text-xs text-muted-foreground">API Cost</div>
             </div>
-            <div className="text-xs text-muted-foreground">API Cost</div>
-          </div>
+          )}
         </div>
       </CardContent>
     </Card>

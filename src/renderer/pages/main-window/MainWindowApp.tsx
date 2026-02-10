@@ -83,7 +83,7 @@ export function MainWindowApp(): React.JSX.Element {
               onToggle={() => void handleToggle()}
             />
 
-            <StatsDisplay stats={stats} />
+            <StatsDisplay stats={stats} keyStatus={keyStatus} />
 
             <IntegrationsSection api={api} />
 
