@@ -1,4 +1,4 @@
-# MemoryLane v0.4.1
+# MemoryLane v0.4.3
 
 MemoryLane is a macOS system tray app that captures your screen activity, processes it with OCR and AI summarization, and makes it searchable through an MCP server — giving AI assistants like Claude and Cursor memory of what you've been working on.
 
@@ -47,4 +47,4 @@ After launching:
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/commits/v0.4.1
+https://github.com/deusXmachina-dev/memorylane/commits/v0.4.3
