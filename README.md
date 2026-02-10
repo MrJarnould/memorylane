@@ -8,88 +8,114 @@ Desktop app that sees what you see, stores summaries about it locally and lets y
 
 🎬 [Demo](https://www.loom.com/share/513b213e82d14323999e419fa434576d)
 
-## About
+## Privacy & Permissions
 
-### Problem
+MemoryLane captures your screen to give AI assistants context about what you're working on. Here's what that means in plain terms:
 
-AI conversations are full of friction because LLMs have little to no context about their users, forcing people to constantly re-explain the same things.
+- **Screen Recording** — the app takes screenshots of your display. macOS will ask you to grant Screen Recording permission. This means the app can see everything on your screen while capture is running.
+- **Accessibility** — the app monitors keyboard and mouse activity (clicks, typing sessions, scrolling) to decide _when_ to capture. macOS will ask you to grant Accessibility permission. The app does not log keystrokes.
+- **What happens to screenshots** — each screenshot is sent to a cloud vision model (Mistral by default, which has a zero data retention policy) for summarization and OCR. The screenshot is then deleted.
+- **What is stored** — only short text summaries and OCR extracts are kept, in a local SQLite database on your machine. Nothing leaves your device except the screenshot sent for processing.
+- **API key** — you need an [OpenRouter](https://openrouter.ai/) API key. The key is stored locally using Electron's encrypted safeStorage.
 
-### Solution
+> **Bottom line:** you are giving this app permission to see your screen and detect your input. All captured data is processed into text and stored locally. Be mindful of sensitive content on screen while capture is active.
 
-Always-on desktop app that analyzes screenshots of what you do, extracts and summarizes it with a vision model and stores it locally on your device. It then lets you pull it into your favorite LLM via MCP as rich context.
+## Current Status
 
-### Benefit
+> **⚠️ Early release — not yet Apple-notarized**
+>
+> MemoryLane is code-signed but is still waiting for Apple notarization (expected by Feb 14, 2025). This means macOS Gatekeeper will block the app on first launch — you'll need to manually approve it (see Installation below).
+>
+> This is a fully functional early release. Expect rough edges.
 
-Make your AI output 10x better by giving it 10x more context about you.
+### What works today
 
-### Why we built it
+- Event-driven screen capture (typing, clicking, scrolling, app switches, visual changes)
+- OCR via macOS Vision framework
+- AI-powered activity summarization (Mistral Small, GPT-5 Nano, Grok-4.1 Fast, Gemini Flash Lite via OpenRouter)
+- Semantic + full-text search over your activity history
+- MCP server with `search_context`, `browse_timeline`, and `get_event_details` tools
+- One-click integration with Claude Desktop, Claude Code, and Cursor
+- Configurable capture settings and API usage tracking
 
-To solve our own problem and because it's become clear that context is the key to truly benefiting from AI. We couldn't find anything similar that would be good enough.
+## Installation
 
-### Security
+### Requirements
 
-MemoryLane uses screenshots and parses them using cloud vision models to generate textual data summaries. Those summaries are stored locally on your device and pulled into your AI chats via MCP on demand. Screenshots are not stored.
+- macOS (Apple Silicon / ARM64)
+- [OpenRouter](https://openrouter.ai/) API key
 
-### Why we use cloud AI models
+### Steps
 
-There are two reasons we didn't use local AI models.
+1. Download `MemoryLane-0.2.0-arm64.dmg` from [trymemorylane.com](https://trymemorylane.com/)
+2. Open the DMG and drag **MemoryLane** to your Applications folder
+3. Double-click the app — you'll see a warning that macOS can't verify the developer
+4. Go to **System Settings → Privacy & Security**, scroll down, and click **"Open Anyway"** next to the MemoryLane message
+5. Authenticate with your password or Touch ID and confirm the dialog
+6. Grant **Screen Recording** permission when prompted
+7. Grant **Accessibility** permission when prompted
+8. Enter your **OpenRouter API key** in the app window
 
-**First, performance.** Local models are too big (~4GB). We believe most users appreciate speed and normal battery life more than having half of their RAM eaten up by an "invisible" app that turns their laptops into "[toasters](https://kevinchen.co/blog/rewind-ai-app-teardown/)". You can't yet do this with local AI models.
+## Usage
 
-**Second, quality.** Cloud models perform 10x better than local ones. Local models are great for a nice demo but fall short off the mark when users expect good output.
+### Start capturing
 
-That said, we'd love to see someone prove us wrong. It's why we open sourced it.
+Click the MemoryLane icon in your menu bar and select **Start Capture**. The app will begin taking screenshots based on your activity — typing sessions, clicks, scrolling, app switches, and visual changes on screen. You can stop anytime from the same menu.
 
-## Example queries
+### Connect to an AI assistant
 
-- "pick up where I left off working on ____"
-- "summarize my research on ____ from last week"
-- "list the design frameworks I viewed recently"
+From the tray menu, click **Add to Claude Desktop**, **Add to Claude Code**, or **Add to Cursor**. This registers MemoryLane as an MCP server so your AI assistant can query your activity history.
 
-## How it works
+You can also set it up manually by pointing your MCP client to the MemoryLane server binary.
 
-1. App captures screenshots using various triggers (e.g. typing session) and time intervals
-2. Vision model extracts context
-3. Output is stored locally in SQLite (never leaves your device)
-4. You can query via MCP in Cursor, Claude, ChatGPT, etc.
+### Example queries
+
+Once connected, try asking your AI assistant things like:
+
+- "What was I working on this morning?"
+- "Pick up where I left off on the auth refactor"
+- "Summarize my research on **\_** from last week"
+- "List the design frameworks I looked at recently"
+- "When did I last review PR #142?"
+
+## How It Works
+
+AI conversations are full of friction because LLMs have no context about you. MemoryLane fixes that by watching what you do and making it searchable.
+
+1. The app captures screenshots based on user activity triggers (not fixed intervals)
+2. A cloud vision model extracts a short summary and OCR text from each screenshot
+3. The screenshot is deleted — only the text summary is stored locally in SQLite
+4. Vector embeddings enable semantic search over your history
+5. An MCP server exposes your history to AI assistants on demand
 
 ### Architecture
 
 ![Architecture](assets/arch-1.png)
 
-## Quick start
+### Why cloud AI models?
 
-There are two ways to start using MemoryLane.
+**Performance** — local models are ~4 GB and turn laptops into space heaters. We believe most users prefer speed and normal battery life from an invisible background app.
 
-### (1) Download our macOS app
+**Quality** — cloud models perform significantly better for summarization and OCR. Local models make a nice demo but fall short when users expect reliable output.
 
-1. Go to https://trymemorylane.com/
-2. Click "Download"
-3. Install the app
-4. Enable permissions
-5. Enable MCP configuration
-6. Done!
+That said, we'd love to see someone prove us wrong — it's one reason we open-sourced this.
 
-### (2) Build using npm
+## Build from Source
 
 1. Clone this repo
-2. ….
-
-## Requirements
-
-- macOS (ARM64)
-- OpenRouter API key
-
-## Privacy
-
-- Screenshots are processed, then deleted (never stored)
-- Only textual summaries of your activity are stored (locally, hosted solution coming soon)
-- Nothing leaves your device except for the initial screenshot that's parsed by a vision model (Mistral by default because it's got default Zero Data Retention policy)
+2. `npm install`
+3. `npm run dev` to start in development mode
+4. See [CLAUDE.md](CLAUDE.md) for full development commands and architecture details
 
 ## Limitations
 
-There are a few limitations we're aware of and working to resolve.
+1. **Single display only** — captures from one screen; multi-monitor support is coming ([#4](https://github.com/deusXmachina-dev/memorylane/issues/4))
+2. **macOS ARM64 only** — this release is Apple Silicon only; Intel Mac, Windows, and Linux builds are planned
 
-1. **Working with two screens** — our app currently captures content from one screen only; multi-monitor support is coming soon ([#4](https://github.com/deusXmachina-dev/memorylane/issues/4))
-2. **Pending Apple notarization** — the app is code-signed and is currently awaiting Apple notarization (expected by Feb 14th); for now, you'll need to right-click → Open on first launch to bypass Gatekeeper ([#5](https://github.com/deusXmachina-dev/memorylane/issues/5))
-3. **macOS ARM64 only** — this release includes a macOS Apple Silicon DMG only; Intel Mac, Windows, and Linux builds will be supported in the future
+## Coming Soon
+
+- **Apple notarization** — seamless install without Gatekeeper warnings
+- **Multi-monitor support** — capture from all connected displays
+- **Browser integration** — deeper context from browser tabs and web apps
+- **Managed cloud service** — hosted version with richer integrations, online LLM tool access, and zero setup
+- **Cross-platform builds** — Intel Mac, Windows, and Linux support
