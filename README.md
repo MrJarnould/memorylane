@@ -1,5 +1,13 @@
 # MemoryLane
 
+## Installation
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/deusXmachina-dev/memorylane/main/install.sh | sh
+```
+
+This downloads the latest release and installs it to `/Applications`.
+
 ## TL;DR
 
 Desktop app that sees what you see, stores summaries about it locally and lets you query it in any AI chat via MCP.
@@ -41,20 +49,12 @@ MemoryLane captures your screen to give AI assistants context about what you're 
 - One-click integration with Claude Desktop, Claude Code, and Cursor
 - Configurable capture settings and API usage tracking
 
-## Installation
+## Usage
 
 ### Requirements
 
 - macOS (Apple Silicon / ARM64)
 - A MemoryLane subscription ($20/mo) **or** your own [OpenRouter](https://openrouter.ai/) API key
-
-### Install
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/deusXmachina-dev/memorylane/main/install.sh | sh
-```
-
-This downloads the latest release and installs it to `/Applications`.
 
 ### First launch
 
@@ -63,8 +63,6 @@ This downloads the latest release and installs it to `/Applications`.
 3. Choose how to provide an API key:
    - **Subscribe** _(recommended)_ — click Subscribe to get a managed key ($20/mo via Stripe)
    - **Bring Your Own Key** — paste your OpenRouter API key if you already have one
-
-## Usage
 
 ### Start capturing
 
