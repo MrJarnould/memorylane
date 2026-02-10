@@ -47,7 +47,7 @@ MemoryLane captures your screen to give AI assistants context about what you're 
 
 ### Steps
 
-1. Download the latest DMG from the [Releases page](https://github.com/deusXmachina-dev/memorylane/releases/latest)
+1. Download the [latest DMG](https://github.com/deusXmachina-dev/memorylane/releases/download/v0.3.0/MemoryLane-0.3.0-arm64.dmg)
 2. Open the DMG and drag **MemoryLane** to your Applications folder
 3. Double-click the app — you'll see a warning that macOS can't verify the developer
 4. Go to **System Settings → Privacy & Security**, scroll down, and click **"Open Anyway"** next to the MemoryLane message
