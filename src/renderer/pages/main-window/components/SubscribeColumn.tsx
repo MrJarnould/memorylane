@@ -69,10 +69,12 @@ export function SubscribeColumn({ api, onKeySet }: SubscribeColumnProps): React.
         <CardTitle className="text-base">Subscribe</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          Get a managed API key for <span className="font-semibold text-foreground">$20/mo</span>.
-          No setup required.
-        </p>
+        <div className="flex items-center h-8">
+          <p className="text-sm text-muted-foreground">
+            Get a managed API key for <span className="font-semibold text-foreground">$20/mo</span>.
+            No setup required.
+          </p>
+        </div>
 
         <Button className="w-full" onClick={() => void handleSubscribe()}>
           Subscribe
