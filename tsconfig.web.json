@@ -10,7 +10,8 @@
       "@/*": ["src/*"],
       "@components/*": ["src/renderer/components/*"],
       "@constants": ["src/shared/constants"],
-      "@types": ["src/shared/types"]
+      "@types": ["src/shared/types"],
+      "@assets/*": ["assets/*"]
     }
   },
   "include": ["src/renderer/**/*", "src/shared/**/*"]

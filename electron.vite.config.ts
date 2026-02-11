@@ -39,6 +39,7 @@ export default defineConfig({
         '@components': resolve(__dirname, 'src/renderer/components'),
         '@constants': resolve(__dirname, 'src/shared/constants'),
         '@types': resolve(__dirname, 'src/shared/types'),
+        '@assets': resolve(__dirname, 'assets'),
       },
     },
     plugins: [tailwindcss(), react()],

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import logoImage from '../../../../../assets/tray-icon-full-size.png'
+import logoImage from '@assets/tray-icon-full-size.png'
 
 export function Logo(): React.JSX.Element {
   return (
