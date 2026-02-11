@@ -23,7 +23,11 @@
     "db:search": "./scripts/enode.sh ./node_modules/.bin/tsx scripts/db-search.ts",
     "db:stats": "./scripts/enode.sh ./node_modules/.bin/tsx scripts/db-stats.ts",
     "mcp:start": "./scripts/enode.sh ./node_modules/.bin/tsx scripts/mcp-server.ts",
-    "mcp:inspector": "npx @modelcontextprotocol/inspector npm run mcp:start"
+    "mcp:inspector": "npx @modelcontextprotocol/inspector npm run mcp:start",
+    "mcp:dev": "./scripts/enode.sh ./node_modules/.bin/tsx scripts/mcp-dev.ts on",
+    "mcp:dev:off": "./scripts/enode.sh ./node_modules/.bin/tsx scripts/mcp-dev.ts off",
+    "mcp:dev:status": "./scripts/enode.sh ./node_modules/.bin/tsx scripts/mcp-dev.ts status",
+    "install:local": "./scripts/install-local.sh"
   },
   "keywords": [],
   "author": {
