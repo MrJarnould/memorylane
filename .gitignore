@@ -127,3 +127,6 @@ Desktop.ini
 
 # Playground dir
 playground/
+
+# Debug pipeline output (dev only)
+.debug-pipeline/

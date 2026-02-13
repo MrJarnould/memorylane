@@ -37,6 +37,7 @@ import { SemanticClassifierService } from './processor/semantic-classifier'
 import { ApiKeyManager } from './settings/api-key-manager'
 import { DeviceIdentity } from './settings/device-identity'
 import { ManagedKeyService } from './services/managed-key-service'
+import { DebugPipelineWriter } from './processor/debug-pipeline'
 import { config as loadEnv } from 'dotenv'
 
 try {
@@ -63,6 +64,7 @@ if (isMCPMode) {
 
   app.on('ready', async () => {
     log.info('[MCP Mode] Starting MemoryLane MCP Server...')
+    DebugPipelineWriter.cleanDebugDir()
 
     try {
       // Initialize API key manager for secure key storage
@@ -118,7 +120,14 @@ if (isMCPMode) {
     // Initialize Processor Services
     const embeddingService = new EmbeddingService()
     const storageService = new StorageService(StorageService.getDefaultDbPath())
-    classifierService = new SemanticClassifierService(apiKeyManager.getApiKey() || undefined)
+    const debugWriter = DebugPipelineWriter.create()
+    classifierService = new SemanticClassifierService(
+      apiKeyManager.getApiKey() || undefined,
+      undefined,
+      undefined,
+      undefined,
+      debugWriter,
+    )
     processor = new EventProcessor(embeddingService, storageService, classifierService)
 
     // Initialize managed key service for subscription flow
@@ -128,6 +137,8 @@ if (isMCPMode) {
 
   // This method will be called when Electron has finished initialization
   app.on('ready', async () => {
+    DebugPipelineWriter.cleanDebugDir()
+
     try {
       const { ensurePermissions } = await import('./ui/permissions')
       await ensurePermissions()

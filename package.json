@@ -7,6 +7,7 @@
   "private": true,
   "scripts": {
     "dev": "LOG_LEVEL=debug electron-vite dev",
+    "dev:debug-pipeline": "LOG_LEVEL=debug DEBUG_PIPELINE=1 electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "npm run build && electron-builder --dir",

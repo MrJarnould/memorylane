@@ -3,6 +3,7 @@ import { OpenRouter } from '@openrouter/sdk'
 import { ClassificationInput, ClassificationResult, InteractionContext } from '../../shared/types'
 import { UsageTracker } from '../services/usage-tracker'
 import log from '../logger'
+import { DebugPipelineWriter } from './debug-pipeline'
 
 const SUPPORTED_MODELS = {
   'mistralai/mistral-small-3.2-24b-instruct': {
@@ -34,12 +35,14 @@ export class SemanticClassifierService {
   private model: ModelChoice
   private maxHistorySize: number
   private usageTracker: UsageTracker
+  private debugWriter: DebugPipelineWriter | null
 
   constructor(
     apiKey?: string,
     model: ModelChoice = 'mistralai/mistral-small-3.2-24b-instruct',
     maxHistorySize = 5,
     usageTracker?: UsageTracker,
+    debugWriter?: DebugPipelineWriter | null,
   ) {
     // Use provided key directly - caller (ApiKeyManager) handles env fallback
     if (apiKey) {
@@ -51,6 +54,7 @@ export class SemanticClassifierService {
     this.model = model
     this.maxHistorySize = maxHistorySize
     this.usageTracker = usageTracker || new UsageTracker()
+    this.debugWriter = debugWriter ?? null
   }
 
   /**
@@ -157,6 +161,15 @@ export class SemanticClassifierService {
         `[SemanticClassifier] Usage tracked - Tokens: ${promptTokens}/${completionTokens}, Cost: $${cost.toFixed(6)}`,
       )
       log.info(`[SemanticClassifier] Total stats: ${JSON.stringify(this.usageTracker.getStats())}`)
+
+      this.debugWriter?.dump(input, prompt, {
+        model: this.model,
+        summary,
+        promptTokens,
+        completionTokens,
+        cost,
+        timestamp: Date.now(),
+      })
 
       // Store in history (use start timestamp for single-image mode)
       const result: ClassificationResult = {
