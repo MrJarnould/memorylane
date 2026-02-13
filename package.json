@@ -22,6 +22,7 @@
     "prepare": "husky",
     "db:search": "./scripts/enode.sh ./node_modules/.bin/tsx scripts/db-search.ts",
     "db:stats": "./scripts/enode.sh ./node_modules/.bin/tsx scripts/db-stats.ts",
+    "db:explore": "jupyter notebook tools/explore-db.ipynb",
     "mcp:start": "./scripts/enode.sh ./node_modules/.bin/tsx scripts/mcp-server.ts",
     "mcp:inspector": "npx @modelcontextprotocol/inspector npm run mcp:start",
     "mcp:dev": "./scripts/enode.sh ./node_modules/.bin/tsx scripts/mcp-dev.ts on",

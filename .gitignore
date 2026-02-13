@@ -122,5 +122,8 @@ Desktop.ini
 # macOS debug symbols
 *.dSYM
 
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
 # Playground dir
 playground/
