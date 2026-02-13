@@ -122,3 +122,7 @@ That said, we'd love to see someone prove us wrong — it's one reason we open-s
 - **Browser integration** — deeper context from browser tabs and web apps
 - **Managed cloud service** — hosted version with richer integrations, online LLM tool access, and zero setup
 - **Cross-platform builds** — Intel Mac, Windows, and Linux support
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=deusXmachina-dev/memorylane&type=date&legend=top-left)](https://www.star-history.com/#deusXmachina-dev/memorylane&type=date&legend=top-left)
