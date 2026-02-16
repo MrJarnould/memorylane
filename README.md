@@ -2,11 +2,19 @@
 
 ## Installation
 
+### macOS (Apple Silicon)
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/deusXmachina-dev/memorylane/main/install.sh | sh
 ```
 
 This downloads the latest release and installs it to `/Applications`.
+
+### Windows (Preview)
+
+1. Download the latest `MemoryLane Setup *.exe` from [GitHub Releases](https://github.com/deusXmachina-dev/memorylane/releases).
+2. Run the installer and finish setup.
+3. Launch MemoryLane from the Start menu.
 
 ## TL;DR
 
@@ -56,7 +64,7 @@ MemoryLane captures your screen to give AI assistants context about what you're 
 ### What works today
 
 - Event-driven screen capture (typing, clicking, scrolling, app switches, visual changes)
-- OCR via macOS Vision framework
+- OCR via macOS Vision framework and native Windows OCR
 - AI-powered activity summarization (Mistral Small, GPT-5 Nano, Grok-4.1 Fast, Gemini Flash Lite via OpenRouter)
 - Semantic + full-text search over your activity history
 - MCP server with `search_context`, `browse_timeline`, and `get_event_details` tools
@@ -115,7 +123,9 @@ That said, we'd love to see someone prove us wrong — it's one reason we open-s
 
 ## Limitations
 
-1. **macOS ARM64 only** — this release is Apple Silicon only; Intel Mac, Windows, and Linux builds are planned
+1. **Windows is preview support** — some OS-specific UX (permissions and tray behavior) may still require tuning.
+2. **Windows OCR depends on native OCR availability** — if OCR language components are unavailable on a given Windows setup, OCR can fail while capture continues.
+3. **Platform support is still evolving** — Linux and Intel macOS are not yet officially supported.
 
 ## Coming Soon
 

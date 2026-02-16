@@ -1,6 +1,16 @@
 import { spawn } from 'child_process'
 import * as path from 'path'
 import * as fs from 'fs'
+import { createOcrBackendError } from './ocr-errors'
+import { extractTextWindowsNative } from './ocr-windows-native'
+
+type OcrBackend = (filepath: string) => Promise<string>
+
+function assertImageExists(filepath: string): void {
+  if (!fs.existsSync(filepath)) {
+    throw new Error(`Image file not found: ${filepath}`)
+  }
+}
 
 interface OcrExecutable {
   readonly command: string
@@ -12,7 +22,7 @@ interface OcrExecutable {
  * In production, uses the pre-compiled binary shipped in the app resources.
  * In development, interprets the Swift script via the `swift` command.
  */
-function getOcrExecutable(): OcrExecutable {
+function getMacOSOcrExecutable(): OcrExecutable {
   let isPackaged = false
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -26,7 +36,11 @@ function getOcrExecutable(): OcrExecutable {
     if (fs.existsSync(binaryPath)) {
       return { command: binaryPath, args: [] }
     }
-    throw new Error(`OCR binary not found at ${binaryPath}`)
+    throw createOcrBackendError(
+      'macos',
+      'backend_unavailable',
+      `OCR binary not found at ${binaryPath}`,
+    )
   }
 
   const scriptPath = path.resolve(process.cwd(), 'src', 'main', 'processor', 'swift', 'ocr.swift')
@@ -34,25 +48,17 @@ function getOcrExecutable(): OcrExecutable {
     return { command: 'swift', args: [scriptPath] }
   }
 
-  throw new Error(`OCR script not found at ${scriptPath}`)
+  throw createOcrBackendError(
+    'macos',
+    'backend_unavailable',
+    `OCR script not found at ${scriptPath}`,
+  )
 }
 
-/**
- * Extracts text from an image using the native macOS Vision framework.
- * In production, runs a pre-compiled Swift binary. In development, interprets the Swift script.
- *
- * @param filepath Absolute path to the image file
- * @returns Promise resolving to the extracted text
- * @throws Error if the file doesn't exist or the OCR process fails
- */
-export async function extractText(filepath: string): Promise<string> {
-  const { command, args } = getOcrExecutable()
+async function extractTextMacOS(filepath: string): Promise<string> {
+  const { command, args } = getMacOSOcrExecutable()
 
   return new Promise((resolve, reject) => {
-    if (!fs.existsSync(filepath)) {
-      return reject(new Error(`Image file not found: ${filepath}`))
-    }
-
     const proc = spawn(command, [...args, filepath])
 
     let stdoutData = ''
@@ -69,7 +75,9 @@ export async function extractText(filepath: string): Promise<string> {
     proc.on('close', (code) => {
       if (code !== 0) {
         return reject(
-          new Error(
+          createOcrBackendError(
+            'macos',
+            'runtime_failed',
             `OCR process failed with code ${code}: ${stderrData.trim() || 'Unknown error'}`,
           ),
         )
@@ -79,7 +87,40 @@ export async function extractText(filepath: string): Promise<string> {
     })
 
     proc.on('error', (err) => {
-      reject(new Error(`Failed to spawn OCR process: ${err.message}`))
+      reject(
+        createOcrBackendError(
+          'macos',
+          'backend_unavailable',
+          `Failed to spawn OCR process: ${err.message}`,
+        ),
+      )
     })
   })
+}
+
+const PLATFORM_OCR_BACKENDS: Partial<Record<NodeJS.Platform, OcrBackend>> = {
+  darwin: extractTextMacOS,
+  win32: extractTextWindowsNative,
+}
+
+/**
+ * Extracts text from an image using a platform-specific OCR backend.
+ *
+ * @param filepath Absolute path to the image file
+ * @returns Promise resolving to the extracted text
+ * @throws Error when no OCR backend is configured for the running platform
+ */
+export async function extractText(filepath: string): Promise<string> {
+  assertImageExists(filepath)
+
+  const backend = PLATFORM_OCR_BACKENDS[process.platform]
+  if (!backend) {
+    throw createOcrBackendError(
+      process.platform === 'win32' ? 'windows' : 'macos',
+      'backend_unavailable',
+      `OCR is not supported on platform "${process.platform}"`,
+    )
+  }
+
+  return backend(filepath)
 }
