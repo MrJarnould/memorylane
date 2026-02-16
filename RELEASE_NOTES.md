@@ -1,10 +1,14 @@
-# MemoryLane v0.6.2
+# MemoryLane v0.7.0
 
 MemoryLane is a macOS system tray app that captures your screen activity, processes it with OCR and AI summarization, and makes it searchable through an MCP server — giving AI assistants like Claude and Cursor memory of what you've been working on.
 
 ## What's Changed
 
-- **Hidden dock icon** — the app no longer appears in the macOS dock, providing a cleaner tray-only experience
+- **Richer activity summaries** — semantic classification now produces more detailed, useful summaries of what you were doing on screen
+- **Summary-first MCP guidance** — tool prompts now prioritize activity summaries for "what was I doing?" questions and reserve OCR for exact recall
+- **Event-based app change monitoring** — capture timing now reacts more precisely to active app transitions
+- **Power usage improvements** — background monitoring was tuned to reduce unnecessary wakeups and improve efficiency
+- **Windows preview improvements** — native Windows OCR support and additional platform groundwork landed in this release
 
 ## Features
 
@@ -21,10 +25,14 @@ MemoryLane is a macOS system tray app that captures your screen activity, proces
 - **Configurable capture settings** — adjust visual change threshold, typing timeout, scroll timeout via the UI
 - **Secure API key storage** — uses Electron's safeStorage for encrypted key persistence
 - **Usage tracking** — monitors API requests, token usage, and costs
+- **Richer activity summaries** — improved summary quality for timeline and search context questions
+- **Windows OCR (preview)** — native OCR path available for Windows preview setups
 
 ## Known Issues & Limitations
 
-- **macOS ARM64 only** — this release is Apple Silicon only; Intel Mac, Windows, and Linux builds are not yet available
+- **macOS ARM64 release artifact only** — official release assets are currently Apple Silicon macOS (`.zip` and `.dmg`)
+- **Windows support is preview quality** — native OCR is available, but some OS-specific UX and setup polish are still in progress
+- **Linux and Intel macOS not yet officially supported**
 
 ## Installation
 
@@ -45,4 +53,4 @@ After launching:
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/commits/v0.6.2
+https://github.com/deusXmachina-dev/memorylane/compare/v0.6.2...v0.7.0

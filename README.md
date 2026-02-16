@@ -137,7 +137,7 @@ That said, we'd love to see someone prove us wrong — it's one reason we open-s
 
 - **Browser integration** — deeper context from browser tabs and web apps
 - **Managed cloud service** — hosted version with richer integrations, online LLM tool access, and zero setup
-- **Cross-platform builds** — Intel Mac, Windows, and Linux support
+- **Cross-platform parity** — Intel Mac and Linux support, plus polished Windows UX
 
 ## Star History
 
