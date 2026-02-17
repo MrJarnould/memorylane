@@ -1,13 +1,18 @@
-# MemoryLane v0.8.0
+# MemoryLane v0.9.0
 
 MemoryLane is a macOS system tray app that captures your screen activity, processes it with OCR and AI summarization, and makes it searchable through an MCP server — giving AI assistants like Claude and Cursor memory of what you've been working on.
 
 ## What's Changed
 
-- **Custom endpoint model support (local models included)** — configure an OpenAI-compatible endpoint in the app and run summarization through your own hosted or local models (for example Ollama-served open weights)
-- **End-to-end custom endpoint integration** — new shared types, persistent endpoint settings, preload/main-process IPC wiring, and runtime model client selection in semantic classification
-- **Custom endpoint UI in the main window** — new settings section for endpoint/model configuration, including a collapsible layout for easier day-to-day use
-- **Improved app context detection** — recorder now monitors title changes to improve activity transitions and timeline quality
+- **Activity-based processing** — screenshots are now grouped into coherent activity sessions via a new ActivityManager, replacing individual screenshot processing with richer, context-aware summaries
+- **Pure event-driven capture** — removed periodic screenshots entirely; capture is now triggered exclusively by user interactions (clicks, typing, scrolling, app switches) and visual changes
+- **Click capture trigger** — mouse clicks now trigger screenshots, improving activity transition detection
+- **Improved OCR pipeline** — polished OCR firing sequences and Swift sidecar for more accurate text extraction
+- **Better summarization prompts** — refined prompts and removed underperforming models for higher-quality activity summaries
+- **Processing queue** — new serial processing queue ensures ordered, reliable screenshot processing
+- **MCP response improvements** — enhanced formatting and richer context in `search_context` and `browse_timeline` tool responses
+- **Data migration** — existing screenshot data is automatically migrated into the new activity-based schema on upgrade
+- **Bug fixes** — resolved race conditions in processing, cold start issues, and Transformers.js compatibility problems
 
 ## Features
 
@@ -17,6 +22,7 @@ MemoryLane is a macOS system tray app that captures your screen activity, proces
 - **Custom endpoint models** — use OpenAI-compatible endpoints, including local runtimes like Ollama
 - **Multi-screen capture** — captures screenshots from all connected displays simultaneously
 - **Event-driven screen capture** — captures screenshots based on user interactions (clicks, typing, scrolling, app switches) and visual changes (perceptual dHash comparison), not fixed intervals
+- **Activity-based processing** — groups screenshots into coherent activity sessions for richer summaries
 - **OCR via macOS Vision** — extracts text from screenshots using the native Vision framework (Swift sidecar)
 - **AI-powered summarization** — classifies activity into concise summaries using vision models via OpenRouter (Mistral Small, GPT-5 Nano, Grok-4.1 Fast, Gemini Flash Lite)
 - **Semantic search** — vector embeddings (all-MiniLM-L6-v2) + SQLite FTS5 for full-text and semantic search over your activity history
@@ -54,4 +60,4 @@ After launching:
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.7.0...v0.8.0
+https://github.com/deusXmachina-dev/memorylane/compare/v0.8.0...v0.9.0
