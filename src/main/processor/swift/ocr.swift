@@ -1,7 +1,7 @@
 import Cocoa
 import Vision
 
-// Check if an argument is provided
+// Parse arguments: ocr.swift <imagePath> [--mode fast|accurate]
 guard CommandLine.arguments.count > 1 else {
     print("Error: No image path provided.")
     exit(1)
@@ -10,13 +10,20 @@ guard CommandLine.arguments.count > 1 else {
 let imagePath = CommandLine.arguments[1]
 let fileURL = URL(fileURLWithPath: imagePath)
 
-// Check if file exists
+var recognitionMode: VNRequestTextRecognitionLevel = .fast
+if let modeIdx = CommandLine.arguments.firstIndex(of: "--mode"),
+   modeIdx + 1 < CommandLine.arguments.count {
+    let modeArg = CommandLine.arguments[modeIdx + 1].lowercased()
+    if modeArg == "accurate" {
+        recognitionMode = .accurate
+    }
+}
+
 guard FileManager.default.fileExists(atPath: imagePath) else {
     print("Error: File not found at \(imagePath)")
     exit(1)
 }
 
-// Request text recognition
 let request = VNRecognizeTextRequest { (request, error) in
     if let error = error {
         print("Error recognizing text: \(error.localizedDescription)")
@@ -28,17 +35,14 @@ let request = VNRecognizeTextRequest { (request, error) in
     }
 
     let recognizedText = observations.compactMap { observation in
-        // Get the top candidate for each observation
         return observation.topCandidates(1).first?.string
     }.joined(separator: "\n")
 
     print(recognizedText)
 }
 
-// Configure request for accuracy
-request.recognitionLevel = .accurate
+request.recognitionLevel = recognitionMode
 
-// Create a handler for the image file
 let handler = VNImageRequestHandler(url: fileURL, options: [:])
 
 do {

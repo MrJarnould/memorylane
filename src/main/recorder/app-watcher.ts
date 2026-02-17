@@ -73,14 +73,11 @@ function spawnWatcher(): void {
   const rl = createInterface({ input: child.stdout! })
 
   rl.on('line', (line) => {
-    log.debug(`[AppWatcher] stdout: ${line}`)
     try {
       const event: AppWatcherEvent = JSON.parse(line)
       if (event.type === 'ready') {
         retries = 0 // successful start, reset backoff
         log.info('[AppWatcher] Ready event received — watcher is alive')
-      } else {
-        log.debug(`[AppWatcher] Event: type=${event.type} app=${event.app} title=${event.title}`)
       }
       onEvent?.(event)
     } catch {

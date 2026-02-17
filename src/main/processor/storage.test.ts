@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { StorageService, StoredEvent } from './storage'
+import Database from 'better-sqlite3'
+import * as sqliteVec from 'sqlite-vec'
+import { StorageService, StoredActivity } from './storage'
 import * as path from 'path'
 import * as fs from 'fs'
 
@@ -12,13 +14,22 @@ const deleteDbFiles = (dbPath: string): void => {
   }
 }
 
-// Helper to create a complete StoredEvent with defaults
-const createEvent = (overrides: Partial<StoredEvent> & { id: string }): StoredEvent => ({
+const createStoredActivity = (
+  overrides: Partial<StoredActivity> & { id: string },
+): StoredActivity => ({
   id: overrides.id,
-  timestamp: overrides.timestamp ?? Date.now(),
-  text: overrides.text ?? 'Sample text',
-  summary: overrides.summary ?? 'Sample summary',
+  startTimestamp: overrides.startTimestamp ?? Date.now(),
+  endTimestamp: overrides.endTimestamp ?? Date.now() + 60000,
   appName: overrides.appName ?? 'TestApp',
+  bundleId: overrides.bundleId ?? 'com.test.app',
+  windowTitle: overrides.windowTitle ?? 'Test Window',
+  url: overrides.url ?? null,
+  tld: overrides.tld ?? null,
+  summary: overrides.summary ?? 'Test activity summary',
+  ocrText: overrides.ocrText ?? 'Sample OCR text',
+  screenshotCount: overrides.screenshotCount ?? 1,
+  interactionSummary: overrides.interactionSummary ?? 'clicks: 1',
+  durationMs: overrides.durationMs ?? 60000,
   vector: overrides.vector ?? [0.1, 0.2, 0.3],
 })
 
@@ -38,141 +49,403 @@ describe('StorageService', () => {
     deleteDbFiles(TEST_DB_PATH)
   })
 
-  it('should add and retrieve an event with all fields', async () => {
-    const event = createEvent({
+  it('should add and retrieve an activity with all fields', async () => {
+    const activity = createStoredActivity({
       id: 'uuid-1',
-      timestamp: 1234567890,
-      text: 'Hello World',
-      summary: 'User said hello',
+      startTimestamp: 1000,
+      endTimestamp: 5000,
       appName: 'VS Code',
+      summary: 'Editing TypeScript',
+      ocrText: 'function hello()',
       vector: [0.1, 0.2, 0.3],
     })
 
-    await storage.addEvent(event)
+    await storage.addActivity(activity)
 
-    const retrieved = await storage.getEventById('uuid-1')
-    expect(retrieved).not.toBeNull()
-    expect(retrieved?.text).toBe('Hello World')
-    expect(retrieved?.summary).toBe('User said hello')
-    expect(retrieved?.appName).toBe('VS Code')
-
-    // Check vector values with closeTo for floating point comparison
-    expect(retrieved?.vector).toBeDefined()
-    expect(retrieved?.vector.length).toBe(3)
-    expect(retrieved?.vector[0]).toBeCloseTo(0.1)
-    expect(retrieved?.vector[1]).toBeCloseTo(0.2)
-    expect(retrieved?.vector[2]).toBeCloseTo(0.3)
+    const retrieved = await storage.getActivitiesByIds(['uuid-1'])
+    expect(retrieved.length).toBe(1)
+    expect(retrieved[0].summary).toBe('Editing TypeScript')
+    expect(retrieved[0].appName).toBe('VS Code')
+    expect(retrieved[0].ocrText).toBe('function hello()')
+    expect(retrieved[0].vector.length).toBe(3)
+    expect(retrieved[0].vector[0]).toBeCloseTo(0.1)
   })
 
-  it('should auto-initialize when addEvent is called without prior init', async () => {
-    // Create a new storage instance without calling init()
+  it('should auto-initialize when addActivity is called without prior init', async () => {
     const autoInitStorage = new StorageService(TEST_DB_PATH, { vectorDimensions: VECTOR_DIMS })
 
-    const event = createEvent({
-      id: 'auto-init-1',
-      timestamp: 1000,
-      text: 'Test auto init',
-      summary: 'Testing automatic initialization',
-      appName: 'TestApp',
-    })
+    await autoInitStorage.addActivity(
+      createStoredActivity({ id: 'auto-init-1', summary: 'Auto init test' }),
+    )
 
-    // Call addEvent directly without init()
-    await autoInitStorage.addEvent(event)
-
-    // Verify the event was stored
-    const retrieved = await autoInitStorage.getEventById('auto-init-1')
-    expect(retrieved).not.toBeNull()
-    expect(retrieved?.id).toBe('auto-init-1')
-    expect(retrieved?.text).toBe('Test auto init')
+    const retrieved = await autoInitStorage.getActivitiesByIds(['auto-init-1'])
+    expect(retrieved.length).toBe(1)
+    expect(retrieved[0].id).toBe('auto-init-1')
+    expect(retrieved[0].summary).toBe('Auto init test')
 
     await autoInitStorage.close()
   })
 
-  describe('searchFTS', () => {
-    it('should return matching results from text column', async () => {
-      const event1 = createEvent({
-        id: 'fts-1',
-        timestamp: 1000,
-        text: 'Apple Pie Recipe',
-        summary: 'Baking dessert',
-        appName: 'Safari',
-      })
+  describe('searchActivitiesFTS', () => {
+    it('should return matching results ranked by relevance', async () => {
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'fts-1',
+          summary: 'Editing TypeScript handler',
+          ocrText: 'function handleRequest()',
+        }),
+      )
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'fts-2',
+          summary: 'Reading documentation',
+          ocrText: 'TypeScript handbook page',
+        }),
+      )
 
-      const event2 = createEvent({
-        id: 'fts-2',
-        timestamp: 2000,
-        text: 'Banana Bread Recipe',
-        summary: 'Making bread',
-        appName: 'Chrome',
-      })
+      const results = await storage.searchActivitiesFTS('TypeScript', 10)
 
-      await storage.addEvent(event1)
-      await storage.addEvent(event2)
-
-      const results = await storage.searchFTS('Apple', 10)
-
-      expect(results.length).toBeGreaterThanOrEqual(1)
-      const appleResult = results.find((r) => r.id === 'fts-1')
-      expect(appleResult).toBeDefined()
-      expect(appleResult?.text).toBe('Apple Pie Recipe')
+      expect(results.length).toBe(2)
+      const ids = results.map((r) => r.id)
+      expect(ids).toContain('fts-1')
+      expect(ids).toContain('fts-2')
     })
 
     it('should return empty array when table is empty', async () => {
-      const results = await storage.searchFTS('nonexistent', 10)
+      const results = await storage.searchActivitiesFTS('nonexistent', 10)
       expect(results).toEqual([])
+    })
+
+    it('should handle special characters in query without throwing', async () => {
+      await storage.addActivity(
+        createStoredActivity({ id: 'fts-special', summary: 'Testing quotes "hello"' }),
+      )
+
+      const results = await storage.searchActivitiesFTS('"hello" world', 10)
+      expect(results.length).toBeGreaterThanOrEqual(0)
+    })
+
+    it('should filter by appName', async () => {
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'fts-vs',
+          appName: 'VS Code',
+          summary: 'TypeScript editing',
+        }),
+      )
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'fts-chrome',
+          appName: 'Chrome',
+          summary: 'TypeScript docs',
+        }),
+      )
+
+      const results = await storage.searchActivitiesFTS('TypeScript', 10, {
+        appName: 'VS Code',
+      })
+
+      expect(results.length).toBe(1)
+      expect(results[0].id).toBe('fts-vs')
+    })
+
+    it('should filter by time range', async () => {
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'fts-old',
+          startTimestamp: 1000,
+          summary: 'TypeScript early',
+        }),
+      )
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'fts-new',
+          startTimestamp: 5000,
+          summary: 'TypeScript later',
+        }),
+      )
+
+      const results = await storage.searchActivitiesFTS('TypeScript', 10, {
+        startTime: 3000,
+      })
+
+      expect(results.length).toBe(1)
+      expect(results[0].id).toBe('fts-new')
+    })
+
+    it('should return lightweight ActivitySummary without ocrText or vector', async () => {
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'fts-light',
+          summary: 'Lightweight check',
+          ocrText: 'should not appear',
+        }),
+      )
+
+      const results = await storage.searchActivitiesFTS('Lightweight', 10)
+
+      expect(results.length).toBe(1)
+      expect(results[0]).toHaveProperty('id')
+      expect(results[0]).toHaveProperty('summary')
+      expect(results[0]).toHaveProperty('durationMs')
+      expect(results[0]).not.toHaveProperty('ocrText')
+      expect(results[0]).not.toHaveProperty('vector')
     })
   })
 
-  describe('searchVectors', () => {
+  describe('searchActivitiesVectors', () => {
     it('should return results ordered by similarity', async () => {
-      const event1 = createEvent({
-        id: 'vec-1',
-        timestamp: 1000,
-        text: 'First event',
-        vector: [1.0, 0.0, 0.0],
-      })
+      await storage.addActivity(
+        createStoredActivity({ id: 'vec-1', vector: [1.0, 0.0, 0.0], summary: 'First' }),
+      )
+      await storage.addActivity(
+        createStoredActivity({ id: 'vec-2', vector: [0.9, 0.1, 0.0], summary: 'Second' }),
+      )
+      await storage.addActivity(
+        createStoredActivity({ id: 'vec-3', vector: [0.0, 1.0, 0.0], summary: 'Third' }),
+      )
 
-      const event2 = createEvent({
-        id: 'vec-2',
-        timestamp: 2000,
-        text: 'Second event',
-        vector: [0.9, 0.1, 0.0],
-      })
-
-      const event3 = createEvent({
-        id: 'vec-3',
-        timestamp: 3000,
-        text: 'Third event',
-        vector: [0.0, 1.0, 0.0],
-      })
-
-      await storage.addEvent(event1)
-      await storage.addEvent(event2)
-      await storage.addEvent(event3)
-
-      const queryVector = [1.0, 0.0, 0.0]
-      const results = await storage.searchVectors(queryVector, 10)
+      const results = await storage.searchActivitiesVectors([1.0, 0.0, 0.0], 10)
 
       expect(results.length).toBe(3)
-      // First result should be most similar (vec-1)
       expect(results[0].id).toBe('vec-1')
     })
 
     it('should return empty array on empty table', async () => {
-      const results = await storage.searchVectors([1.0, 0.0, 0.0], 10)
+      const results = await storage.searchActivitiesVectors([1.0, 0.0, 0.0], 10)
       expect(results).toEqual([])
+    })
+
+    it('should filter by appName', async () => {
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'vec-vs',
+          appName: 'VS Code',
+          vector: [1.0, 0.0, 0.0],
+        }),
+      )
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'vec-chrome',
+          appName: 'Chrome',
+          vector: [0.9, 0.1, 0.0],
+        }),
+      )
+
+      const results = await storage.searchActivitiesVectors([1.0, 0.0, 0.0], 10, {
+        appName: 'VS Code',
+      })
+
+      expect(results.length).toBe(1)
+      expect(results[0].id).toBe('vec-vs')
+    })
+
+    it('should filter by time range', async () => {
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'vec-old',
+          startTimestamp: 1000,
+          vector: [1.0, 0.0, 0.0],
+        }),
+      )
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'vec-new',
+          startTimestamp: 5000,
+          vector: [0.9, 0.1, 0.0],
+        }),
+      )
+
+      const results = await storage.searchActivitiesVectors([1.0, 0.0, 0.0], 10, {
+        startTime: 3000,
+      })
+
+      expect(results.length).toBe(1)
+      expect(results[0].id).toBe('vec-new')
+    })
+
+    it('should handle combined filters (appName + time)', async () => {
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'combo-1',
+          startTimestamp: 1000,
+          appName: 'VS Code',
+          vector: [1.0, 0.0, 0.0],
+        }),
+      )
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'combo-2',
+          startTimestamp: 3000,
+          appName: 'VS Code',
+          vector: [0.9, 0.1, 0.0],
+        }),
+      )
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'combo-3',
+          startTimestamp: 3000,
+          appName: 'Chrome',
+          vector: [0.8, 0.2, 0.0],
+        }),
+      )
+
+      const results = await storage.searchActivitiesVectors([1.0, 0.0, 0.0], 10, {
+        appName: 'VS Code',
+        startTime: 2000,
+      })
+
+      expect(results.length).toBe(1)
+      expect(results[0].id).toBe('combo-2')
+    })
+
+    it('should respect limit with filters', async () => {
+      for (let i = 0; i < 5; i++) {
+        await storage.addActivity(
+          createStoredActivity({
+            id: `limit-${i}`,
+            appName: 'VS Code',
+            vector: [1.0 - i * 0.1, i * 0.1, 0.0],
+          }),
+        )
+      }
+
+      const results = await storage.searchActivitiesVectors([1.0, 0.0, 0.0], 2, {
+        appName: 'VS Code',
+      })
+
+      expect(results.length).toBe(2)
+    })
+
+    it('should return lightweight ActivitySummary without ocrText or vector', async () => {
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'vec-light',
+          vector: [1.0, 0.0, 0.0],
+          ocrText: 'should not appear',
+        }),
+      )
+
+      const results = await storage.searchActivitiesVectors([1.0, 0.0, 0.0], 10)
+
+      expect(results.length).toBe(1)
+      expect(results[0]).toHaveProperty('id')
+      expect(results[0]).toHaveProperty('summary')
+      expect(results[0]).not.toHaveProperty('ocrText')
+      expect(results[0]).not.toHaveProperty('vector')
+    })
+
+    it('should handle appName case-insensitively', async () => {
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'case-1',
+          appName: 'VS Code',
+          vector: [1.0, 0.0, 0.0],
+        }),
+      )
+
+      const results = await storage.searchActivitiesVectors([1.0, 0.0, 0.0], 10, {
+        appName: 'vs code',
+      })
+
+      expect(results.length).toBe(1)
+      expect(results[0].id).toBe('case-1')
+    })
+  })
+
+  describe('getActivitiesByTimeRange', () => {
+    it('should return activities sorted by start_timestamp', async () => {
+      await storage.addActivity(
+        createStoredActivity({ id: 'time-2', startTimestamp: 2000, appName: 'Chrome' }),
+      )
+      await storage.addActivity(
+        createStoredActivity({ id: 'time-1', startTimestamp: 1000, appName: 'VS Code' }),
+      )
+
+      const results = await storage.getActivitiesByTimeRange(null, null)
+
+      expect(results.length).toBe(2)
+      expect(results[0].id).toBe('time-1')
+      expect(results[1].id).toBe('time-2')
+    })
+
+    it('should filter by time range', async () => {
+      await storage.addActivity(createStoredActivity({ id: 'range-1', startTimestamp: 1000 }))
+      await storage.addActivity(createStoredActivity({ id: 'range-2', startTimestamp: 2000 }))
+      await storage.addActivity(createStoredActivity({ id: 'range-3', startTimestamp: 3000 }))
+
+      const results = await storage.getActivitiesByTimeRange(1500, 2500)
+
+      expect(results.length).toBe(1)
+      expect(results[0].id).toBe('range-2')
+    })
+
+    it('should filter with only startTime', async () => {
+      await storage.addActivity(createStoredActivity({ id: 'start-1', startTimestamp: 1000 }))
+      await storage.addActivity(createStoredActivity({ id: 'start-2', startTimestamp: 2000 }))
+      await storage.addActivity(createStoredActivity({ id: 'start-3', startTimestamp: 3000 }))
+
+      const results = await storage.getActivitiesByTimeRange(2000, null)
+
+      expect(results.length).toBe(2)
+      expect(results.find((r) => r.id === 'start-2')).toBeDefined()
+      expect(results.find((r) => r.id === 'start-3')).toBeDefined()
+    })
+
+    it('should filter with only endTime', async () => {
+      await storage.addActivity(createStoredActivity({ id: 'end-1', startTimestamp: 1000 }))
+      await storage.addActivity(createStoredActivity({ id: 'end-2', startTimestamp: 2000 }))
+      await storage.addActivity(createStoredActivity({ id: 'end-3', startTimestamp: 3000 }))
+
+      const results = await storage.getActivitiesByTimeRange(null, 2000)
+
+      expect(results.length).toBe(2)
+      expect(results.find((r) => r.id === 'end-1')).toBeDefined()
+      expect(results.find((r) => r.id === 'end-2')).toBeDefined()
+    })
+
+    it('should filter by appName case-insensitively', async () => {
+      await storage.addActivity(
+        createStoredActivity({ id: 'app-1', appName: 'VS Code', startTimestamp: 1000 }),
+      )
+      await storage.addActivity(
+        createStoredActivity({ id: 'app-2', appName: 'Chrome', startTimestamp: 2000 }),
+      )
+
+      const results = await storage.getActivitiesByTimeRange(null, null, { appName: 'vs code' })
+
+      expect(results.length).toBe(1)
+      expect(results[0].id).toBe('app-1')
+    })
+
+    it('should return lightweight ActivitySummary without ocrText or vector', async () => {
+      await storage.addActivity(
+        createStoredActivity({
+          id: 'light-1',
+          startTimestamp: 1000,
+          ocrText: 'should not appear',
+        }),
+      )
+
+      const results = await storage.getActivitiesByTimeRange(null, null)
+
+      expect(results.length).toBe(1)
+      expect(results[0]).toHaveProperty('id')
+      expect(results[0]).toHaveProperty('summary')
+      expect(results[0]).toHaveProperty('durationMs')
+      expect(results[0]).not.toHaveProperty('ocrText')
+      expect(results[0]).not.toHaveProperty('vector')
     })
   })
 
   describe('getDateRange', () => {
     it('should return correct oldest and newest timestamps', async () => {
-      const event1 = createEvent({ id: 'date-1', timestamp: 5000 })
-      const event2 = createEvent({ id: 'date-2', timestamp: 1000 })
-      const event3 = createEvent({ id: 'date-3', timestamp: 3000 })
-
-      await storage.addEvent(event1)
-      await storage.addEvent(event2)
-      await storage.addEvent(event3)
+      await storage.addActivity(
+        createStoredActivity({ id: 'date-1', startTimestamp: 1000, endTimestamp: 3000 }),
+      )
+      await storage.addActivity(
+        createStoredActivity({ id: 'date-2', startTimestamp: 2000, endTimestamp: 5000 }),
+      )
 
       const range = await storage.getDateRange()
 
@@ -188,361 +461,286 @@ describe('StorageService', () => {
     })
   })
 
-  describe('searchVectorsWithFilters', () => {
-    it('should handle appName with single quote (SQL escaping)', async () => {
-      const event1 = createEvent({
-        id: 'quote-1',
-        timestamp: 1000,
-        appName: "Editor's Choice",
-        vector: [1.0, 0.0, 0.0],
-      })
-
-      const event2 = createEvent({
-        id: 'quote-2',
-        timestamp: 2000,
-        appName: 'Regular App',
-        vector: [0.9, 0.1, 0.0],
-      })
-
-      await storage.addEvent(event1)
-      await storage.addEvent(event2)
-
-      const results = await storage.searchVectorsWithFilters([1.0, 0.0, 0.0], 10, {
-        appName: "Editor's Choice",
-      })
-
-      expect(results.length).toBe(1)
-      expect(results[0].id).toBe('quote-1')
-      expect(results[0].appName).toBe("Editor's Choice")
-    })
-
-    describe('comprehensive filter combinations', () => {
-      beforeEach(async () => {
-        // Seed realistic dataset: 6 events across 3 apps spanning time range
-        const events = [
-          createEvent({
-            id: 'ev-1',
-            timestamp: 1000,
-            appName: 'VS Code',
-            text: 'Writing TypeScript handler',
-            summary: 'Coding a REST API endpoint',
-            vector: [1.0, 0.0, 0.0],
-          }),
-          createEvent({
-            id: 'ev-2',
-            timestamp: 2000,
-            appName: 'Chrome',
-            text: 'Reading TypeScript docs on MDN',
-            summary: 'Browsing documentation',
-            vector: [0.8, 0.2, 0.0],
-          }),
-          createEvent({
-            id: 'ev-3',
-            timestamp: 3000,
-            appName: 'VS Code',
-            text: 'Reviewing pull request changes',
-            summary: 'Code review in editor',
-            vector: [0.6, 0.4, 0.0],
-          }),
-          createEvent({
-            id: 'ev-4',
-            timestamp: 4000,
-            appName: 'Slack',
-            text: 'Discussing TypeScript migration',
-            summary: 'Team chat about refactoring',
-            vector: [0.4, 0.6, 0.0],
-          }),
-          createEvent({
-            id: 'ev-5',
-            timestamp: 5000,
-            appName: 'VS Code',
-            text: 'Writing unit tests for TypeScript',
-            summary: 'Testing the API endpoint',
-            vector: [0.9, 0.1, 0.0],
-          }),
-          createEvent({
-            id: 'ev-6',
-            timestamp: 6000,
-            appName: 'Chrome',
-            text: 'Searching StackOverflow for errors',
-            summary: 'Debugging a runtime exception',
-            vector: [0.3, 0.7, 0.0],
-          }),
-        ]
-
-        for (const event of events) {
-          await storage.addEvent(event)
-        }
-      })
-
-      it('should return all events ordered by similarity when no filters applied', async () => {
-        const queryVector = [1.0, 0.0, 0.0]
-        const results = await storage.searchVectorsWithFilters(queryVector, 10)
-
-        expect(results.length).toBe(6)
-        // Most similar should be ev-1 (exact match)
-        expect(results[0].id).toBe('ev-1')
-      })
-
-      it('should filter by startTime only', async () => {
-        const queryVector = [1.0, 0.0, 0.0]
-        const results = await storage.searchVectorsWithFilters(queryVector, 10, {
-          startTime: 3500,
-        })
-
-        expect(results.length).toBe(3)
-        const ids = results.map((r) => r.id)
-        expect(ids).toContain('ev-4')
-        expect(ids).toContain('ev-5')
-        expect(ids).toContain('ev-6')
-      })
-
-      it('should filter by endTime only', async () => {
-        const queryVector = [1.0, 0.0, 0.0]
-        const results = await storage.searchVectorsWithFilters(queryVector, 10, {
-          endTime: 2500,
-        })
-
-        expect(results.length).toBe(2)
-        const ids = results.map((r) => r.id)
-        expect(ids).toContain('ev-1')
-        expect(ids).toContain('ev-2')
-      })
-
-      it('should filter by time range only (no appName)', async () => {
-        const queryVector = [1.0, 0.0, 0.0]
-        const results = await storage.searchVectorsWithFilters(queryVector, 10, {
-          startTime: 2000,
-          endTime: 5000,
-        })
-
-        expect(results.length).toBe(4)
-        const ids = results.map((r) => r.id)
-        expect(ids).toContain('ev-2')
-        expect(ids).toContain('ev-3')
-        expect(ids).toContain('ev-4')
-        expect(ids).toContain('ev-5')
-      })
-
-      it('should filter by appName and narrow time window combined', async () => {
-        const queryVector = [1.0, 0.0, 0.0]
-        const results = await storage.searchVectorsWithFilters(queryVector, 10, {
-          appName: 'VS Code',
-          startTime: 2500,
-          endTime: 5500,
-        })
-
-        expect(results.length).toBe(2)
-        const ids = results.map((r) => r.id)
-        expect(ids).toContain('ev-3')
-        expect(ids).toContain('ev-5')
-      })
-
-      it('should return empty array when filters match nothing', async () => {
-        const queryVector = [1.0, 0.0, 0.0]
-        const results = await storage.searchVectorsWithFilters(queryVector, 10, {
-          appName: 'Figma',
-        })
-
-        expect(results.length).toBe(0)
-      })
-
-      it('should respect limit with filters', async () => {
-        const queryVector = [1.0, 0.0, 0.0]
-        const results = await storage.searchVectorsWithFilters(queryVector, 1, {
-          appName: 'VS Code',
-        })
-
-        expect(results.length).toBe(1)
-      })
-    })
-  })
-
-  describe('searchFTSWithFilters', () => {
-    it('should filter FTS results by appName (case-sensitive column)', async () => {
-      const vscodeEvent = createEvent({
-        id: 'vscode-fts-1',
-        timestamp: 1000,
-        text: 'TypeScript function implementation',
-        summary: 'Implementing a function',
-        appName: 'VS Code',
-      })
-
-      const chromeEvent = createEvent({
-        id: 'chrome-fts-1',
-        timestamp: 2000,
-        text: 'TypeScript documentation page',
-        summary: 'Reading TypeScript docs',
-        appName: 'Chrome',
-      })
-
-      await storage.addEvent(vscodeEvent)
-      await storage.addEvent(chromeEvent)
-
-      // Both events contain "TypeScript", but filter should only return VS Code
-      const results = await storage.searchFTSWithFilters('TypeScript', 10, {
-        appName: 'VS Code',
-      })
-
-      expect(results.length).toBe(1)
-      expect(results[0].id).toBe('vscode-fts-1')
-      expect(results[0].appName).toBe('VS Code')
-    })
-
-    it('should search summary column when term appears only in summary', async () => {
-      const event = createEvent({
-        id: 'summary-only-1',
-        timestamp: 1000,
-        text: 'Regular text without special term',
-        summary: 'Debugging TypeScript application',
-        appName: 'VS Code',
-      })
-
-      await storage.addEvent(event)
-
-      const results = await storage.searchFTSWithFilters('Debugging', 10)
-
-      expect(results.length).toBe(1)
-      expect(results[0].id).toBe('summary-only-1')
-      expect(results[0].summary).toContain('Debugging')
-    })
-
-    it('should deduplicate results when event matches in both text and summary', async () => {
-      const event = createEvent({
-        id: 'duplicate-1',
-        timestamp: 1000,
-        text: 'Python script for data analysis',
-        summary: 'Writing Python code',
-        appName: 'VS Code',
-      })
-
-      await storage.addEvent(event)
-
-      const results = await storage.searchFTSWithFilters('Python', 10)
-
-      // Should only appear once even though it matches in both columns
-      expect(results.length).toBe(1)
-      expect(results[0].id).toBe('duplicate-1')
-    })
-  })
-
-  describe('getEventsByTimeRange', () => {
-    it('should return events with correct appName field', async () => {
-      const event1 = createEvent({
-        id: 'time-1',
-        timestamp: 1000,
-        appName: 'VS Code',
-      })
-
-      const event2 = createEvent({
-        id: 'time-2',
-        timestamp: 2000,
-        appName: 'Chrome',
-      })
-
-      await storage.addEvent(event1)
-      await storage.addEvent(event2)
-
-      const results = await storage.getEventsByTimeRange(null, null)
-
-      expect(results.length).toBe(2)
-
-      const vsCodeResult = results.find((r) => r.id === 'time-1')
-      const chromeResult = results.find((r) => r.id === 'time-2')
-
-      expect(vsCodeResult?.appName).toBe('VS Code')
-      expect(chromeResult?.appName).toBe('Chrome')
-    })
-
-    it('should filter by time range correctly', async () => {
-      const event1 = createEvent({ id: 'range-1', timestamp: 1000 })
-      const event2 = createEvent({ id: 'range-2', timestamp: 2000 })
-      const event3 = createEvent({ id: 'range-3', timestamp: 3000 })
-
-      await storage.addEvent(event1)
-      await storage.addEvent(event2)
-      await storage.addEvent(event3)
-
-      const results = await storage.getEventsByTimeRange(1500, 2500)
-
-      expect(results.length).toBe(1)
-      expect(results[0].id).toBe('range-2')
-    })
-
-    it('should include text field when includeText is true', async () => {
-      const event = createEvent({
-        id: 'text-1',
-        timestamp: 1000,
-        text: 'Full text content here',
-        summary: 'Short summary',
-      })
-
-      await storage.addEvent(event)
-
-      const results = await storage.getEventsByTimeRange(null, null, { includeText: true })
-
-      expect(results.length).toBe(1)
-      expect(results[0].text).toBe('Full text content here')
-      expect(results[0].summary).toBe('Short summary')
-    })
-
-    it('should exclude text field when includeText is false or undefined', async () => {
-      const event = createEvent({
-        id: 'text-2',
-        timestamp: 1000,
-        text: 'Full text content here',
-      })
-
-      await storage.addEvent(event)
-
-      const results = await storage.getEventsByTimeRange(null, null)
-
-      expect(results.length).toBe(1)
-      expect(results[0].text).toBe('')
-    })
-
-    it('should filter with only startTime (no endTime)', async () => {
-      const event1 = createEvent({ id: 'start-1', timestamp: 1000 })
-      const event2 = createEvent({ id: 'start-2', timestamp: 2000 })
-      const event3 = createEvent({ id: 'start-3', timestamp: 3000 })
-
-      await storage.addEvent(event1)
-      await storage.addEvent(event2)
-      await storage.addEvent(event3)
-
-      const results = await storage.getEventsByTimeRange(2000, null)
-
-      expect(results.length).toBe(2)
-      expect(results.find((r) => r.id === 'start-2')).toBeDefined()
-      expect(results.find((r) => r.id === 'start-3')).toBeDefined()
-    })
-
-    it('should filter with only endTime (no startTime)', async () => {
-      const event1 = createEvent({ id: 'end-1', timestamp: 1000 })
-      const event2 = createEvent({ id: 'end-2', timestamp: 2000 })
-      const event3 = createEvent({ id: 'end-3', timestamp: 3000 })
-
-      await storage.addEvent(event1)
-      await storage.addEvent(event2)
-      await storage.addEvent(event3)
-
-      const results = await storage.getEventsByTimeRange(null, 2000)
-
-      expect(results.length).toBe(2)
-      expect(results.find((r) => r.id === 'end-1')).toBeDefined()
-      expect(results.find((r) => r.id === 'end-2')).toBeDefined()
-    })
-  })
-
   describe('countRows', () => {
-    it('should return correct count of events', async () => {
+    it('should return correct count of activities', async () => {
       expect(await storage.countRows()).toBe(0)
 
-      await storage.addEvent(createEvent({ id: 'count-1' }))
+      await storage.addActivity(createStoredActivity({ id: 'count-1' }))
       expect(await storage.countRows()).toBe(1)
 
-      await storage.addEvent(createEvent({ id: 'count-2' }))
+      await storage.addActivity(createStoredActivity({ id: 'count-2' }))
       expect(await storage.countRows()).toBe(2)
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Legacy context_events migration
+// ---------------------------------------------------------------------------
+
+const MIGRATION_DB_PATH = path.join(process.cwd(), 'temp_migration_test.db')
+const VECTOR_DIMS = 3
+
+/** Seed a raw SQLite database with the legacy context_events schema. */
+function seedLegacyDb(
+  rows: {
+    id: string
+    timestamp: number
+    text: string
+    summary: string
+    appName: string
+    vector: number[] | null
+  }[],
+): void {
+  const db = new Database(MIGRATION_DB_PATH)
+  sqliteVec.load(db)
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS context_events (
+      id TEXT PRIMARY KEY,
+      timestamp INTEGER NOT NULL,
+      text TEXT NOT NULL DEFAULT '',
+      summary TEXT NOT NULL DEFAULT '',
+      appName TEXT NOT NULL DEFAULT '',
+      vector BLOB
+    )
+  `)
+  db.exec('CREATE INDEX IF NOT EXISTS idx_context_events_timestamp ON context_events(timestamp)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_context_events_appName ON context_events(appName)')
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS context_events_fts USING fts5(
+      text, summary, content='context_events', content_rowid='rowid'
+    )
+  `)
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS context_events_ai AFTER INSERT ON context_events BEGIN
+      INSERT INTO context_events_fts(rowid, text, summary) VALUES (new.rowid, new.text, new.summary);
+    END
+  `)
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS context_events_vec USING vec0(
+      id TEXT PRIMARY KEY,
+      embedding float[${VECTOR_DIMS}]
+    )
+  `)
+
+  for (const row of rows) {
+    const vectorBlob = row.vector ? Buffer.from(new Float32Array(row.vector).buffer) : null
+    db.prepare(
+      'INSERT INTO context_events (id, timestamp, text, summary, appName, vector) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(row.id, row.timestamp, row.text, row.summary, row.appName, vectorBlob)
+    if (vectorBlob) {
+      db.prepare('INSERT INTO context_events_vec (id, embedding) VALUES (?, ?)').run(
+        row.id,
+        vectorBlob,
+      )
+    }
+  }
+
+  db.close()
+}
+
+describe('context_events migration', () => {
+  afterEach(async () => {
+    deleteDbFiles(MIGRATION_DB_PATH)
+  })
+
+  it('should migrate rows into activities with correct column mapping', async () => {
+    deleteDbFiles(MIGRATION_DB_PATH)
+    seedLegacyDb([
+      {
+        id: 'evt-1',
+        timestamp: 1000,
+        text: 'hello world',
+        summary: 'greeting',
+        appName: 'Terminal',
+        vector: [0.1, 0.2, 0.3],
+      },
+    ])
+
+    const storage = new StorageService(MIGRATION_DB_PATH, { vectorDimensions: VECTOR_DIMS })
+    await storage.init()
+
+    const rows = await storage.getActivitiesByIds(['evt-1'])
+    expect(rows.length).toBe(1)
+    const row = rows[0]
+    expect(row.startTimestamp).toBe(1000)
+    expect(row.endTimestamp).toBe(1000)
+    expect(row.appName).toBe('Terminal')
+    expect(row.ocrText).toBe('hello world')
+    expect(row.summary).toBe('greeting')
+    expect(row.bundleId).toBe('')
+    expect(row.windowTitle).toBe('')
+    expect(row.url).toBeNull()
+    expect(row.tld).toBeNull()
+    expect(row.screenshotCount).toBe(0)
+    expect(row.interactionSummary).toBe('')
+    expect(row.durationMs).toBe(0)
+    expect(row.vector[0]).toBeCloseTo(0.1)
+
+    await storage.close()
+  })
+
+  it('should make migrated rows searchable via FTS', async () => {
+    deleteDbFiles(MIGRATION_DB_PATH)
+    seedLegacyDb([
+      {
+        id: 'fts-evt',
+        timestamp: 2000,
+        text: 'TypeScript compiler',
+        summary: 'compiling project',
+        appName: 'Terminal',
+        vector: [0.1, 0.2, 0.3],
+      },
+    ])
+
+    const storage = new StorageService(MIGRATION_DB_PATH, { vectorDimensions: VECTOR_DIMS })
+    await storage.init()
+
+    const results = await storage.searchActivitiesFTS('compiling', 10)
+    expect(results.length).toBe(1)
+    expect(results[0].id).toBe('fts-evt')
+
+    await storage.close()
+  })
+
+  it('should make migrated rows searchable via vector similarity', async () => {
+    deleteDbFiles(MIGRATION_DB_PATH)
+    seedLegacyDb([
+      {
+        id: 'vec-evt',
+        timestamp: 3000,
+        text: 'code review',
+        summary: 'reviewing PR',
+        appName: 'Chrome',
+        vector: [1.0, 0.0, 0.0],
+      },
+    ])
+
+    const storage = new StorageService(MIGRATION_DB_PATH, { vectorDimensions: VECTOR_DIMS })
+    await storage.init()
+
+    const results = await storage.searchActivitiesVectors([1.0, 0.0, 0.0], 10)
+    expect(results.length).toBe(1)
+    expect(results[0].id).toBe('vec-evt')
+
+    await storage.close()
+  })
+
+  it('should drop legacy tables after migration', async () => {
+    deleteDbFiles(MIGRATION_DB_PATH)
+    seedLegacyDb([
+      {
+        id: 'drop-evt',
+        timestamp: 1000,
+        text: 'test',
+        summary: 'test',
+        appName: 'App',
+        vector: [0.1, 0.2, 0.3],
+      },
+    ])
+
+    const storage = new StorageService(MIGRATION_DB_PATH, { vectorDimensions: VECTOR_DIMS })
+    await storage.init()
+
+    // Verify legacy tables are gone by opening a raw connection
+    const db = new Database(MIGRATION_DB_PATH)
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'context_events%'")
+      .all()
+    const triggers = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name='context_events_ai'")
+      .all()
+    db.close()
+
+    expect(tables).toEqual([])
+    expect(triggers).toEqual([])
+
+    await storage.close()
+  })
+
+  it('should handle NULL vectors gracefully', async () => {
+    deleteDbFiles(MIGRATION_DB_PATH)
+    seedLegacyDb([
+      {
+        id: 'null-vec',
+        timestamp: 1000,
+        text: 'no vector',
+        summary: 'test',
+        appName: 'App',
+        vector: null,
+      },
+    ])
+
+    const storage = new StorageService(MIGRATION_DB_PATH, { vectorDimensions: VECTOR_DIMS })
+    await storage.init()
+
+    const rows = await storage.getActivitiesByIds(['null-vec'])
+    expect(rows.length).toBe(1)
+    expect(rows[0].vector).toEqual([])
+
+    // Vector search should return no results (no vector was inserted)
+    const vecResults = await storage.searchActivitiesVectors([1.0, 0.0, 0.0], 10)
+    expect(vecResults).toEqual([])
+
+    await storage.close()
+  })
+
+  it('should be idempotent (safe to run init() twice)', async () => {
+    deleteDbFiles(MIGRATION_DB_PATH)
+    seedLegacyDb([
+      {
+        id: 'idem-1',
+        timestamp: 1000,
+        text: 'test',
+        summary: 'test',
+        appName: 'App',
+        vector: [0.1, 0.2, 0.3],
+      },
+    ])
+
+    const storage1 = new StorageService(MIGRATION_DB_PATH, { vectorDimensions: VECTOR_DIMS })
+    await storage1.init()
+    await storage1.close()
+
+    // Second init on same DB — context_events already dropped, should not throw
+    const storage2 = new StorageService(MIGRATION_DB_PATH, { vectorDimensions: VECTOR_DIMS })
+    await storage2.init()
+
+    const rows = await storage2.getActivitiesByIds(['idem-1'])
+    expect(rows.length).toBe(1)
+
+    await storage2.close()
+  })
+
+  it('should drop empty legacy table without error', async () => {
+    deleteDbFiles(MIGRATION_DB_PATH)
+    seedLegacyDb([]) // empty table
+
+    const storage = new StorageService(MIGRATION_DB_PATH, { vectorDimensions: VECTOR_DIMS })
+    await storage.init()
+
+    const db = new Database(MIGRATION_DB_PATH)
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'context_events%'")
+      .all()
+    db.close()
+
+    expect(tables).toEqual([])
+
+    await storage.close()
+  })
+
+  it('should skip migration on fresh database (no legacy table)', async () => {
+    deleteDbFiles(MIGRATION_DB_PATH)
+
+    const storage = new StorageService(MIGRATION_DB_PATH, { vectorDimensions: VECTOR_DIMS })
+    // Should not throw — no context_events table to migrate
+    await storage.init()
+
+    const count = await storage.countRows()
+    expect(count).toBe(0)
+
+    await storage.close()
   })
 })

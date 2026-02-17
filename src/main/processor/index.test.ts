@@ -1,121 +1,166 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { EventProcessor } from './index'
+import { ActivityProcessor } from './index'
 import { EmbeddingService } from './embedding'
 import { StorageService } from './storage'
+import { SemanticClassifierService } from './semantic-classifier'
 import * as fs from 'fs'
-import * as os from 'os'
-import * as path from 'path'
 import * as ocr from './ocr'
+import { Activity } from '../../shared/types'
 
 // Mock dependencies
 vi.mock('fs')
 vi.mock('./ocr')
+vi.mock('@constants', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    OCR_CONFIG: {
+      ...(actual.OCR_CONFIG as Record<string, unknown>),
+      ENABLED: true,
+    },
+  }
+})
 
-describe('EventProcessor', () => {
-  const existingScreenshotPath = path.join(os.tmpdir(), 'memorylane-test.png')
-  const ocrFailureScreenshotPath = path.join(os.tmpdir(), 'memorylane-ocr-failure.png')
-  const missingScreenshotPath = path.join(os.tmpdir(), 'memorylane-missing.png')
+function createActivity(overrides: Partial<Activity> = {}): Activity {
+  return {
+    id: overrides.id ?? 'activity-1',
+    startTimestamp: overrides.startTimestamp ?? 1000,
+    endTimestamp: overrides.endTimestamp ?? 5000,
+    appName: overrides.appName ?? 'VS Code',
+    windowTitle: overrides.windowTitle ?? 'index.ts',
+    screenshots: overrides.screenshots ?? [
+      {
+        id: 'ss-1',
+        filepath: '/tmp/ss-1.png',
+        timestamp: 1000,
+        trigger: 'activity_start',
+        display: { id: 1, width: 1920, height: 1080 },
+      },
+      {
+        id: 'ss-2',
+        filepath: '/tmp/ss-2.png',
+        timestamp: 5000,
+        trigger: 'activity_end',
+        display: { id: 1, width: 1920, height: 1080 },
+      },
+    ],
+    interactions: overrides.interactions ?? [],
+  }
+}
 
-  let processor: EventProcessor
+describe('ActivityProcessor', () => {
+  let processor: ActivityProcessor
   let mockEmbeddingService: EmbeddingService
   let mockStorageService: StorageService
+  let mockClassifierService: SemanticClassifierService
 
   beforeEach(() => {
-    // Reset mocks
     vi.resetAllMocks()
 
-    // Create manual mocks for services (since they are classes)
     mockEmbeddingService = {
       generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
       init: vi.fn(),
     } as unknown as EmbeddingService
 
     mockStorageService = {
-      addEvent: vi.fn().mockResolvedValue(undefined),
+      addActivity: vi.fn().mockResolvedValue(undefined),
       init: vi.fn(),
-      getEventById: vi.fn(),
       close: vi.fn(),
     } as unknown as StorageService
 
-    processor = new EventProcessor(mockEmbeddingService, mockStorageService)
+    mockClassifierService = {
+      classifyActivity: vi.fn().mockResolvedValue('User edited index.ts in VS Code'),
+      getSummaryHistory: vi.fn().mockReturnValue([]),
+      isConfigured: vi.fn().mockReturnValue(true),
+    } as unknown as SemanticClassifierService
+
+    processor = new ActivityProcessor(
+      mockEmbeddingService,
+      mockStorageService,
+      mockClassifierService,
+    )
   })
 
-  it('should process a screenshot successfully', async () => {
-    const screenshot = {
-      id: 'test-id',
-      filepath: existingScreenshotPath,
-      timestamp: 123456,
-      display: { id: 1, width: 1920, height: 1080 },
-    }
+  it('should process an activity: OCR, classify, embed, store, cleanup', async () => {
+    const activity = createActivity()
 
-    // Setup mocks behavior
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(ocr.extractText).mockResolvedValue('Detected Text')
-    // fs.unlinkSync is void, no return needed
 
-    // Run
-    await processor.processScreenshot(screenshot)
+    await processor.processActivity(activity)
 
-    // Verify Pipeline Steps
-    // 1. OCR
-    expect(ocr.extractText).toHaveBeenCalledWith(screenshot.filepath)
+    // OCR ran on both screenshots
+    expect(ocr.extractText).toHaveBeenCalledTimes(2)
+    expect(ocr.extractText).toHaveBeenCalledWith('/tmp/ss-1.png')
+    expect(ocr.extractText).toHaveBeenCalledWith('/tmp/ss-2.png')
 
-    // 2. Embedding
-    expect(mockEmbeddingService.generateEmbedding).toHaveBeenCalledWith('Detected Text')
-
-    // 3. Storage
-    expect(mockStorageService.addEvent).toHaveBeenCalledWith({
-      appName: '',
-      id: screenshot.id,
-      timestamp: screenshot.timestamp,
-      text: 'Detected Text',
-      summary: '',
-      vector: [0.1, 0.2, 0.3],
+    // Classifier was called without OCR text (screenshots only)
+    expect(mockClassifierService.classifyActivity).toHaveBeenCalledWith({
+      activity,
+      screenshotPaths: ['/tmp/ss-1.png', '/tmp/ss-2.png'],
+      previousSummaries: [],
     })
 
-    // 4. Cleanup
-    expect(fs.unlinkSync).toHaveBeenCalledWith(screenshot.filepath)
+    // Embedding generated from summary
+    expect(mockEmbeddingService.generateEmbedding).toHaveBeenCalledWith(
+      'User edited index.ts in VS Code',
+    )
+
+    // Stored as activity
+    expect(mockStorageService.addActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'activity-1',
+        appName: 'VS Code',
+        windowTitle: 'index.ts',
+        summary: 'User edited index.ts in VS Code',
+        ocrText: 'Detected Text\n---\nDetected Text',
+        screenshotCount: 2,
+        vector: [0.1, 0.2, 0.3],
+      }),
+    )
+
+    // Screenshot files deleted
+    expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/ss-1.png')
+    expect(fs.unlinkSync).toHaveBeenCalledWith('/tmp/ss-2.png')
   })
 
   it('should continue processing when OCR fails', async () => {
-    const screenshot = {
-      id: 'ocr-failure-id',
-      filepath: ocrFailureScreenshotPath,
-      timestamp: 123456,
-      display: { id: 1, width: 1920, height: 1080 },
-    }
+    const activity = createActivity()
 
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(ocr.extractText).mockRejectedValue(new Error('OCR backend unavailable'))
 
-    await processor.processScreenshot(screenshot)
+    await processor.processActivity(activity)
 
-    expect(ocr.extractText).toHaveBeenCalledWith(screenshot.filepath)
-    expect(mockEmbeddingService.generateEmbedding).toHaveBeenCalledWith('')
-    expect(mockStorageService.addEvent).toHaveBeenCalledWith({
-      appName: '',
-      id: screenshot.id,
-      timestamp: screenshot.timestamp,
-      text: '',
-      summary: '',
-      vector: [0.1, 0.2, 0.3],
-    })
-    expect(fs.unlinkSync).toHaveBeenCalledWith(screenshot.filepath)
+    // OCR attempted
+    expect(ocr.extractText).toHaveBeenCalledTimes(2)
+
+    // Classifier still called
+    expect(mockClassifierService.classifyActivity).toHaveBeenCalled()
+
+    // Storage still called with empty OCR text
+    expect(mockStorageService.addActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ocrText: '\n---\n',
+      }),
+    )
+
+    // Cleanup still runs
+    expect(fs.unlinkSync).toHaveBeenCalledTimes(2)
   })
 
-  it('should skip processing if file does not exist', async () => {
-    const screenshot = {
-      id: 'missing-id',
-      filepath: missingScreenshotPath,
-      timestamp: 123456,
-      display: { id: 1, width: 100, height: 100 },
-    }
+  it('should skip OCR for missing screenshot files', async () => {
+    const activity = createActivity()
 
     vi.mocked(fs.existsSync).mockReturnValue(false)
 
-    await processor.processScreenshot(screenshot)
+    await processor.processActivity(activity)
 
+    // OCR not called since files don't exist
     expect(ocr.extractText).not.toHaveBeenCalled()
-    expect(mockStorageService.addEvent).not.toHaveBeenCalled()
+
+    // Still classified and stored
+    expect(mockClassifierService.classifyActivity).toHaveBeenCalled()
+    expect(mockStorageService.addActivity).toHaveBeenCalled()
   })
 })

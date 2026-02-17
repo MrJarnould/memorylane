@@ -48,17 +48,46 @@ function loadSqliteVecExtension(db: Database.Database): void {
   )
 }
 
-export interface StoredEvent extends Record<string, unknown> {
+export interface StoredActivity extends Record<string, unknown> {
   id: string
-  timestamp: number
-  text: string
-  summary: string
+  startTimestamp: number
+  endTimestamp: number
   appName: string
+  bundleId: string
+  windowTitle: string
+  url: string | null
+  tld: string | null
+  summary: string
+  ocrText: string
+  screenshotCount: number
+  interactionSummary: string
+  durationMs: number
   vector: number[]
+}
+
+/** Lightweight activity without heavy ocr_text and vector fields. */
+export interface ActivitySummary {
+  id: string
+  startTimestamp: number
+  endTimestamp: number
+  appName: string
+  summary: string
+  durationMs: number
+  screenshotCount: number
 }
 
 /** sqlite-vec hard limit for the k parameter in knn queries. */
 const SQLITE_VEC_KNN_MAX = 4096
+
+/**
+ * Sanitizes a user query string for FTS5 MATCH.
+ * Quotes each token to prevent FTS5 syntax errors from special characters.
+ */
+function sanitizeFtsQuery(query: string): string {
+  const tokens = query.trim().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return '""'
+  return tokens.map((t) => `"${t.replace(/"/g, '""')}"`).join(' ')
+}
 
 interface StorageOptions {
   readonly vectorDimensions?: number
@@ -111,44 +140,55 @@ export class StorageService {
 
       loadSqliteVecExtension(db)
 
+      // Activities table (app-switch-driven activity windows)
       db.exec(`
-        CREATE TABLE IF NOT EXISTS context_events (
+        CREATE TABLE IF NOT EXISTS activities (
           id TEXT PRIMARY KEY,
-          timestamp INTEGER NOT NULL,
-          text TEXT NOT NULL DEFAULT '',
+          start_timestamp INTEGER NOT NULL,
+          end_timestamp INTEGER NOT NULL,
+          app_name TEXT NOT NULL DEFAULT '',
+          bundle_id TEXT NOT NULL DEFAULT '',
+          window_title TEXT NOT NULL DEFAULT '',
+          url TEXT DEFAULT NULL,
+          tld TEXT DEFAULT NULL,
           summary TEXT NOT NULL DEFAULT '',
-          appName TEXT NOT NULL DEFAULT '',
+          ocr_text TEXT NOT NULL DEFAULT '',
+          screenshot_count INTEGER NOT NULL DEFAULT 0,
+          interaction_summary TEXT NOT NULL DEFAULT '',
+          duration_ms INTEGER NOT NULL DEFAULT 0,
           vector BLOB
         )
       `)
 
       db.exec(
-        'CREATE INDEX IF NOT EXISTS idx_context_events_timestamp ON context_events(timestamp)',
+        'CREATE INDEX IF NOT EXISTS idx_activities_start_timestamp ON activities(start_timestamp)',
       )
-      db.exec('CREATE INDEX IF NOT EXISTS idx_context_events_appName ON context_events(appName)')
+      db.exec('CREATE INDEX IF NOT EXISTS idx_activities_app_name ON activities(app_name)')
 
       db.exec(`
-        CREATE VIRTUAL TABLE IF NOT EXISTS context_events_fts USING fts5(
-          text,
+        CREATE VIRTUAL TABLE IF NOT EXISTS activities_fts USING fts5(
           summary,
-          content='context_events',
+          ocr_text,
+          content='activities',
           content_rowid='rowid'
         )
       `)
 
       db.exec(`
-        CREATE TRIGGER IF NOT EXISTS context_events_ai AFTER INSERT ON context_events BEGIN
-          INSERT INTO context_events_fts(rowid, text, summary)
-            VALUES (new.rowid, new.text, new.summary);
+        CREATE TRIGGER IF NOT EXISTS activities_ai AFTER INSERT ON activities BEGIN
+          INSERT INTO activities_fts(rowid, summary, ocr_text)
+            VALUES (new.rowid, new.summary, new.ocr_text);
         END
       `)
 
       db.exec(`
-        CREATE VIRTUAL TABLE IF NOT EXISTS context_events_vec USING vec0(
+        CREATE VIRTUAL TABLE IF NOT EXISTS activities_vec USING vec0(
           id TEXT PRIMARY KEY,
           embedding float[${this.vectorDimensions}]
         )
       `)
+
+      this.migrateContextEvents(db)
 
       this.db = db
       log.info('SQLite database initialized successfully')
@@ -159,267 +199,7 @@ export class StorageService {
   }
 
   /**
-   * Adds an event to the storage.
-   */
-  public async addEvent(event: StoredEvent): Promise<void> {
-    if (!this.db) {
-      await this.init()
-    }
-    if (!this.db) throw new Error('Failed to initialize SQLite database')
-
-    const vectorBlob = this.vectorToBlob(event.vector)
-
-    const insert = this.db.transaction(() => {
-      this.db!.prepare(
-        `INSERT INTO context_events (id, timestamp, text, summary, appName, vector)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(event.id, event.timestamp, event.text, event.summary, event.appName, vectorBlob)
-
-      this.db!.prepare(
-        `INSERT INTO context_events_vec (id, embedding)
-         VALUES (?, ?)`,
-      ).run(event.id, vectorBlob)
-    })
-
-    insert()
-  }
-
-  /**
-   * Retrieves an event by ID.
-   */
-  public async getEventById(id: string): Promise<StoredEvent | null> {
-    if (!this.db) {
-      await this.init()
-    }
-    if (!this.db) return null
-
-    const row = this.db
-      .prepare(
-        'SELECT id, timestamp, text, summary, appName, vector FROM context_events WHERE id = ?',
-      )
-      .get(id) as Record<string, unknown> | undefined
-
-    if (!row) return null
-    return this.rowToStoredEvent(row)
-  }
-
-  /**
-   * Full-text search across text and summary columns.
-   */
-  public async searchFTS(query: string, limit = 5): Promise<StoredEvent[]> {
-    if (!this.db) {
-      await this.init()
-    }
-    if (!this.db) return []
-
-    const count = this.getRowCount()
-    if (count === 0) return []
-
-    const rows = this.db
-      .prepare(
-        `SELECT ce.id, ce.timestamp, ce.text, ce.summary, ce.appName, ce.vector
-         FROM context_events_fts fts
-         JOIN context_events ce ON ce.rowid = fts.rowid
-         WHERE context_events_fts MATCH ?
-         LIMIT ?`,
-      )
-      .all(query, limit) as Record<string, unknown>[]
-
-    return rows.map((row) => this.rowToStoredEvent(row))
-  }
-
-  /**
-   * Vector similarity search.
-   */
-  public async searchVectors(queryVector: number[], limit = 5): Promise<StoredEvent[]> {
-    if (!this.db) {
-      await this.init()
-    }
-    if (!this.db) return []
-
-    const count = this.getRowCount()
-    if (count === 0) return []
-
-    const vectorBlob = this.vectorToBlob(queryVector)
-    const effectiveLimit = Math.min(limit, SQLITE_VEC_KNN_MAX)
-
-    const rows = this.db
-      .prepare(
-        `SELECT ce.id, ce.timestamp, ce.text, ce.summary, ce.appName, ce.vector
-         FROM (
-           SELECT id, distance
-           FROM context_events_vec
-           WHERE embedding MATCH ?
-           AND k = ?
-         ) vec
-         JOIN context_events ce ON ce.id = vec.id`,
-      )
-      .all(vectorBlob, effectiveLimit) as Record<string, unknown>[]
-
-    return rows.map((row) => this.rowToStoredEvent(row))
-  }
-
-  /**
-   * Vector similarity search with optional filters.
-   */
-  public async searchVectorsWithFilters(
-    queryVector: number[],
-    limit = 5,
-    filters?: SearchFilters,
-  ): Promise<StoredEvent[]> {
-    if (!this.db) {
-      await this.init()
-    }
-    if (!this.db) return []
-
-    const count = this.getRowCount()
-    if (count === 0) return []
-
-    const hasFilters =
-      filters &&
-      (filters.startTime !== undefined ||
-        filters.endTime !== undefined ||
-        filters.appName !== undefined)
-
-    if (!hasFilters) {
-      return this.searchVectors(queryVector, limit)
-    }
-
-    const vectorBlob = this.vectorToBlob(queryVector)
-    const overFetchLimit = Math.min(Math.max(limit * 10, count), SQLITE_VEC_KNN_MAX)
-    const { conditions, params } = this.buildFilterConditions(filters)
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-
-    const rows = this.db
-      .prepare(
-        `SELECT ce.id, ce.timestamp, ce.text, ce.summary, ce.appName, ce.vector
-         FROM (
-           SELECT id, distance
-           FROM context_events_vec
-           WHERE embedding MATCH ?
-           AND k = ?
-         ) vec
-         JOIN context_events ce ON ce.id = vec.id
-         ${whereClause}
-         ORDER BY vec.distance
-         LIMIT ?`,
-      )
-      .all(vectorBlob, overFetchLimit, ...params, limit) as Record<string, unknown>[]
-
-    return rows.map((row) => this.rowToStoredEvent(row))
-  }
-
-  /**
-   * FTS search across text and summary columns with optional filters.
-   */
-  public async searchFTSWithFilters(
-    searchQuery: string,
-    limit = 5,
-    filters?: SearchFilters,
-  ): Promise<StoredEvent[]> {
-    if (!this.db) {
-      await this.init()
-    }
-    if (!this.db) return []
-
-    const count = this.getRowCount()
-    if (count === 0) return []
-
-    const { conditions, params } = this.buildFilterConditions(filters)
-    const filterClause = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : ''
-
-    const rows = this.db
-      .prepare(
-        `SELECT ce.id, ce.timestamp, ce.text, ce.summary, ce.appName, ce.vector
-         FROM context_events_fts fts
-         JOIN context_events ce ON ce.rowid = fts.rowid
-         WHERE context_events_fts MATCH ?
-         ${filterClause}
-         LIMIT ?`,
-      )
-      .all(searchQuery, ...params, limit) as Record<string, unknown>[]
-
-    return rows.map((row) => this.rowToStoredEvent(row))
-  }
-
-  /**
-   * Returns events within a time range, sorted by timestamp ascending.
-   *
-   * NB: loads all matching rows into memory. This is fine at current scale
-   * (lightweight rows, no OCR/vectors, realistic capture rates produce <1k/day).
-   * If the database grows to 100k+ rows, consider adding a SQL LIMIT cap with
-   * a separate COUNT(*) query so callers can still report total counts.
-   */
-  public async getEventsByTimeRange(
-    startTime: number | null = null,
-    endTime: number | null = null,
-    options?: { includeText?: boolean; appName?: string | undefined },
-  ): Promise<Omit<StoredEvent, 'vector'>[]> {
-    if (!this.db) {
-      await this.init()
-    }
-    if (!this.db) return []
-
-    const includeText = options?.includeText ?? false
-    const conditions: string[] = []
-    const params: unknown[] = []
-
-    if (startTime !== null) {
-      conditions.push('timestamp >= ?')
-      params.push(startTime)
-    }
-    if (endTime !== null) {
-      conditions.push('timestamp <= ?')
-      params.push(endTime)
-    }
-    if (options?.appName !== undefined) {
-      conditions.push('appName = ?')
-      params.push(options.appName)
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-
-    const rows = this.db
-      .prepare(
-        `SELECT id, timestamp, summary, appName${includeText ? ', text' : ''}
-         FROM context_events
-         ${whereClause}
-         ORDER BY timestamp ASC`,
-      )
-      .all(...params) as Record<string, unknown>[]
-
-    return rows.map((row) => ({
-      id: row.id as string,
-      timestamp: row.timestamp as number,
-      summary: row.summary as string,
-      appName: row.appName as string,
-      text: includeText ? (row.text as string) : '',
-    }))
-  }
-
-  /**
-   * Retrieves multiple events by their IDs.
-   */
-  public async getEventsByIds(ids: readonly string[]): Promise<StoredEvent[]> {
-    if (!this.db) {
-      await this.init()
-    }
-    if (!this.db || ids.length === 0) return []
-
-    const placeholders = ids.map(() => '?').join(', ')
-    const rows = this.db
-      .prepare(
-        `SELECT id, timestamp, text, summary, appName, vector
-         FROM context_events
-         WHERE id IN (${placeholders})`,
-      )
-      .all(...ids) as Record<string, unknown>[]
-
-    return rows.map((row) => this.rowToStoredEvent(row))
-  }
-
-  /**
-   * Returns the total number of events in the database.
+   * Returns the total number of activities in the database.
    */
   public async countRows(): Promise<number> {
     if (!this.db) {
@@ -427,7 +207,7 @@ export class StorageService {
     }
     if (!this.db) return 0
 
-    return this.getRowCount()
+    return this.getActivityRowCount()
   }
 
   /**
@@ -440,7 +220,9 @@ export class StorageService {
     if (!this.db) return { oldest: null, newest: null }
 
     const result = this.db
-      .prepare('SELECT MIN(timestamp) as oldest, MAX(timestamp) as newest FROM context_events')
+      .prepare(
+        'SELECT MIN(start_timestamp) as oldest, MAX(end_timestamp) as newest FROM activities',
+      )
       .get() as DateRangeRow
 
     return {
@@ -475,13 +257,288 @@ export class StorageService {
   }
 
   // ---------------------------------------------------------------------------
+  // Activity methods
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Adds an activity to the storage.
+   */
+  public async addActivity(activity: StoredActivity): Promise<void> {
+    if (!this.db) {
+      await this.init()
+    }
+    if (!this.db) throw new Error('Failed to initialize SQLite database')
+
+    const vectorBlob = this.vectorToBlob(activity.vector)
+
+    const insert = this.db.transaction(() => {
+      this.db!.prepare(
+        `INSERT INTO activities (id, start_timestamp, end_timestamp, app_name, bundle_id, window_title, url, tld, summary, ocr_text, screenshot_count, interaction_summary, duration_ms, vector)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        activity.id,
+        activity.startTimestamp,
+        activity.endTimestamp,
+        activity.appName,
+        activity.bundleId,
+        activity.windowTitle,
+        activity.url,
+        activity.tld,
+        activity.summary,
+        activity.ocrText,
+        activity.screenshotCount,
+        activity.interactionSummary,
+        activity.durationMs,
+        vectorBlob,
+      )
+
+      this.db!.prepare(
+        `INSERT INTO activities_vec (id, embedding)
+         VALUES (?, ?)`,
+      ).run(activity.id, vectorBlob)
+    })
+
+    insert()
+  }
+
+  /**
+   * Full-text search across activity summary and OCR text.
+   * Returns lightweight summaries ranked by FTS5 BM25 relevance.
+   */
+  public async searchActivitiesFTS(
+    query: string,
+    limit = 5,
+    filters?: SearchFilters,
+  ): Promise<ActivitySummary[]> {
+    if (!this.db) {
+      await this.init()
+    }
+    if (!this.db) return []
+
+    const count = this.getActivityRowCount()
+    if (count === 0) return []
+
+    const safeQuery = sanitizeFtsQuery(query)
+    const { conditions, params } = this.buildActivityFilterConditions(filters)
+    const filterClause = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : ''
+
+    const rows = this.db
+      .prepare(
+        `SELECT a.id, a.start_timestamp, a.end_timestamp, a.app_name, a.summary, a.screenshot_count, a.duration_ms
+         FROM activities_fts fts
+         JOIN activities a ON a.rowid = fts.rowid
+         WHERE activities_fts MATCH ?
+         ${filterClause}
+         ORDER BY rank
+         LIMIT ?`,
+      )
+      .all(safeQuery, ...params, limit) as Record<string, unknown>[]
+
+    return rows.map((row) => this.rowToActivitySummary(row))
+  }
+
+  /**
+   * Vector similarity search over activities.
+   * Returns lightweight summaries ordered by cosine distance (most relevant first).
+   */
+  public async searchActivitiesVectors(
+    queryVector: number[],
+    limit = 5,
+    filters?: SearchFilters,
+  ): Promise<ActivitySummary[]> {
+    if (!this.db) {
+      await this.init()
+    }
+    if (!this.db) return []
+
+    const count = this.getActivityRowCount()
+    if (count === 0) return []
+
+    const vectorBlob = this.vectorToBlob(queryVector)
+    const hasFilters =
+      filters &&
+      (filters.startTime !== undefined ||
+        filters.endTime !== undefined ||
+        filters.appName !== undefined)
+
+    if (!hasFilters) {
+      const effectiveLimit = Math.min(limit, SQLITE_VEC_KNN_MAX)
+      const rows = this.db
+        .prepare(
+          `SELECT a.id, a.start_timestamp, a.end_timestamp, a.app_name, a.summary, a.screenshot_count, a.duration_ms
+           FROM (
+             SELECT id, distance
+             FROM activities_vec
+             WHERE embedding MATCH ?
+             AND k = ?
+           ) vec
+           JOIN activities a ON a.id = vec.id`,
+        )
+        .all(vectorBlob, effectiveLimit) as Record<string, unknown>[]
+
+      return rows.map((row) => this.rowToActivitySummary(row))
+    }
+
+    const overFetchLimit = Math.min(Math.max(limit * 10, count), SQLITE_VEC_KNN_MAX)
+    const { conditions, params } = this.buildActivityFilterConditions(filters)
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
+    const rows = this.db
+      .prepare(
+        `SELECT a.id, a.start_timestamp, a.end_timestamp, a.app_name, a.summary, a.screenshot_count, a.duration_ms
+         FROM (
+           SELECT id, distance
+           FROM activities_vec
+           WHERE embedding MATCH ?
+           AND k = ?
+         ) vec
+         JOIN activities a ON a.id = vec.id
+         ${whereClause}
+         ORDER BY vec.distance
+         LIMIT ?`,
+      )
+      .all(vectorBlob, overFetchLimit, ...params, limit) as Record<string, unknown>[]
+
+    if (rows.length < limit) {
+      log.warn(
+        `Vector search with filters returned ${rows.length}/${limit} requested results ` +
+          `(overfetched ${overFetchLimit} of ${count} total). ` +
+          'Some relevant results may have been missed due to KNN pre-filtering.',
+      )
+    }
+
+    return rows.map((row) => this.rowToActivitySummary(row))
+  }
+
+  /**
+   * Returns lightweight activity summaries within a time range, sorted by start_timestamp ascending.
+   */
+  public async getActivitiesByTimeRange(
+    startTime: number | null = null,
+    endTime: number | null = null,
+    options?: { appName?: string | undefined },
+  ): Promise<ActivitySummary[]> {
+    if (!this.db) {
+      await this.init()
+    }
+    if (!this.db) return []
+
+    const conditions: string[] = []
+    const params: unknown[] = []
+
+    if (startTime !== null) {
+      conditions.push('start_timestamp >= ?')
+      params.push(startTime)
+    }
+    if (endTime !== null) {
+      conditions.push('start_timestamp <= ?')
+      params.push(endTime)
+    }
+    if (options?.appName !== undefined) {
+      conditions.push('app_name = ? COLLATE NOCASE')
+      params.push(options.appName)
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
+    const rows = this.db
+      .prepare(
+        `SELECT id, start_timestamp, end_timestamp, app_name, summary, screenshot_count, duration_ms
+         FROM activities
+         ${whereClause}
+         ORDER BY start_timestamp ASC`,
+      )
+      .all(...params) as Record<string, unknown>[]
+
+    return rows.map((row) => this.rowToActivitySummary(row))
+  }
+
+  /**
+   * Retrieves multiple activities by their IDs.
+   */
+  public async getActivitiesByIds(ids: readonly string[]): Promise<StoredActivity[]> {
+    if (!this.db) {
+      await this.init()
+    }
+    if (!this.db || ids.length === 0) return []
+
+    const placeholders = ids.map(() => '?').join(', ')
+    const rows = this.db
+      .prepare(
+        `SELECT id, start_timestamp, end_timestamp, app_name, bundle_id, window_title, url, tld, summary, ocr_text, screenshot_count, interaction_summary, duration_ms, vector
+         FROM activities
+         WHERE id IN (${placeholders})`,
+      )
+      .all(...ids) as Record<string, unknown>[]
+
+    return rows.map((row) => this.rowToStoredActivity(row))
+  }
+
+  /**
+   * Returns the total number of activities in the database.
+   */
+  public async countActivityRows(): Promise<number> {
+    if (!this.db) {
+      await this.init()
+    }
+    if (!this.db) return 0
+
+    return this.getActivityRowCount()
+  }
+
+  // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  private getRowCount(): number {
-    if (!this.db) return 0
-    const result = this.db.prepare('SELECT COUNT(*) as count FROM context_events').get() as CountRow
-    return result.count
+  /**
+   * One-time migration: copies rows from the legacy `context_events` table
+   * into `activities` / `activities_vec`, then drops all legacy artifacts.
+   * No-op on fresh installs where the table never existed.
+   */
+  private migrateContextEvents(db: Database.Database): void {
+    const tableExists = db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='context_events'")
+      .get()
+    if (!tableExists) return
+
+    log.info('Migrating legacy context_events data into activities…')
+
+    const rowCount = (db.prepare('SELECT COUNT(*) as count FROM context_events').get() as CountRow)
+      .count
+
+    if (rowCount > 0) {
+      db.transaction(() => {
+        db.prepare(
+          `INSERT OR IGNORE INTO activities
+             (id, start_timestamp, end_timestamp, app_name, bundle_id, window_title,
+              url, tld, summary, ocr_text, screenshot_count, interaction_summary, duration_ms, vector)
+           SELECT id, timestamp, timestamp, appName, '', '',
+              NULL, NULL, summary, text, 0, '', 0, vector
+           FROM context_events`,
+        ).run()
+
+        db.prepare(
+          `INSERT OR IGNORE INTO activities_vec (id, embedding)
+           SELECT id, vector FROM context_events WHERE vector IS NOT NULL`,
+        ).run()
+      })()
+    }
+
+    // Drop legacy artifacts (idempotent — IF EXISTS where supported,
+    // and virtual/trigger drops are silent if already gone)
+    const drops = [
+      'DROP TRIGGER IF EXISTS context_events_ai',
+      'DROP TABLE IF EXISTS context_events_fts',
+      'DROP TABLE IF EXISTS context_events_vec',
+      'DROP INDEX IF EXISTS idx_context_events_timestamp',
+      'DROP INDEX IF EXISTS idx_context_events_appName',
+      'DROP TABLE IF EXISTS context_events',
+    ]
+    for (const sql of drops) {
+      db.exec(sql)
+    }
+
+    log.info(`Migrated ${rowCount} legacy context_events rows and dropped legacy tables`)
   }
 
   private vectorToBlob(vector: number[]): Buffer {
@@ -498,18 +555,44 @@ export class StorageService {
     return Array.from(float32)
   }
 
-  private rowToStoredEvent(row: Record<string, unknown>): StoredEvent {
+  private getActivityRowCount(): number {
+    if (!this.db) return 0
+    const result = this.db.prepare('SELECT COUNT(*) as count FROM activities').get() as CountRow
+    return result.count
+  }
+
+  private rowToActivitySummary(row: Record<string, unknown>): ActivitySummary {
     return {
       id: row.id as string,
-      timestamp: row.timestamp as number,
-      text: row.text as string,
+      startTimestamp: row.start_timestamp as number,
+      endTimestamp: row.end_timestamp as number,
+      appName: row.app_name as string,
       summary: row.summary as string,
-      appName: row.appName as string,
+      durationMs: row.duration_ms as number,
+      screenshotCount: row.screenshot_count as number,
+    }
+  }
+
+  private rowToStoredActivity(row: Record<string, unknown>): StoredActivity {
+    return {
+      id: row.id as string,
+      startTimestamp: row.start_timestamp as number,
+      endTimestamp: row.end_timestamp as number,
+      appName: row.app_name as string,
+      bundleId: row.bundle_id as string,
+      windowTitle: row.window_title as string,
+      url: (row.url as string) ?? null,
+      tld: (row.tld as string) ?? null,
+      summary: row.summary as string,
+      ocrText: row.ocr_text as string,
+      screenshotCount: row.screenshot_count as number,
+      interactionSummary: row.interaction_summary as string,
+      durationMs: row.duration_ms as number,
       vector: row.vector ? this.blobToVector(row.vector as Buffer) : [],
     }
   }
 
-  private buildFilterConditions(filters?: SearchFilters): {
+  private buildActivityFilterConditions(filters?: SearchFilters): {
     conditions: string[]
     params: unknown[]
   } {
@@ -519,15 +602,15 @@ export class StorageService {
     if (!filters) return { conditions, params }
 
     if (filters.startTime !== undefined) {
-      conditions.push('ce.timestamp >= ?')
+      conditions.push('a.start_timestamp >= ?')
       params.push(filters.startTime)
     }
     if (filters.endTime !== undefined) {
-      conditions.push('ce.timestamp <= ?')
+      conditions.push('a.start_timestamp <= ?')
       params.push(filters.endTime)
     }
     if (filters.appName !== undefined) {
-      conditions.push('ce.appName = ?')
+      conditions.push('a.app_name = ? COLLATE NOCASE')
       params.push(filters.appName)
     }
 

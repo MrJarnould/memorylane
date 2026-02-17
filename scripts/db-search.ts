@@ -5,7 +5,7 @@
  * Usage:
  *   npm run db:search "your search query"
  *   npm run db:search "your search query" --limit 10
- *   npm run db:search "your search query" --db-path /custom/path
+ *   npm run db:search "your search query" --db-path /custom/path --include-ocr
  */
 
 import * as fs from 'fs'
@@ -17,6 +17,7 @@ interface CLIArgs {
   query: string
   limit: number
   dbPath: string
+  includeOcr: boolean
 }
 
 function parseArgs(): CLIArgs {
@@ -25,6 +26,7 @@ function parseArgs(): CLIArgs {
   let query = ''
   let limit = 5
   let dbPath = getDefaultDbPath()
+  let includeOcr = false
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
@@ -35,12 +37,14 @@ function parseArgs(): CLIArgs {
     } else if (arg === '--db-path' && args[i + 1]) {
       dbPath = args[i + 1]
       i++
+    } else if (arg === '--include-ocr') {
+      includeOcr = true
     } else if (!arg.startsWith('--')) {
       query = arg
     }
   }
 
-  return { query, limit, dbPath }
+  return { query, limit, dbPath, includeOcr }
 }
 
 function formatTimestamp(timestamp: number): string {
@@ -54,14 +58,17 @@ function truncateText(text: string, maxLength = 200): string {
 }
 
 async function main() {
-  const { query, limit, dbPath } = parseArgs()
+  const { query, limit, dbPath, includeOcr } = parseArgs()
 
   if (!query) {
-    console.error('Usage: npm run db:search "your search query" [--limit N] [--db-path PATH]')
+    console.error(
+      'Usage: npm run db:search "your search query" [--limit N] [--db-path PATH] [--include-ocr]',
+    )
     console.error('')
     console.error('Options:')
     console.error('  --limit N        Number of results to return (default: 5)')
     console.error('  --db-path PATH   Path to SQLite database file')
+    console.error('  --include-ocr    Include OCR text in output (default: false)')
     console.error('')
     console.error(`Default database path: ${getDefaultDbPath()}`)
     process.exit(1)
@@ -79,6 +86,7 @@ async function main() {
   console.log(`Searching: "${query}"`)
   console.log(`Database: ${dbPath}`)
   console.log(`Limit: ${limit}`)
+  console.log(`Include OCR: ${includeOcr}`)
   console.log('---')
 
   try {
@@ -96,8 +104,8 @@ async function main() {
     // Run both searches
     console.log('Searching...')
     const [vectorResults, ftsResults] = await Promise.all([
-      storageService.searchVectors(queryVector, limit),
-      storageService.searchFTS(query, limit),
+      storageService.searchActivitiesVectors(queryVector, limit),
+      storageService.searchActivitiesFTS(query, limit),
     ])
 
     // Display vector search results
@@ -106,9 +114,17 @@ async function main() {
       console.log('No results found.')
     } else {
       vectorResults.forEach((result, index) => {
-        console.log(`[${index + 1}] ${formatTimestamp(result.timestamp)}`)
+        console.log(`[${index + 1}] ${formatTimestamp(result.startTimestamp)}`)
         console.log(`    ID: ${result.id}`)
-        console.log(`    Text: ${truncateText(result.text)}`)
+        console.log(`    App: ${result.appName}`)
+        if (result.windowTitle) {
+          console.log(`    Window: ${truncateText(result.windowTitle, 120)}`)
+        }
+        console.log(`    Duration: ${Math.round(result.durationMs / 1000)}s`)
+        if (includeOcr) {
+          console.log(`    OCR Text: ${truncateText(result.ocrText)}`)
+        }
+        console.log(`    Summary: ${truncateText(result.summary)}`)
         console.log('')
       })
     }
@@ -119,9 +135,17 @@ async function main() {
       console.log('No results found.')
     } else {
       ftsResults.forEach((result, index) => {
-        console.log(`[${index + 1}] ${formatTimestamp(result.timestamp)}`)
+        console.log(`[${index + 1}] ${formatTimestamp(result.startTimestamp)}`)
         console.log(`    ID: ${result.id}`)
-        console.log(`    Text: ${truncateText(result.text)}`)
+        console.log(`    App: ${result.appName}`)
+        if (result.windowTitle) {
+          console.log(`    Window: ${truncateText(result.windowTitle, 120)}`)
+        }
+        console.log(`    Duration: ${Math.round(result.durationMs / 1000)}s`)
+        if (includeOcr) {
+          console.log(`    OCR Text: ${truncateText(result.ocrText)}`)
+        }
+        console.log(`    Summary: ${truncateText(result.summary)}`)
         console.log('')
       })
     }

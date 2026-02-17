@@ -12,11 +12,12 @@ import { updateTrayMenu } from './tray'
 import { registerWithClaudeDesktop } from '../integrations/claude-desktop'
 import { registerWithCursor } from '../integrations/cursor'
 import { registerWithClaudeCode } from '../integrations/claude-code'
-import type { EventProcessor } from '../processor/index'
+import type { ActivityProcessor } from '../processor/index'
 import type { ApiKeyManager } from '../settings/api-key-manager'
 import type { CustomEndpointManager } from '../settings/custom-endpoint-manager'
 import type { SemanticClassifierService } from '../processor/semantic-classifier'
 import type { ManagedKeyService } from '../services/managed-key-service'
+import type { ActivityManager } from '../processor/activity-manager'
 import type { CustomEndpointConfig, MainWindowStats } from '../../shared/types'
 
 interface MainWindowDependencies {
@@ -25,10 +26,8 @@ interface MainWindowDependencies {
     startCapture: () => void
     stopCapture: () => void
   }
-  interactionMonitor: {
-    stopInteractionMonitoring: () => void
-  }
-  processor: EventProcessor
+  activityManager: ActivityManager
+  processor: ActivityProcessor
   apiKeyManager: ApiKeyManager
   customEndpointManager: CustomEndpointManager
   classifierService: SemanticClassifierService
@@ -114,7 +113,7 @@ export function getMainWindow(): BrowserWindow | null {
 async function buildStats(): Promise<MainWindowStats> {
   if (!deps) {
     return {
-      screenshotCount: 0,
+      activityCount: 0,
       dbSize: 0,
       dateRange: { oldest: null, newest: null },
       apiUsage: null,
@@ -124,12 +123,12 @@ async function buildStats(): Promise<MainWindowStats> {
   const storage = deps.processor.getStorageService()
   const classifier = deps.processor.getClassifierService()
 
-  let screenshotCount = 0
+  let activityCount = 0
   let dbSize = 0
   const dateRange: { oldest: number | null; newest: number | null } = { oldest: null, newest: null }
 
   try {
-    screenshotCount = await storage.countRows()
+    activityCount = await storage.countRows()
     dbSize = storage.getDbSize()
     const range = await storage.getDateRange()
     dateRange.oldest = range.oldest
@@ -148,7 +147,7 @@ async function buildStats(): Promise<MainWindowStats> {
     }
   }
 
-  return { screenshotCount, dbSize, dateRange, apiUsage }
+  return { activityCount, dbSize, dateRange, apiUsage }
 }
 
 /**
@@ -169,8 +168,8 @@ export function initMainWindowIPC(dependencies: MainWindowDependencies): void {
     }
 
     if (deps.recorder.isCapturingNow()) {
+      void deps.activityManager.forceClose()
       deps.recorder.stopCapture()
-      deps.interactionMonitor.stopInteractionMonitoring()
     } else {
       deps.recorder.startCapture()
     }

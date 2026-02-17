@@ -95,7 +95,14 @@ function getProdInstallPaths(): { command: string; mcpEntrypoint: string } {
     const appContentsDir = path.join('/Applications', 'MemoryLane.app', 'Contents')
     return {
       command: path.join(appContentsDir, 'MacOS', 'MemoryLane'),
-      mcpEntrypoint: path.join(appContentsDir, 'Resources', 'app.asar', 'out', 'main', 'mcp-entry.js'),
+      mcpEntrypoint: path.join(
+        appContentsDir,
+        'Resources',
+        'app.asar',
+        'out',
+        'main',
+        'mcp-entry.js',
+      ),
     }
   }
 

@@ -5,9 +5,11 @@
  * The MCP server runs separately via mcp-entry.ts under ELECTRON_RUN_AS_NODE=1.
  */
 
+import * as fs from 'fs'
+import * as path from 'path'
 import { app } from 'electron'
 import log from './logger'
-import { EventProcessor } from './processor/index'
+import { ActivityProcessor } from './processor/index'
 import { EmbeddingService } from './processor/embedding'
 import { StorageService } from './processor/storage'
 import { SemanticClassifierService } from './processor/semantic-classifier'
@@ -16,7 +18,10 @@ import { CustomEndpointManager } from './settings/custom-endpoint-manager'
 import { DeviceIdentity } from './settings/device-identity'
 import { ManagedKeyService } from './services/managed-key-service'
 import { DebugPipelineWriter } from './processor/debug-pipeline'
+import { ActivityManager } from './processor/activity-manager'
+import { ProcessingQueue } from './processor/processing-queue'
 import { startPowerMonitoring, shouldPause } from './power-monitor'
+import { SCREENSHOT_CLEANUP_CONFIG } from '../shared/constants'
 import { config as loadEnv } from 'dotenv'
 
 try {
@@ -38,7 +43,8 @@ app.on('window-all-closed', () => {
 let recorder: typeof import('./recorder/recorder')
 let interactionMonitor: typeof import('./recorder/interaction-monitor')
 
-let processor: EventProcessor | null = null
+let processor: ActivityProcessor | null = null
+let activityManager: ActivityManager | null = null
 let apiKeyManager: ApiKeyManager | null = null
 let customEndpointManager: CustomEndpointManager | null = null
 let classifierService: SemanticClassifierService | null = null
@@ -73,7 +79,7 @@ const initServices = async (): Promise<void> => {
     debugWriter,
     endpointConfig,
   )
-  processor = new EventProcessor(embeddingService, storageService, classifierService)
+  processor = new ActivityProcessor(embeddingService, storageService, classifierService)
 
   const deviceIdentity = new DeviceIdentity()
   managedKeyService = new ManagedKeyService(deviceIdentity)
@@ -102,10 +108,17 @@ app.on('ready', async () => {
 
   await initServices()
 
+  // Set up ActivityManager with recorder as capture provider
+  activityManager = new ActivityManager({
+    captureImmediate: recorder.captureImmediate,
+    captureIfVisualChange: recorder.captureIfVisualChange,
+    captureWindowByTitle: recorder.captureWindowByTitle,
+  })
+
   const { setupTray, updateTrayMenu } = await import('./ui/tray')
   setupTray({
     recorder,
-    interactionMonitor,
+    activityManager: activityManager!,
     processor: processor!,
   })
 
@@ -113,7 +126,7 @@ app.on('ready', async () => {
     await import('./ui/main-window')
   initMainWindowIPC({
     recorder,
-    interactionMonitor,
+    activityManager: activityManager!,
     processor: processor!,
     apiKeyManager: apiKeyManager!,
     customEndpointManager: customEndpointManager!,
@@ -128,20 +141,26 @@ app.on('ready', async () => {
 
   openMainWindow()
 
-  recorder.onScreenshot(async (screenshot) => {
-    log.info(`[Main] Screenshot captured: ${screenshot.id}`)
-    try {
-      await processor!.processScreenshot(screenshot)
-      log.info(`[Main] Screenshot processed successfully: ${screenshot.id}`)
-      void updateTrayMenu()
-      void sendStatusToRenderer()
-    } catch (error) {
-      log.error(`[Main] Error processing screenshot ${screenshot.id}:`, error)
-    }
+  // When an activity completes, enqueue it for processing (backpressure)
+  const processingQueue = new ProcessingQueue((activity) => processor!.processActivity(activity))
+
+  activityManager.onActivityComplete((activity) => {
+    log.info(`[Main] Activity completed: ${activity.id} (${activity.appName})`)
+    void processingQueue
+      .enqueue(activity)
+      .then(() => {
+        log.info(`[Main] Activity processed successfully: ${activity.id}`)
+        void updateTrayMenu()
+        void sendStatusToRenderer()
+      })
+      .catch((error) => {
+        log.error(`[Main] Error processing activity ${activity.id}:`, error)
+      })
   })
 
+  // Route all interaction events through the ActivityManager
   interactionMonitor.onInteraction((event) => {
-    processor!.addInteractionEvent(event)
+    void activityManager!.handleInteraction(event)
   })
 
   app.on('activate', () => {
@@ -150,6 +169,10 @@ app.on('ready', async () => {
 
   startPowerMonitoring({
     onPause: () => {
+      // Force-close current activity before stopping capture
+      if (activityManager) {
+        void activityManager.forceClose()
+      }
       if (recorder.isCapturingNow()) {
         log.info('[Main] Pausing capture (power state: locked/suspended)')
         recorder.stopCapture()
@@ -163,5 +186,27 @@ app.on('ready', async () => {
     },
   })
 
-  log.info('MemoryLane started. Screenshots will be saved to:', recorder.getScreenshotsDir())
+  const screenshotsDir = recorder.getScreenshotsDir()
+  setInterval(() => {
+    const now = Date.now()
+    let deleted = 0
+    try {
+      for (const file of fs.readdirSync(screenshotsDir)) {
+        const filepath = path.join(screenshotsDir, file)
+        try {
+          if (now - fs.statSync(filepath).mtimeMs > SCREENSHOT_CLEANUP_CONFIG.MAX_AGE_MS) {
+            fs.unlinkSync(filepath)
+            deleted++
+          }
+        } catch {
+          // ignore per-file errors
+        }
+      }
+    } catch (err) {
+      log.warn('[Main] Screenshot cleanup failed:', err)
+    }
+    if (deleted > 0) log.info(`[Main] Deleted ${deleted} old screenshot(s)`)
+  }, SCREENSHOT_CLEANUP_CONFIG.CLEANUP_INTERVAL_MS)
+
+  log.info('MemoryLane started. Screenshots will be saved to:', screenshotsDir)
 })

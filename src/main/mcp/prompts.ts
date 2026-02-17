@@ -36,8 +36,8 @@ export function registerPrompts(server: McpServer): void {
                 'Instructions:\n' +
                 `1. Use browse_timeline with startTime "${lookback} minutes ago" and ` +
                 'endTime "now", with recent_first sampling and a limit of 50.\n' +
-                '2. Treat event summaries as the primary source of truth for what I did.\n' +
-                '3. Only call get_event_details when you need exact strings (for example: an error message, file name, or quoted text).\n' +
+                '2. Treat activity summaries as the primary source of truth for what I did.\n' +
+                '3. Only call get_activity_details when you need exact strings (for example: an error message, file name, or quoted text).\n' +
                 '4. Do not infer activity from OCR alone; use OCR only as supporting exact-text evidence.\n' +
                 '5. Provide a concise narrative summary of what I have been working on, organized by activity or app.\n' +
                 '6. Highlight notable items (e.g. errors, context switches, repeated focus) and label any OCR-based details as exact on-screen text.\n' +
@@ -76,8 +76,8 @@ export function registerPrompts(server: McpServer): void {
               'Instructions:\n' +
               '1. Use browse_timeline to fetch activity for the period with uniform sampling ' +
               'and a limit of 100-1000.\n' +
-              '2. Build the report primarily from event summaries (not OCR).\n' +
-              '3. Call get_event_details only when exact strings are required to clarify an item.\n' +
+              '2. Build the report primarily from activity summaries (not OCR).\n' +
+              '3. Call get_activity_details only when exact strings are required to clarify an item.\n' +
               '4. Do not infer projects/tasks from OCR alone.\n' +
               '5. Group the activity into tasks or projects based on summary evidence, app, and timestamps.\n' +
               '6. Estimate the time spent on each group using the timestamps.\n' +

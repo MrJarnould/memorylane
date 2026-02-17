@@ -1,4 +1,4 @@
-import { pipeline, env } from '@xenova/transformers'
+import { pipeline, env } from '@huggingface/transformers'
 import log from '../logger'
 
 // Configure environment to not use local file system for models if possible,

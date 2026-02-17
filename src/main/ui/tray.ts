@@ -9,7 +9,8 @@ import { formatBytes, formatNumber } from '../utils/formatters'
 import { registerWithClaudeDesktop } from '../integrations/claude-desktop'
 import { registerWithCursor } from '../integrations/cursor'
 import { registerWithClaudeCode } from '../integrations/claude-code'
-import type { EventProcessor } from '../processor/index'
+import type { ActivityProcessor } from '../processor/index'
+import type { ActivityManager } from '../processor/activity-manager'
 import { sendStatusToRenderer, openMainWindow } from './main-window'
 
 interface TrayDependencies {
@@ -19,10 +20,8 @@ interface TrayDependencies {
     stopCapture: () => void
     getScreenshotsDir: () => string
   }
-  interactionMonitor: {
-    stopInteractionMonitoring: () => void
-  }
-  processor: EventProcessor
+  activityManager: ActivityManager
+  processor: ActivityProcessor
 }
 
 let tray: Tray | null = null
@@ -88,12 +87,12 @@ const buildUsageStatsSubmenu = async (): Promise<Electron.MenuItemConstructorOpt
   submenu.push({ type: 'separator' })
 
   try {
-    const screenshotCount = await storage.countRows()
+    const activityCount = await storage.countRows()
     const dbSize = storage.getDbSize()
 
     submenu.push(
       {
-        label: `Screenshots: ${formatNumber(screenshotCount)}`,
+        label: `Activities: ${formatNumber(activityCount)}`,
         enabled: false,
       },
       {
@@ -127,8 +126,8 @@ export const updateTrayMenu = async (): Promise<void> => {
       label: isCapturing ? 'Stop Capture' : 'Start Capture',
       click: () => {
         if (isCapturing) {
+          void deps!.activityManager.forceClose()
           deps!.recorder.stopCapture()
-          deps!.interactionMonitor.stopInteractionMonitoring()
         } else {
           deps!.recorder.startCapture()
         }
@@ -170,8 +169,8 @@ export const updateTrayMenu = async (): Promise<void> => {
     {
       label: 'Quit',
       click: () => {
+        void deps!.activityManager.forceClose()
         deps!.recorder.stopCapture()
-        deps!.interactionMonitor.stopInteractionMonitoring()
         app.quit()
       },
     },

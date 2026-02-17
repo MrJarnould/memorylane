@@ -1,23 +1,31 @@
 // eslint-disable-next-line import/no-unresolved
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { EventProcessor } from '../processor/index'
+import { ActivityProcessor } from '../processor/index'
 import { parseTimeString } from './parse-time'
-import { formatEventLine, sampleEvents, deduplicateResults } from './formatting'
+import {
+  formatTimelineEntry,
+  sampleEntries,
+  activityToTimelineEntry,
+  TimelineEntry,
+} from './formatting'
 import log from '../logger'
 
 /**
  * Registers all MCP tools on the given server.
  *
  * @param server - The MCP server instance to register tools on.
- * @param getProcessor - Lazy accessor for the EventProcessor (may be null before initialization).
+ * @param getProcessor - Lazy accessor for the ActivityProcessor (may be null before initialization).
  */
-export function registerTools(server: McpServer, getProcessor: () => EventProcessor | null): void {
+export function registerTools(
+  server: McpServer,
+  getProcessor: () => ActivityProcessor | null,
+): void {
   server.registerTool(
     'search_context',
     {
       description:
-        'Semantic search over recorded screen activity sessions. Each result includes id, time, app, and AI summary for summary-first activity reasoning. Use this for targeted questions (e.g. "when did I review PR #142?", "find my work on the auth module"). For exact strings, call get_event_details to inspect OCR text. If query is omitted, returns events chronologically (requires startTime or endTime).',
+        'Semantic search over recorded screen activity sessions. Each result includes id, time, app, and AI summary for summary-first activity reasoning. Use this for targeted questions (e.g. "when did I review PR #142?", "find my work on the auth module"). For exact strings, call get_activity_details to inspect OCR text. If query is omitted, returns activities chronologically (requires startTime or endTime).',
       inputSchema: {
         query: z
           .string()
@@ -53,7 +61,7 @@ export function registerTools(server: McpServer, getProcessor: () => EventProces
     'browse_timeline',
     {
       description:
-        'List activity during a time period — best for broad "what did I do?" questions. Each result is a one-line summary (~20 tokens), so use higher limits (30-50) to get a full picture. Supports uniform sampling to cover long ranges. Returns id, timestamp, app, and summary for activity inference; call get_event_details only when exact OCR text is needed.',
+        'List activity during a time period — best for broad "what did I do?" questions. Each result is a one-line summary (~20 tokens), so use higher limits (30-50) to get a full picture. Supports uniform sampling to cover long ranges. Returns id, timestamp, app, and summary for activity inference; call get_activity_details only when exact OCR text is needed.',
       inputSchema: {
         startTime: z
           .string()
@@ -76,7 +84,7 @@ export function registerTools(server: McpServer, getProcessor: () => EventProces
           .enum(['uniform', 'recent_first'])
           .optional()
           .describe(
-            'How to sample when there are more events than the limit. "uniform" picks evenly spaced entries across the range (default). "recent_first" returns the newest entries.',
+            'How to sample when there are more activities than the limit. "uniform" picks evenly spaced entries across the range (default). "recent_first" returns the newest entries.',
           ),
       },
     },
@@ -84,19 +92,19 @@ export function registerTools(server: McpServer, getProcessor: () => EventProces
   )
 
   server.registerTool(
-    'get_event_details',
+    'get_activity_details',
     {
       description:
-        'Fetch full event details by ID, including summary and raw OCR screen text. This is the only tool that returns OCR content. Use after browse_timeline or search_context when exact on-screen text is required (quotes, file names, error strings), not as the primary source for activity inference.',
+        'Fetch full activity details by ID, including summary and raw OCR screen text. This is the only tool that returns OCR content. Use after browse_timeline or search_context when exact on-screen text is required (quotes, file names, error strings), not as the primary source for activity inference.',
       inputSchema: {
         ids: z
           .array(z.string())
           .min(1)
           .max(100)
-          .describe('Event IDs to fetch (from search_context or browse_timeline results)'),
+          .describe('Activity IDs to fetch (from search_context or browse_timeline results)'),
       },
     },
-    (params) => handleGetEventDetails(getProcessor(), params),
+    (params) => handleGetActivityDetails(getProcessor(), params),
   )
 }
 
@@ -105,7 +113,7 @@ export function registerTools(server: McpServer, getProcessor: () => EventProces
 // ---------------------------------------------------------------------------
 
 async function handleSearchContext(
-  processor: EventProcessor | null,
+  processor: ActivityProcessor | null,
   {
     query,
     limit,
@@ -125,7 +133,7 @@ async function handleSearchContext(
       content: [
         {
           type: 'text' as const,
-          text: 'Error: EventProcessor is not initialized. The server cannot search the database.',
+          text: 'Error: Processor is not initialized. The server cannot search the database.',
         },
       ],
       isError: true,
@@ -162,6 +170,8 @@ async function handleSearchContext(
       }
     }
 
+    const storage = processor.getStorageService()
+
     // No query: fall back to chronological time-range listing
     if (!query) {
       if (startTime === undefined && endTime === undefined) {
@@ -176,25 +186,29 @@ async function handleSearchContext(
         }
       }
 
-      const storage = processor.getStorageService()
-      const events = await storage.getEventsByTimeRange(startTime ?? null, endTime ?? null, {
-        appName,
-      })
+      const activities = await storage.getActivitiesByTimeRange(
+        startTime ?? null,
+        endTime ?? null,
+        { appName },
+      )
 
-      const sampled = sampleEvents(events, effectiveLimit, 'recent_first')
+      const entries = activities.map(activityToTimelineEntry)
+      const sampled = sampleEntries(entries, effectiveLimit, 'recent_first')
 
       if (sampled.length === 0) {
         return {
-          content: [{ type: 'text' as const, text: 'No events found in the given time range.' }],
+          content: [
+            { type: 'text' as const, text: 'No activities found in the given time range.' },
+          ],
         }
       }
 
-      const formatted = sampled.map(formatEventLine).join('\n')
+      const formatted = sampled.map(formatTimelineEntry).join('\n')
 
       const header =
-        sampled.length < events.length
-          ? `Showing ${sampled.length} of ${events.length} events:`
-          : `${events.length} event(s):`
+        sampled.length < entries.length
+          ? `Showing ${sampled.length} of ${entries.length} activities:`
+          : `${entries.length} activit${entries.length === 1 ? 'y' : 'ies'}:`
 
       return {
         content: [{ type: 'text' as const, text: `${header}\n\n${formatted}` }],
@@ -202,16 +216,41 @@ async function handleSearchContext(
     }
 
     // Semantic search path
-    const results = await processor.search(query, {
-      limit: effectiveLimit,
+    const filters = {
       startTime: startTime ?? undefined,
       endTime: endTime ?? undefined,
       appName,
-    })
+    }
 
-    const combinedResults = deduplicateResults(results.vector, results.fts)
+    // Run embedding generation and FTS in parallel
+    const [embedding, ftsResults] = await Promise.all([
+      processor.getEmbeddingService().generateEmbedding(query),
+      storage.searchActivitiesFTS(query, effectiveLimit, filters).catch((err) => {
+        log.warn('FTS search failed, falling back to vector-only:', err)
+        return []
+      }),
+    ])
+    const vectorResults = await storage.searchActivitiesVectors(embedding, effectiveLimit, filters)
 
-    if (combinedResults.length === 0) {
+    // Deduplicate: vector results first (preserves relevance order), then FTS extras
+    const seen = new Set<string>()
+    const allResults: TimelineEntry[] = []
+
+    for (const a of vectorResults) {
+      seen.add(a.id)
+      allResults.push(activityToTimelineEntry(a))
+    }
+    for (const a of ftsResults) {
+      if (!seen.has(a.id)) {
+        seen.add(a.id)
+        allResults.push(activityToTimelineEntry(a))
+      }
+    }
+
+    // Truncate to requested limit
+    const truncated = allResults.slice(0, effectiveLimit)
+
+    if (truncated.length === 0) {
       return {
         content: [
           {
@@ -222,13 +261,13 @@ async function handleSearchContext(
       }
     }
 
-    const formattedResults = combinedResults.map(formatEventLine).join('\n')
+    const formattedResults = truncated.map(formatTimelineEntry).join('\n')
 
     return {
       content: [
         {
           type: 'text' as const,
-          text: `Found ${combinedResults.length} relevant events:\n\n${formattedResults}`,
+          text: `Found ${truncated.length} relevant results (ranked by relevance):\n\n${formattedResults}`,
         },
       ],
     }
@@ -247,7 +286,7 @@ async function handleSearchContext(
 }
 
 async function handleBrowseTimeline(
-  processor: EventProcessor | null,
+  processor: ActivityProcessor | null,
   {
     startTime: startTimeStr,
     endTime: endTimeStr,
@@ -267,7 +306,7 @@ async function handleBrowseTimeline(
       content: [
         {
           type: 'text' as const,
-          text: 'Error: EventProcessor is not initialized. The server cannot query the database.',
+          text: 'Error: Processor is not initialized. The server cannot query the database.',
         },
       ],
       isError: true,
@@ -303,14 +342,15 @@ async function handleBrowseTimeline(
     }
 
     const storage = processor.getStorageService()
-    const allEvents = await storage.getEventsByTimeRange(startTime, endTime, { appName })
+    const activities = await storage.getActivitiesByTimeRange(startTime, endTime, { appName })
+    const entries = activities.map(activityToTimelineEntry)
 
-    if (allEvents.length === 0) {
+    if (entries.length === 0) {
       return {
         content: [
           {
             type: 'text' as const,
-            text: 'No events found in the given time range.',
+            text: 'No activities found in the given time range.',
           },
         ],
       }
@@ -318,14 +358,14 @@ async function handleBrowseTimeline(
 
     const effectiveLimit = limit ?? 100
     const effectiveSampling = sampling ?? 'uniform'
-    const sampled = sampleEvents(allEvents, effectiveLimit, effectiveSampling)
+    const sampled = sampleEntries(entries, effectiveLimit, effectiveSampling)
 
-    const formatted = sampled.map(formatEventLine).join('\n')
+    const formatted = sampled.map(formatTimelineEntry).join('\n')
 
     const header =
-      sampled.length < allEvents.length
-        ? `Showing ${sampled.length} of ${allEvents.length} events (${effectiveSampling} sampling):`
-        : `${allEvents.length} event(s):`
+      sampled.length < entries.length
+        ? `Showing ${sampled.length} of ${entries.length} activities (${effectiveSampling} sampling):`
+        : `${entries.length} activit${entries.length === 1 ? 'y' : 'ies'}:`
 
     return {
       content: [
@@ -349,13 +389,16 @@ async function handleBrowseTimeline(
   }
 }
 
-async function handleGetEventDetails(processor: EventProcessor | null, { ids }: { ids: string[] }) {
+async function handleGetActivityDetails(
+  processor: ActivityProcessor | null,
+  { ids }: { ids: string[] },
+) {
   if (!processor) {
     return {
       content: [
         {
           type: 'text' as const,
-          text: 'Error: EventProcessor is not initialized. The server cannot query the database.',
+          text: 'Error: Processor is not initialized. The server cannot query the database.',
         },
       ],
       isError: true,
@@ -364,25 +407,30 @@ async function handleGetEventDetails(processor: EventProcessor | null, { ids }: 
 
   try {
     const storage = processor.getStorageService()
-    const events = await storage.getEventsByIds(ids)
+    const activities = await storage.getActivitiesByIds(ids)
 
-    if (events.length === 0) {
+    if (activities.length === 0) {
       return {
         content: [
           {
             type: 'text' as const,
-            text: 'No events found for the given IDs.',
+            text: 'No activities found for the given IDs.',
           },
         ],
       }
     }
 
-    const formatted = events
-      .map((e) => {
-        const timeStr = new Date(e.timestamp).toLocaleString()
-        const appInfo = e.appName ? ` [${e.appName}]` : ''
-        const summaryLine = e.summary ? `\nSummary: ${e.summary}` : ''
-        return `ID: ${e.id}\n[${timeStr}]${appInfo}${summaryLine}\nOCR: ${e.text}`
+    const formatted = activities
+      .map((a) => {
+        const timeStr = new Date(a.startTimestamp).toLocaleString()
+        const endTimeStr = new Date(a.endTimestamp).toLocaleString()
+        const appInfo = a.appName ? ` [${a.appName}]` : ''
+        const durationSec = Math.round(a.durationMs / 1000)
+        const summaryLine = a.summary ? `\nSummary: ${a.summary}` : ''
+        const interactionLine = a.interactionSummary
+          ? `\nInteractions: ${a.interactionSummary}`
+          : ''
+        return `ID: ${a.id}\n[${timeStr} → ${endTimeStr}]${appInfo} (${durationSec}s, ${a.screenshotCount} screenshots)${summaryLine}${interactionLine}\nOCR: ${a.ocrText}`
       })
       .join('\n\n---\n\n')
 
@@ -392,17 +440,17 @@ async function handleGetEventDetails(processor: EventProcessor | null, { ids }: 
           type: 'text' as const,
           text:
             'Interpretation guide: use "Summary" for what the user did. OCR is raw on-screen text for exact recall and can be ambiguous, so do not infer activity from OCR alone.\n\n' +
-            `${events.length} event(s):\n\n${formatted}`,
+            `${activities.length} result(s):\n\n${formatted}`,
         },
       ],
     }
   } catch (error) {
-    log.error('Error fetching event details:', error)
+    log.error('Error fetching activity details:', error)
     return {
       content: [
         {
           type: 'text' as const,
-          text: `Error fetching event details: ${error instanceof Error ? error.message : String(error)}`,
+          text: `Error fetching activity details: ${error instanceof Error ? error.message : String(error)}`,
         },
       ],
       isError: true,

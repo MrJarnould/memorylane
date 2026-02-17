@@ -3,28 +3,16 @@ import { app, desktopCapturer } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import * as fs from 'fs'
 import * as path from 'path'
-import {
-  Screenshot,
-  OnScreenshotCallback,
-  CaptureReason,
-  InteractionContext,
-} from '../../shared/types'
-import { CAPTURE_RATE_CONFIG } from '@constants'
+import { ActivityScreenshot } from '../../shared/types'
 import * as visualDetector from './visual-detector'
 import * as interactionMonitor from './interaction-monitor'
 import log from '../logger'
 
 // Configuration
 const SCREENSHOTS_DIR = path.join(app.getPath('userData'), 'screenshots')
-const SCREENSHOT_MAX_AGE_MS = 60_000
-const CLEANUP_INTERVAL_MS = 30_000
 
 // State
-const screenshotCallbacks: OnScreenshotCallback[] = []
 let isCapturing = false
-let cleanupTimer: ReturnType<typeof setInterval> | null = null
-let lastCaptureTime = 0
-let isProcessingInteraction = false
 
 // Ensure screenshots directory exists
 function ensureScreenshotsDir(): void {
@@ -33,32 +21,38 @@ function ensureScreenshotsDir(): void {
   }
 }
 
-/**
- * Delete screenshot files older than SCREENSHOT_MAX_AGE_MS from the screenshots directory.
- */
-function cleanupOldScreenshots(): void {
-  try {
-    const now = Date.now()
-    const files = fs.readdirSync(SCREENSHOTS_DIR)
+const FULL_RES_SIZE = { width: 1920, height: 1080 }
+const SAMPLE_SIZE = { width: 320, height: 180 }
 
-    for (const file of files) {
-      if (!file.endsWith('.png')) continue
-
-      const filepath = path.join(SCREENSHOTS_DIR, file)
-      const stat = fs.statSync(filepath)
-
-      if (now - stat.mtimeMs > SCREENSHOT_MAX_AGE_MS) {
-        fs.unlinkSync(filepath)
-        log.info(`[Cleanup] Deleted old screenshot: ${file}`)
-      }
-    }
-  } catch (error) {
-    log.error('[Cleanup] Error cleaning up old screenshots:', error)
-  }
+function parseDisplayId(sourceId: string): number {
+  return parseInt(sourceId.split(':')[1] || '0', 10)
 }
 
-const FULL_RES_SIZE = { width: 1920 * 2, height: 1080 * 2 }
-const SAMPLE_SIZE = { width: 320, height: 180 }
+/**
+ * Persist a captured source's thumbnail to disk and build the ActivityScreenshot metadata.
+ */
+function saveScreenshot(
+  source: Electron.DesktopCapturerSource,
+  trigger: ActivityScreenshot['trigger'],
+): ActivityScreenshot {
+  ensureScreenshotsDir()
+
+  const id = uuidv4()
+  const timestamp = Date.now()
+  const filename = `${timestamp}_${id}.png`
+  const filepath = path.join(SCREENSHOTS_DIR, filename)
+  const size = source.thumbnail.getSize()
+
+  fs.writeFileSync(filepath, source.thumbnail.toPNG())
+
+  return {
+    id,
+    filepath,
+    timestamp,
+    trigger,
+    display: { id: parseDisplayId(source.id), width: size.width, height: size.height },
+  }
+}
 
 /**
  * Capture a screen source at the given thumbnail resolution.
@@ -103,109 +97,84 @@ async function captureSampleBitmap(displayId?: number): Promise<Buffer> {
 }
 
 /**
- * Handle an interaction event by checking for visual changes and capturing if needed.
+ * Capture a screenshot immediately.
+ * Used by ActivityManager for on-demand captures (activity start/end/periodic).
  */
-async function handleInteraction(context: InteractionContext): Promise<void> {
-  const now = Date.now()
-  const timeSinceLastCapture = now - lastCaptureTime
-
-  if (timeSinceLastCapture < CAPTURE_RATE_CONFIG.MIN_CAPTURE_INTERVAL_MS) {
-    log.info(
-      `[Capture] Interaction skipped (cooldown: ${timeSinceLastCapture}ms < ${CAPTURE_RATE_CONFIG.MIN_CAPTURE_INTERVAL_MS}ms)`,
-    )
-    return
-  }
-
-  if (isProcessingInteraction) {
-    log.info('[Capture] Interaction skipped (already processing)')
-    return
-  }
-
-  isProcessingInteraction = true
-
-  try {
-    log.info(
-      `[Capture] Interaction detected: ${context.type} (display: ${context.displayId ?? 'unknown'})`,
-    )
-
-    const sampleBitmap = await captureSampleBitmap(context.displayId)
-    const result = visualDetector.checkBitmapAgainstBaseline(sampleBitmap)
-
-    if (result.changed) {
-      log.info(
-        `[Capture] Visual change detected (${result.difference.toFixed(1)}%) - capturing full-res screenshot`,
-      )
-
-      const fullSource = await captureScreen(FULL_RES_SIZE, context.displayId)
-      saveScreenshotFromSource(fullSource, {
-        type: 'baseline_change',
-        confidence: result.difference,
-      })
-
-      lastCaptureTime = Date.now()
-
-      visualDetector.updateBaselineFromBitmap(sampleBitmap)
-      log.info('[Capture] Baseline updated to new screenshot')
-    } else {
-      log.info(
-        `[Capture] No significant change (${result.difference.toFixed(1)}%) - keeping current baseline`,
-      )
-    }
-  } finally {
-    isProcessingInteraction = false
-  }
-}
-
-/**
- * Save a screenshot from an already-captured source, notify callbacks, and return metadata.
- */
-function saveScreenshotFromSource(
-  source: Electron.DesktopCapturerSource,
-  reason: CaptureReason,
-): Screenshot {
-  ensureScreenshotsDir()
-
-  const thumbnail = source.thumbnail
-  const id = uuidv4()
-  const timestamp = Date.now()
-  const filename = `${timestamp}_${id}.png`
-  const filepath = path.join(SCREENSHOTS_DIR, filename)
-  const size = thumbnail.getSize()
-
-  const pngBuffer = thumbnail.toPNG()
-  fs.writeFileSync(filepath, pngBuffer)
-
-  const screenshot: Screenshot = {
-    id,
-    filepath,
-    timestamp,
-    display: {
-      id: parseInt(source.id.split(':')[1] || '0', 10),
-      width: size.width,
-      height: size.height,
-    },
-    trigger: reason,
-  }
-
-  log.info(`[Capture] Screenshot saved: ${filename} (reason: ${reason.type})`)
-  log.debug(
-    `[Capture] Screenshot details: display=${screenshot.display.id}, ` +
-      `size=${size.width}x${size.height}, source=${source.id}`,
+export async function captureImmediate(
+  trigger: ActivityScreenshot['trigger'],
+  displayId?: number,
+): Promise<ActivityScreenshot> {
+  const source = await captureScreen(FULL_RES_SIZE, displayId)
+  const screenshot = saveScreenshot(source, trigger)
+  log.info(
+    `[Capture] Screenshot saved: ${path.basename(screenshot.filepath)} (trigger: ${trigger})`,
   )
-
-  screenshotCallbacks.forEach((callback) => {
-    try {
-      callback(screenshot)
-    } catch (error) {
-      log.error('Error in screenshot callback:', error)
-    }
-  })
-
   return screenshot
 }
 
 /**
- * Start capturing screenshots using event-driven baseline detection
+ * Check for visual change and capture if detected.
+ * Used by ActivityManager for periodic visual-change-gated captures.
+ * Returns the screenshot if visual change was detected, null otherwise.
+ */
+export async function captureIfVisualChange(
+  trigger: ActivityScreenshot['trigger'],
+  displayId?: number,
+): Promise<ActivityScreenshot | null> {
+  const sampleBitmap = await captureSampleBitmap(displayId)
+  const result = visualDetector.checkBitmapAgainstBaseline(sampleBitmap)
+
+  if (!result.changed) {
+    return null
+  }
+
+  log.info(
+    `[Capture] Visual change detected (${result.difference.toFixed(1)}%) - capturing screenshot`,
+  )
+
+  const screenshot = await captureImmediate(trigger, displayId)
+  visualDetector.updateBaselineFromBitmap(sampleBitmap)
+  return screenshot
+}
+
+/**
+ * Capture a specific window by its title.
+ * Uses desktopCapturer with types: ['window'] which on macOS uses CGWindowListCopyWindowInfo,
+ * allowing capture of background windows regardless of z-order.
+ * Returns null if no window with the given title is found.
+ */
+export async function captureWindowByTitle(
+  title: string,
+  trigger: ActivityScreenshot['trigger'],
+): Promise<ActivityScreenshot | null> {
+  const sources = await desktopCapturer.getSources({
+    types: ['window'],
+    thumbnailSize: FULL_RES_SIZE,
+  })
+
+  log.debug(
+    `[Capture] captureWindowByTitle: looking for "${title}" among ${sources.length} windows: [${sources.map((s) => `"${s.name}"`).join(', ')}]`,
+  )
+
+  const source = sources.find((s) => s.name === title)
+  if (!source) {
+    log.info(
+      `[Capture] Window not found by title: "${title}" (${sources.length} windows available)`,
+    )
+    return null
+  }
+
+  const screenshot = saveScreenshot(source, trigger)
+  log.info(
+    `[Capture] Window screenshot saved: ${path.basename(screenshot.filepath)} ` +
+      `(title: "${title}", trigger: ${trigger})`,
+  )
+  return screenshot
+}
+
+/**
+ * Start the capture system: visual detection and interaction monitoring.
+ * The ActivityManager (wired in index.ts) handles interaction routing and capture orchestration.
  */
 export function startCapture(): void {
   if (isCapturing) {
@@ -213,36 +182,28 @@ export function startCapture(): void {
     return
   }
 
-  log.info('[Capture] Starting screenshot capture with event-driven baseline detection')
+  log.info('[Capture] Starting capture system')
   isCapturing = true
 
-  // Start periodic cleanup of old screenshot files
-  cleanupTimer = setInterval(cleanupOldScreenshots, CLEANUP_INTERVAL_MS)
-
-  // Start visual detection (no interval, just enables the module)
+  // Start visual detection (enables the module for baseline comparisons)
   visualDetector.startVisualDetection()
 
-  // Start interaction monitoring
+  // Start interaction monitoring (events routed to ActivityManager via index.ts)
   interactionMonitor.startInteractionMonitoring()
 
-  // Capture initial baseline screenshot and derive baseline from a separate sample capture
-  Promise.all([captureScreen(FULL_RES_SIZE), captureSampleBitmap()])
-    .then(([fullSource, sampleBitmap]) => {
+  // Initialize visual detection baseline from a sample capture
+  captureSampleBitmap()
+    .then((sampleBitmap) => {
       visualDetector.updateBaselineFromBitmap(sampleBitmap)
-
-      saveScreenshotFromSource(fullSource, { type: 'manual' })
-      log.info('[Capture] Initial baseline screenshot captured')
+      log.info('[Capture] Visual detection baseline initialized')
     })
     .catch((error) => {
-      log.error('[Capture] Failed to capture initial baseline:', error)
+      log.error('[Capture] Failed to initialize baseline:', error)
     })
-
-  // Register interaction monitor callback
-  interactionMonitor.onInteraction(handleInteraction)
 }
 
 /**
- * Stop capturing screenshots
+ * Stop the capture system.
  */
 export function stopCapture(): void {
   if (!isCapturing) {
@@ -250,32 +211,14 @@ export function stopCapture(): void {
     return
   }
 
-  log.info('[Capture] Stopping screenshot capture')
+  log.info('[Capture] Stopping capture system')
   isCapturing = false
-  lastCaptureTime = 0
-  isProcessingInteraction = false
-
-  // Stop periodic cleanup
-  if (cleanupTimer) {
-    clearInterval(cleanupTimer)
-    cleanupTimer = null
-  }
 
   // Stop visual detection
   visualDetector.stopVisualDetection()
 
-  // Clear interaction monitor callbacks
-  interactionMonitor.clearInteractionCallback(handleInteraction)
-
   // Stop interaction monitoring
   interactionMonitor.stopInteractionMonitoring()
-}
-
-/**
- * Register a callback to be notified when screenshots are captured
- */
-export function onScreenshot(callback: OnScreenshotCallback): void {
-  screenshotCallbacks.push(callback)
 }
 
 /**

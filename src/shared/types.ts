@@ -1,21 +1,3 @@
-export interface Screenshot {
-  id: string // UUID
-  filepath: string // Absolute path to PNG
-  timestamp: number // Unix ms
-  display: {
-    id: number
-    width: number
-    height: number
-  }
-  trigger: CaptureReason // Why was this screenshot taken
-}
-
-export interface CaptureReason {
-  type: 'timer' | 'baseline_change' | 'manual'
-  confidence?: number // Visual change percentage (0-100) for baseline_change
-  metadata?: Record<string, unknown>
-}
-
 export interface InteractionContext {
   type: 'click' | 'keyboard' | 'scroll' | 'app_change'
   timestamp: number
@@ -32,10 +14,14 @@ export interface InteractionContext {
   scrollDirection?: 'vertical' | 'horizontal'
   scrollAmount?: number // Accumulated scroll delta
 
+  // Keyboard-specific: window context during typing session
+  windowTitle?: string
+
   // Window/app context
   activeWindow?: {
     title: string
     processName: string
+    bundleId?: string
     url?: string // Browser tab URL (Chrome, Safari, Arc, etc.)
   }
 
@@ -43,21 +29,41 @@ export interface InteractionContext {
   previousWindow?: {
     title: string
     processName: string
+    bundleId?: string
     url?: string
   }
-}
-
-export type OnScreenshotCallback = (screenshot: Screenshot) => void
-
-export interface ClassificationInput {
-  startScreenshot: Screenshot
-  endScreenshot?: Screenshot | undefined // Optional for single-image mode (app change)
-  events: InteractionContext[]
 }
 
 export interface ClassificationResult {
   summary: string
   timestamp: number
+}
+
+export interface ActivityScreenshot {
+  id: string
+  filepath: string
+  timestamp: number
+  trigger: 'activity_start' | 'activity_end' | 'visual_change'
+  display: { id: number; width: number; height: number }
+}
+
+export interface Activity {
+  id: string
+  startTimestamp: number
+  endTimestamp?: number
+  appName: string
+  bundleId?: string
+  windowTitle: string
+  url?: string
+  tld?: string
+  screenshots: ActivityScreenshot[]
+  interactions: InteractionContext[]
+}
+
+export interface ActivityClassificationInput {
+  activity: Activity
+  screenshotPaths: string[] // paths of selected screenshots (up to MAX_SCREENSHOTS_FOR_LLM)
+  previousSummaries: ClassificationResult[]
 }
 
 export interface SearchFilters {
@@ -117,7 +123,7 @@ export interface MainWindowStatus {
 }
 
 export interface MainWindowStats {
-  screenshotCount: number
+  activityCount: number
   dbSize: number
   dateRange: { oldest: number | null; newest: number | null }
   apiUsage: { requestCount: number; totalCost: number } | null

@@ -19,14 +19,21 @@ let scrollSessionAmount = 0
 let scrollSessionDirection: 'vertical' | 'horizontal' = 'vertical'
 let scrollSessionStartTime = 0
 
-// Click throttle state
-let lastClickTime = 0
+// Click debounce state
+let clickSessionTimeoutId: NodeJS.Timeout | null = null
+let clickSessionCount = 0
+let clickSessionStartTime = 0
+let lastClickPosition: { x: number; y: number } | null = null
+let lastClickDisplayId: number | undefined
 
 // App change state
 let previousWindow: NonNullable<InteractionContext['activeWindow']> | null = null
 
 // Display resolution state (used by keyboard/scroll handlers)
 let cachedDisplayId: number | null = null
+
+// Cached window title from latest app-watcher event (for keyboard context enrichment)
+let cachedWindowTitle: string | null = null
 
 /**
  * Resolve which Electron Display contains the given global coordinate.
@@ -41,7 +48,8 @@ const interactionCallbacks: OnInteractionCallback[] = []
 
 /**
  * Handle mouse click events
- * Throttled to prevent rapid-fire captures from fast clicking
+ * Debounced: accumulates clicks and emits a single event when clicking stops,
+ * matching the session pattern used by keyboard and scroll handlers.
  */
 function handleMouseClick(event: UiohookMouseEvent): void {
   if (!INTERACTION_MONITOR_CONFIG.TRACK_CLICKS) {
@@ -49,30 +57,50 @@ function handleMouseClick(event: UiohookMouseEvent): void {
   }
 
   const now = Date.now()
-  if (now - lastClickTime < INTERACTION_MONITOR_CONFIG.CLICK_THROTTLE_MS) {
-    return
-  }
-  lastClickTime = now
 
-  const displayId = getDisplayIdForPoint(event.x, event.y)
-
-  const context: InteractionContext = {
-    type: 'click',
-    timestamp: now,
-    displayId,
-    clickPosition: {
-      x: event.x,
-      y: event.y,
-    },
+  if (clickSessionTimeoutId) {
+    clearTimeout(clickSessionTimeoutId)
   }
 
-  interactionCallbacks.forEach((callback) => {
-    try {
-      callback(context)
-    } catch (error) {
-      log.error('Error in interaction callback:', error)
+  if (clickSessionCount === 0) {
+    clickSessionStartTime = now
+    log.info('[Interaction Monitor] Click session started')
+  }
+
+  clickSessionCount++
+  lastClickPosition = { x: event.x, y: event.y }
+  lastClickDisplayId = getDisplayIdForPoint(event.x, event.y)
+
+  clickSessionTimeoutId = setTimeout(() => {
+    if (clickSessionCount === 0) return
+
+    const endTime = Date.now() - INTERACTION_MONITOR_CONFIG.CLICK_DEBOUNCE_MS
+    const durationMs = endTime - clickSessionStartTime
+
+    log.info(
+      `[Interaction Monitor] Click session ended: ${clickSessionCount} clicks over ${durationMs}ms`,
+    )
+
+    const context: InteractionContext = {
+      type: 'click',
+      timestamp: endTime,
+      displayId: lastClickDisplayId,
+      clickPosition: lastClickPosition ?? undefined,
     }
-  })
+
+    interactionCallbacks.forEach((callback) => {
+      try {
+        callback(context)
+      } catch (error) {
+        log.error('Error in interaction callback:', error)
+      }
+    })
+
+    clickSessionCount = 0
+    clickSessionStartTime = 0
+    lastClickPosition = null
+    lastClickDisplayId = undefined
+  }, INTERACTION_MONITOR_CONFIG.CLICK_DEBOUNCE_MS)
 }
 
 /**
@@ -107,9 +135,9 @@ function handleKeyboard(): void {
     if (!isTyping) return
 
     isTyping = false
-    const endTime = Date.now() - INTERACTION_MONITOR_CONFIG.TYPING_SESSION_TIMEOUT_MS
+    const endTime = Date.now() - INTERACTION_MONITOR_CONFIG.TYPING_DEBOUNCE_MS
     const durationMs =
-      endTime - typingSessionStartTime - INTERACTION_MONITOR_CONFIG.TYPING_SESSION_TIMEOUT_MS
+      endTime - typingSessionStartTime - INTERACTION_MONITOR_CONFIG.TYPING_DEBOUNCE_MS
 
     log.info(
       `[Interaction Monitor] Typing session ended: ${typingSessionKeyCount} keys over ${durationMs}ms`,
@@ -121,6 +149,7 @@ function handleKeyboard(): void {
       displayId: cachedDisplayId ?? undefined,
       keyCount: typingSessionKeyCount,
       durationMs: durationMs,
+      windowTitle: cachedWindowTitle ?? undefined,
     }
 
     // Notify all callbacks
@@ -135,7 +164,7 @@ function handleKeyboard(): void {
     // Reset session tracking
     typingSessionKeyCount = 0
     typingSessionStartTime = 0
-  }, INTERACTION_MONITOR_CONFIG.TYPING_SESSION_TIMEOUT_MS)
+  }, INTERACTION_MONITOR_CONFIG.TYPING_DEBOUNCE_MS)
 }
 
 /**
@@ -171,7 +200,7 @@ function handleScroll(event: UiohookWheelEvent): void {
     if (!isScrolling) return
 
     isScrolling = false
-    const endTime = Date.now() - INTERACTION_MONITOR_CONFIG.SCROLL_SESSION_TIMEOUT_MS
+    const endTime = Date.now() - INTERACTION_MONITOR_CONFIG.SCROLL_DEBOUNCE_MS
     const durationMs = endTime - scrollSessionStartTime
 
     log.info(
@@ -198,7 +227,7 @@ function handleScroll(event: UiohookWheelEvent): void {
     // Reset session tracking
     scrollSessionAmount = 0
     scrollSessionStartTime = 0
-  }, INTERACTION_MONITOR_CONFIG.SCROLL_SESSION_TIMEOUT_MS)
+  }, INTERACTION_MONITOR_CONFIG.SCROLL_DEBOUNCE_MS)
 }
 
 /**
@@ -223,8 +252,12 @@ function handleAppWatcherEvent(event: AppWatcherEvent): void {
   const current: NonNullable<InteractionContext['activeWindow']> = {
     title: event.title ?? '',
     processName: event.app ?? '',
+    ...(event.bundleId && { bundleId: event.bundleId }),
     ...(event.url && { url: event.url }),
   }
+
+  // Cache window title for keyboard context enrichment
+  cachedWindowTitle = current.title
 
   // Skip if nothing actually changed
   if (
@@ -253,11 +286,7 @@ function handleAppWatcherEvent(event: AppWatcherEvent): void {
     previousWindow: previousWindow ?? undefined,
   }
 
-  const prev = previousWindow
   previousWindow = current
-
-  // Don't emit on the very first event (no previous to compare against)
-  if (!prev) return
 
   // Notify all callbacks
   log.debug(
@@ -338,9 +367,13 @@ export function stopInteractionMonitoring(): void {
     isScrolling = false
     scrollSessionAmount = 0
     scrollSessionStartTime = 0
-    lastClickTime = 0
+    clickSessionCount = 0
+    clickSessionStartTime = 0
+    lastClickPosition = null
+    lastClickDisplayId = undefined
     previousWindow = null
     cachedDisplayId = null
+    cachedWindowTitle = null
 
     // Clear any pending typing session timeout
     if (typingSessionTimeoutId) {
@@ -352,6 +385,12 @@ export function stopInteractionMonitoring(): void {
     if (scrollSessionTimeoutId) {
       clearTimeout(scrollSessionTimeoutId)
       scrollSessionTimeoutId = null
+    }
+
+    // Clear any pending click session timeout
+    if (clickSessionTimeoutId) {
+      clearTimeout(clickSessionTimeoutId)
+      clickSessionTimeoutId = null
     }
 
     // Stop the native app-watcher process

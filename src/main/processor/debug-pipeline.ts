@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { app } from 'electron'
 import log from '../logger'
-import { ClassificationInput } from '../../shared/types'
+import { ActivityClassificationInput } from '../../shared/types'
 
 function getDebugDir(): string {
   return path.join(app.getAppPath(), '.debug-pipeline')
@@ -59,22 +59,28 @@ export class DebugPipelineWriter {
   }
 
   /**
-   * Dump a full LLM round-trip to a timestamped subfolder.
+   * Dump a full activity classification round-trip to a timestamped subfolder.
    * Fire-and-forget — errors are logged but never thrown.
    */
-  public dump(input: ClassificationInput, prompt: string, response: DebugPipelineResponse): void {
+  public dumpActivity(
+    input: ActivityClassificationInput,
+    prompt: string,
+    response: DebugPipelineResponse,
+  ): void {
     try {
-      const { startScreenshot, endScreenshot } = input
+      const { activity, screenshotPaths } = input
       const ts = new Date().toISOString().replace(/:/g, '-')
-      const subDir = path.join(this.debugDir, `${ts}_${startScreenshot.id}`)
+      const subDir = path.join(this.debugDir, `${ts}_${activity.id}`)
 
       fs.mkdirSync(subDir, { recursive: true })
 
-      if (fs.existsSync(startScreenshot.filepath)) {
-        fs.copyFileSync(startScreenshot.filepath, path.join(subDir, 'start.png'))
-      }
-      if (endScreenshot && fs.existsSync(endScreenshot.filepath)) {
-        fs.copyFileSync(endScreenshot.filepath, path.join(subDir, 'end.png'))
+      // Copy screenshot files
+      for (let i = 0; i < screenshotPaths.length; i++) {
+        const filepath = screenshotPaths[i]
+        if (fs.existsSync(filepath)) {
+          const label = i === 0 ? 'start' : i === screenshotPaths.length - 1 ? 'end' : `mid-${i}`
+          fs.copyFileSync(filepath, path.join(subDir, `${label}.png`))
+        }
       }
 
       fs.writeFileSync(path.join(subDir, 'prompt.txt'), prompt, 'utf-8')
@@ -85,9 +91,28 @@ export class DebugPipelineWriter {
         'utf-8',
       )
 
-      log.info(`[DebugPipeline] Dumped round-trip to ${subDir}`)
+      fs.writeFileSync(
+        path.join(subDir, 'activity.json'),
+        JSON.stringify(
+          {
+            id: activity.id,
+            appName: activity.appName,
+            windowTitle: activity.windowTitle,
+            url: activity.url,
+            startTimestamp: activity.startTimestamp,
+            endTimestamp: activity.endTimestamp,
+            screenshotCount: activity.screenshots.length,
+            interactionCount: activity.interactions.length,
+          },
+          null,
+          2,
+        ),
+        'utf-8',
+      )
+
+      log.info(`[DebugPipeline] Dumped activity round-trip to ${subDir}`)
     } catch (error) {
-      log.warn('[DebugPipeline] Failed to dump round-trip:', error)
+      log.warn('[DebugPipeline] Failed to dump activity round-trip:', error)
     }
   }
 }

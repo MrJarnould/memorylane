@@ -11,7 +11,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { Writable } from 'node:stream'
 import * as fs from 'fs'
-import { EventProcessor } from '../processor/index'
+import { ActivityProcessor } from '../processor/index'
 import { StorageService } from '../processor/storage'
 import { EmbeddingService } from '../processor/embedding'
 import { getDefaultDbPath } from '../paths'
@@ -23,14 +23,14 @@ const SERVER_NAME = 'memorylane'
 const SERVER_VERSION = '1.0.0'
 
 const SERVER_INSTRUCTIONS = `\
-MemoryLane captures application sessions and stores one event per session with \
+MemoryLane captures application sessions and stores one activity per session with \
 an AI summary, OCR text, app metadata, and timestamp. Use it to recall past \
 screen activity.
 
 ## How to reason about data (critical)
 
 - **Use summaries for activity conclusions** — when answering "what the user did," \
-ground conclusions in event summaries from search_context or browse_timeline.
+ground conclusions in activity summaries from search_context or browse_timeline.
 - **Use OCR for exact recall only** — use OCR only when the user needs exact strings \
 (file names, error messages, copied text, specific wording).
 - **Never infer activity from OCR alone** — OCR is ambiguous: it may include passive \
@@ -47,14 +47,14 @@ reasoning. \
 - **search_context** — targeted recall like "when did I review PR #142?", \
 "find my work on the auth module", or "that error I saw in the terminal". \
 Results are ranked by semantic relevance and return summary-first context.
-- **get_event_details** — fetch full OCR screen text for specific event IDs \
-returned by the other tools. Use this only when exact on-screen text is needed; \
-do not use OCR as the primary source for inferring user activity.
+- **get_activity_details** — fetch full activity details including OCR screen text \
+for specific activity IDs returned by the other tools. Use this only when exact \
+on-screen text is needed; do not use OCR as the primary source for inferring user activity.
 
 ## Typical workflows
 
 1. Activity question: browse_timeline or search_context → answer from summaries.
-2. Exact-text question: search_context/browse_timeline → get_event_details on key IDs → quote OCR text.
+2. Exact-text question: search_context/browse_timeline → get_activity_details on key IDs → quote OCR text.
 3. Drill-down: start broad with browse_timeline, then refine with search_context.
 4. Mixed question: use summaries for narrative and OCR only for precise supporting details.
 
@@ -64,14 +64,14 @@ do not use OCR as the primary source for inferring user activity.
 - Use the appName filter when the user mentions a specific app ("in VS Code", "on Slack").
 - When summarizing a time period, prefer uniform sampling to cover the full range.
 - If summary and OCR seem to disagree, trust summary for "what happened" and treat OCR as raw evidence only.
-- Event IDs are opaque UUIDs — never fabricate them; always use IDs from tool results.`
+- Activity IDs are opaque UUIDs — never fabricate them; always use IDs from tool results.`
 
 export class MemoryLaneMCPServer {
   private server: McpServer
-  private eventProcessor: EventProcessor | null = null
+  private activityProcessor: ActivityProcessor | null = null
 
-  constructor(eventProcessor?: EventProcessor) {
-    this.eventProcessor = eventProcessor || null
+  constructor(activityProcessor?: ActivityProcessor) {
+    this.activityProcessor = activityProcessor || null
     this.server = new McpServer(
       {
         name: SERVER_NAME,
@@ -86,7 +86,7 @@ export class MemoryLaneMCPServer {
       },
     )
 
-    registerTools(this.server, () => this.eventProcessor)
+    registerTools(this.server, () => this.activityProcessor)
     registerPrompts(this.server)
   }
 
@@ -94,7 +94,7 @@ export class MemoryLaneMCPServer {
    * Initializes services if they haven't been injected.
    */
   private async initializeServices(dbPath?: string): Promise<void> {
-    if (this.eventProcessor) return
+    if (this.activityProcessor) return
 
     // Use provided path or fall back to default
     const resolvedPath = dbPath || getDefaultDbPath()
@@ -113,7 +113,7 @@ export class MemoryLaneMCPServer {
       const embeddingService = new EmbeddingService()
       await embeddingService.init()
 
-      this.eventProcessor = new EventProcessor(embeddingService, storageService)
+      this.activityProcessor = new ActivityProcessor(embeddingService, storageService)
       log.error('Services initialized successfully')
     } catch (error) {
       log.error('Failed to initialize services:', error)

@@ -45,8 +45,8 @@ export function StatsDisplay({
       <CardContent className="py-3">
         <div className={`grid ${hideCost ? 'grid-cols-2' : 'grid-cols-3'} gap-4 text-center`}>
           <div>
-            <div className="text-lg font-semibold">{formatNumber(stats.screenshotCount)}</div>
-            <div className="text-xs text-muted-foreground">Screenshots</div>
+            <div className="text-lg font-semibold">{formatNumber(stats.activityCount)}</div>
+            <div className="text-xs text-muted-foreground">Activities</div>
           </div>
           <div>
             <div className="text-lg font-semibold">{formatBytes(stats.dbSize)}</div>

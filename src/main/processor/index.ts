@@ -1,32 +1,17 @@
 import * as fs from 'fs'
 import { extractText } from './ocr'
 import { EmbeddingService } from './embedding'
-import { StorageService, StoredEvent } from './storage'
-import { Screenshot, InteractionContext, SearchOptions, SearchFilters } from '../../shared/types'
+import { StorageService } from './storage'
+import { Activity } from '../../shared/types'
 import { SemanticClassifierService } from './semantic-classifier'
-import { CAPTURE_RATE_CONFIG } from '@constants'
+import { buildChronologicalTimeline } from './activity-timeline'
+import { ACTIVITY_CONFIG, OCR_CONFIG } from '@constants'
 import log from '../logger'
 
-export class EventProcessor {
+export class ActivityProcessor {
   private embeddingService: EmbeddingService
   private storageService: StorageService
   private classifierService: SemanticClassifierService | null = null
-
-  // Event aggregation state (moved from recorder for separation of concerns)
-  private pendingEvents: InteractionContext[] = []
-
-  // Classification state - track START screenshot for START/END pairs
-  private startScreenshot: Screenshot | null = null
-  private startOcrText = ''
-
-  // Processing queue to limit concurrent screenshot processing (prevents too many OCR/LLM subprocesses)
-  private processingQueue: Array<{
-    screenshot: Screenshot
-    events: InteractionContext[]
-    resolve: () => void
-    reject: (error: unknown) => void
-  }> = []
-  private activeProcessingCount = 0
 
   constructor(
     embeddingService: EmbeddingService,
@@ -39,225 +24,149 @@ export class EventProcessor {
   }
 
   /**
-   * Add an interaction event to the pending events list.
-   * Events are aggregated here and associated with screenshots during processing.
+   * Process a completed activity: OCR selected screenshots, classify, embed, store, cleanup.
    */
-  public addInteractionEvent(event: InteractionContext): void {
-    this.pendingEvents.push(event)
-  }
-
-  /**
-   * Enqueue a screenshot for processing. Concurrency is limited by
-   * MAX_CONCURRENT_PROCESSING to prevent too many OCR subprocesses.
-   */
-  public async processScreenshot(screenshot: Screenshot): Promise<void> {
-    const events = [...this.pendingEvents]
-    this.pendingEvents = []
-
-    return new Promise<void>((resolve, reject) => {
-      this.processingQueue.push({ screenshot, events, resolve, reject })
-      log.info(
-        `[EventProcessor] Queued screenshot ${screenshot.id} with ${events.length} events (queue size: ${this.processingQueue.length}, active: ${this.activeProcessingCount})`,
-      )
-      void this.drainQueue()
-    })
-  }
-
-  /**
-   * Process queued screenshots up to MAX_CONCURRENT_PROCESSING at a time.
-   */
-  private async drainQueue(): Promise<void> {
-    const maxConcurrent = CAPTURE_RATE_CONFIG.MAX_CONCURRENT_PROCESSING
-
-    while (this.processingQueue.length > 0 && this.activeProcessingCount < maxConcurrent) {
-      const item = this.processingQueue.shift()!
-      this.activeProcessingCount++
-
-      void this.processScreenshotInternal(item.screenshot, item.events)
-        .then(() => item.resolve())
-        .catch((error) => item.reject(error))
-        .finally(() => {
-          this.activeProcessingCount--
-          void this.drainQueue()
-        })
-    }
-  }
-
-  /**
-   * Main pipeline: OCR -> Embed -> Store -> Classification -> Cleanup
-   *
-   * Flow:
-   * 1. OCR extracts text from screenshot (needs file)
-   * 2. Generate embedding from text
-   * 3. Store in database
-   * 4. If classifier enabled: track START/END pairs for classification
-   * 5. Classification runs (needs both screenshot files)
-   * 6. Delete screenshot files after classification (or immediately if no classifier)
-   */
-  private async processScreenshotInternal(
-    screenshot: Screenshot,
-    events: InteractionContext[],
-  ): Promise<void> {
-    const { filepath, id } = screenshot
+  public async processActivity(activity: Activity): Promise<void> {
+    const { id, screenshots } = activity
     log.info(
-      `[EventProcessor] Processing screenshot ${id} with ${events.length} accumulated events`,
+      `[ActivityProcessor] Processing activity ${id}: ${activity.appName} "${activity.windowTitle}" (${screenshots.length} screenshots, ${activity.interactions.length} interactions)`,
     )
-    log.info(`[EventProcessor] Events: ${JSON.stringify(events)}`)
 
     try {
-      // 1. OCR - needs the file to exist
-      if (!fs.existsSync(filepath)) {
-        log.warn(`File not found for screenshot ${id}: ${filepath}`)
-        return
-      }
+      // 1. Select screenshots for OCR: first + last + sampled intermediates (up to MAX_SCREENSHOTS_FOR_LLM)
+      const selectedScreenshots = this.selectScreenshotsForLLM(screenshots)
+      log.info(
+        `[ActivityProcessor] Selected ${selectedScreenshots.length} of ${screenshots.length} screenshots for LLM`,
+      )
 
-      let text = ''
-      try {
-        text = await extractText(filepath)
-        log.info(`[EventProcessor] OCR complete for ${id}. Text length: ${text.length}`)
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        log.error(`[EventProcessor] OCR failed for ${id}: ${errorMessage}`)
-      }
-
-      // 2. Semantic Classification (START/END pair tracking)
-      if (this.classifierService) {
-        if (!this.startScreenshot) {
-          // This is the START screenshot - keep file and OCR for classification
-          this.setStartState(screenshot, text)
-        } else {
-          // Check if app changed between START and END
-          const appChanged = this.hasAppChange(events)
-
-          if (appChanged) {
-            // App change: use single-image classification for START only
-            log.info(`[EventProcessor] App change detected, using single-image classification`)
-            const summary = await this.runClassification(this.startScreenshot, undefined, events)
-            await this.storeAndCleanup(
-              this.startScreenshot,
-              this.startOcrText,
-              summary,
-              events,
-              'app change, single-image',
-            )
-          } else {
-            // Normal flow: two-image classification (same app)
-            const summary = await this.runClassification(this.startScreenshot, screenshot, events)
-            await this.storeAndCleanup(this.startScreenshot, this.startOcrText, summary, events)
-          }
-
-          // END becomes new START (keep its file for next classification)
-          this.setStartState(screenshot, text)
-        }
+      // 2. Run OCR on selected screenshots (if enabled), bounded by MAX_CONCURRENT_OCR
+      let ocrTexts: string[] = []
+      if (OCR_CONFIG.ENABLED) {
+        ocrTexts = await this.runOcrBatch(selectedScreenshots)
       } else {
-        // No classifier - store OCR only with empty summary, then delete
-        await this.storeAndCleanup(screenshot, text, '', events, 'no classifier')
+        log.info('[ActivityProcessor] OCR disabled by OCR_CONFIG.ENABLED')
+      }
+
+      // 3. Classify activity (screenshots only — OCR is stored but not sent to LLM)
+      let summary = ''
+      if (this.classifierService) {
+        try {
+          summary = await this.classifierService.classifyActivity({
+            activity,
+            screenshotPaths: selectedScreenshots.map((s) => s.filepath),
+            previousSummaries: this.classifierService.getSummaryHistory(),
+          })
+          log.info(`[ActivityProcessor] Activity classification summary: ${summary}`)
+        } catch (error) {
+          log.error('[ActivityProcessor] Activity classification failed:', error)
+          summary = ''
+        }
+      }
+
+      // 4. Generate embedding from summary (fallback to combined OCR text)
+      const embeddingText = summary || ocrTexts.join(' ')
+      const vector = await this.embeddingService.generateEmbedding(embeddingText)
+
+      // 5. Build interaction timeline for storage (same format as the LLM prompt)
+      const selectedPaths = selectedScreenshots.map((s) => s.filepath)
+      const interactionSummary = buildChronologicalTimeline(activity, selectedPaths)
+
+      // 6. Store as activity
+      const durationMs = (activity.endTimestamp ?? Date.now()) - activity.startTimestamp
+      await this.storageService.addActivity({
+        id: activity.id,
+        startTimestamp: activity.startTimestamp,
+        endTimestamp: activity.endTimestamp ?? Date.now(),
+        appName: activity.appName,
+        bundleId: activity.bundleId ?? '',
+        windowTitle: activity.windowTitle,
+        url: activity.url ?? null,
+        tld: activity.tld ?? null,
+        summary,
+        ocrText: ocrTexts.join('\n---\n'),
+        screenshotCount: screenshots.length,
+        interactionSummary,
+        durationMs,
+        vector,
+      })
+
+      log.info(`[ActivityProcessor] Stored activity ${id} (${activity.appName}, ${durationMs}ms)`)
+
+      // 7. Delete all screenshot files
+      for (const screenshot of screenshots) {
+        this.deleteScreenshot(screenshot.filepath)
       }
     } catch (error) {
-      log.error(`Error processing screenshot ${id}:`, error)
+      log.error(`[ActivityProcessor] Error processing activity ${id}:`, error)
       throw error
     }
   }
 
   /**
-   * Run classification and return summary. Handles errors gracefully.
+   * Select screenshots for LLM: always first + last, sample up to MAX_SCREENSHOTS_FOR_LLM - 2 intermediates.
    */
-  private async runClassification(
-    startScreenshot: Screenshot,
-    endScreenshot: Screenshot | undefined,
-    events: InteractionContext[],
-  ): Promise<string> {
-    log.info(`[EventProcessor] START screenshot: ${startScreenshot.id}`)
-    if (endScreenshot) {
-      log.info(`[EventProcessor] END screenshot: ${endScreenshot.id}`)
+  private selectScreenshotsForLLM(screenshots: Activity['screenshots']): Activity['screenshots'] {
+    const max = ACTIVITY_CONFIG.MAX_SCREENSHOTS_FOR_LLM
+
+    if (screenshots.length <= max) {
+      return [...screenshots]
     }
 
-    try {
-      const summary = await this.classifierService!.classify({
-        startScreenshot,
-        endScreenshot,
-        events,
-      })
-      log.info(`[EventProcessor] Classification summary: ${summary}`)
-      return summary
-    } catch (error) {
-      log.error('[EventProcessor] Classification failed:', error)
-      return 'Classification failed'
+    const result = [screenshots[0]]
+    const intermediates = screenshots.slice(1, -1)
+    const intermediateSlots = max - 2 // Reserve spots for first and last
+
+    if (intermediateSlots > 0 && intermediates.length > 0) {
+      const step = (intermediates.length - 1) / (intermediateSlots - 1 || 1)
+      for (let i = 0; i < intermediateSlots && i < intermediates.length; i++) {
+        const idx = Math.round(i * step)
+        result.push(intermediates[idx])
+      }
     }
+
+    result.push(screenshots[screenshots.length - 1])
+    return result
   }
 
   /**
-   * Store event to database and delete the screenshot file.
+   * Run OCR on a batch of screenshots with bounded concurrency.
+   * Results are returned in the same order as the input array.
    */
-  private async storeAndCleanup(
-    screenshot: Screenshot,
-    ocrText: string,
-    summary: string,
-    events: InteractionContext[],
-    logSuffix?: string,
-  ): Promise<void> {
-    const vector = await this.embeddingService.generateEmbedding(summary || ocrText)
-    const appName = this.extractAppName(events)
-    const storedEvent: StoredEvent = {
-      id: screenshot.id,
-      timestamp: screenshot.timestamp,
-      text: ocrText,
-      summary,
-      appName,
-      vector,
+  private async runOcrBatch(screenshots: Activity['screenshots']): Promise<string[]> {
+    const maxConcurrent = OCR_CONFIG.MAX_CONCURRENT_OCR
+    const results: string[] = new Array(screenshots.length).fill('')
+    let nextIndex = 0
+
+    async function worker(): Promise<void> {
+      while (nextIndex < screenshots.length) {
+        const idx = nextIndex++
+        const screenshot = screenshots[idx]
+
+        if (!fs.existsSync(screenshot.filepath)) {
+          log.warn(`[ActivityProcessor] Screenshot file not found: ${screenshot.filepath}`)
+          continue
+        }
+
+        try {
+          results[idx] = await extractText(screenshot.filepath)
+        } catch (error) {
+          log.error(`[ActivityProcessor] OCR failed for ${screenshot.id}:`, error)
+        }
+      }
     }
-    await this.storageService.addEvent(storedEvent)
 
-    const suffix = logSuffix ? ` (${logSuffix}, app: ${appName})` : ` (app: ${appName})`
-    log.info(`[EventProcessor] Stored event for ${screenshot.id}${suffix}`)
-
-    this.deleteScreenshot(screenshot.filepath)
-  }
-
-  /**
-   * Update the START state for the next classification pair.
-   */
-  private setStartState(screenshot: Screenshot, ocrText: string): void {
-    this.startScreenshot = screenshot
-    this.startOcrText = ocrText
-  }
-
-  /**
-   * Check if there's an app change between START and END periods.
-   * Returns true if the process name changed.
-   */
-  private hasAppChange(events: InteractionContext[]): boolean {
-    return events.some(
-      (event) =>
-        event.type === 'app_change' &&
-        event.previousWindow?.processName !== event.activeWindow?.processName,
+    const workerCount = Math.min(maxConcurrent, screenshots.length)
+    log.info(
+      `[ActivityProcessor] Starting OCR batch: ${screenshots.length} images, ${workerCount} workers`,
     )
-  }
-
-  /**
-   * Extract the app name from interaction events.
-   * Looks for the most common app name in the events.
-   * Because theoretically the app name can change during the event.
-   * For example the you have split screen with two apps and you switch between them.
-   */
-  private extractAppName(events: InteractionContext[]): string {
-    const counts = new Map<string, number>()
-    for (const event of events) {
-      const name = event.activeWindow?.processName
-      if (name) {
-        counts.set(name, (counts.get(name) ?? 0) + 1)
-      }
-    }
-
-    let mostCommon = ''
-    let maxCount = 0
-    for (const [name, count] of counts) {
-      if (count > maxCount) {
-        mostCommon = name
-        maxCount = count
-      }
-    }
-    return mostCommon
+    const batchStart = Date.now()
+    await Promise.all(Array.from({ length: workerCount }, () => worker()))
+    const batchElapsed = Date.now() - batchStart
+    const successCount = results.filter((t) => t.length > 0).length
+    log.info(
+      `[ActivityProcessor] OCR batch finished in ${batchElapsed}ms (${successCount}/${screenshots.length} succeeded)`,
+    )
+    return results
   }
 
   /**
@@ -267,42 +176,18 @@ export class EventProcessor {
     try {
       if (fs.existsSync(filepath)) {
         fs.unlinkSync(filepath)
-        log.info(`[EventProcessor] Deleted screenshot: ${filepath}`)
+        log.info(`[ActivityProcessor] Deleted screenshot: ${filepath}`)
       }
     } catch (error) {
-      log.error(`[EventProcessor] Failed to delete screenshot ${filepath}:`, error)
+      log.error(`[ActivityProcessor] Failed to delete screenshot ${filepath}:`, error)
     }
   }
 
   /**
-   * Search for events using both vector similarity and FTS.
+   * Get the embedding service instance (used by MCP tools for activity search).
    */
-  // TODO: review the vibecoded logic here - in searhc as well as in storage.ts
-  public async search(
-    query: string,
-    options: SearchOptions = {},
-  ): Promise<{ fts: StoredEvent[]; vector: StoredEvent[] }> {
-    const { limit = 5, startTime, endTime, appName } = options
-    const filters: SearchFilters = { startTime, endTime, appName }
-
-    log.info(`[Search] Query: "${query}" (Limit: ${limit}, Filters: ${JSON.stringify(filters)})`)
-
-    // 1. Generate embedding for vector search
-    const queryVector = await this.embeddingService.generateEmbedding(query)
-
-    // 2. Vector search with filters
-    const vectorResults = await this.storageService.searchVectorsWithFilters(
-      queryVector,
-      limit,
-      filters,
-    )
-    log.info(`[Search] Vector results: ${vectorResults.length}`)
-
-    // 3. FTS search with filters
-    const ftsResults = await this.storageService.searchFTSWithFilters(query, limit, filters)
-    log.info(`[Search] FTS results: ${ftsResults.length}`)
-
-    return { fts: ftsResults, vector: vectorResults }
+  public getEmbeddingService(): EmbeddingService {
+    return this.embeddingService
   }
 
   /**
