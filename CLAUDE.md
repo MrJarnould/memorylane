@@ -170,3 +170,7 @@ Each captured screenshot provides:
 - Dock icon hidden on macOS for cleaner system tray experience
 - App doesn't quit when all windows close
 - Tray menu dynamically updates based on capture state
+
+## Multi-Agent Workflow
+
+Multiple agents may be working concurrently on the current branch. When committing changes, only stage and commit the files you personally modified — do not use `git add -A` or `git add .`.
