@@ -47,7 +47,7 @@ export class SemanticClassifierService {
   constructor(
     apiKey?: string,
     model: ModelChoice = 'mistralai/mistral-small-3.2-24b-instruct',
-    maxHistorySize = 5,
+    maxHistorySize = 2,
     usageTracker?: UsageTracker,
     debugWriter?: DebugPipelineWriter | null,
     endpointConfig?: EndpointConfig,
