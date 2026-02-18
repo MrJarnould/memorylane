@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import * as fs from 'fs'
 
 // Mock dependencies
-vi.mock('fs')
 vi.mock('electron', () => ({
   app: { getPath: vi.fn().mockReturnValue('/mock/userData') },
 }))
@@ -14,10 +12,20 @@ vi.mock('@openrouter/sdk', () => ({
   }),
 }))
 
+vi.mock('sharp', () => ({
+  default: vi.fn().mockReturnValue({
+    resize: vi.fn().mockReturnValue({
+      jpeg: vi.fn().mockReturnValue({
+        toBuffer: vi.fn().mockResolvedValue(Buffer.from('fake-image')),
+      }),
+    }),
+  }),
+}))
+
 import { OpenRouter } from '@openrouter/sdk'
 import { SemanticClassifierService } from './semantic-classifier'
 import { UsageTracker } from '../services/usage-tracker'
-import type { ClassificationInput } from '../../shared/types'
+import type { ActivityClassificationInput } from '../../shared/types'
 
 describe('SemanticClassifierService', () => {
   let mockUsageTracker: UsageTracker
@@ -70,7 +78,6 @@ describe('SemanticClassifierService', () => {
   })
 
   it('should forward custom model name in chat.send()', async () => {
-    vi.mocked(fs.readFileSync).mockReturnValue(Buffer.from('fake-image'))
     mockSend.mockResolvedValue({
       choices: [{ message: { content: 'Test summary' } }],
       usage: { promptTokens: 100, completionTokens: 20 },
@@ -88,23 +95,25 @@ describe('SemanticClassifierService', () => {
       },
     )
 
-    const input: ClassificationInput = {
-      startScreenshot: {
-        id: 'start-1',
-        filepath: '/tmp/start.png',
-        timestamp: 1000,
-        display: { id: 1, width: 1920, height: 1080 },
-        trigger: { type: 'manual' },
+    const input: ActivityClassificationInput = {
+      activity: {
+        id: 'test-activity',
+        startTimestamp: 1000,
+        endTimestamp: 5000,
+        appName: 'VS Code',
+        windowTitle: 'index.ts',
+        screenshots: [],
+        interactions: [],
       },
-      events: [],
+      screenshotPaths: ['/tmp/start.png'],
+      previousSummaries: [],
     }
 
-    await service.classify(input)
+    await service.classifyActivity(input)
     expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ model: 'my-custom-model' }))
   })
 
   it('should track cost as 0 for custom endpoints', async () => {
-    vi.mocked(fs.readFileSync).mockReturnValue(Buffer.from('fake-image'))
     mockSend.mockResolvedValue({
       choices: [{ message: { content: 'Test summary' } }],
       usage: { promptTokens: 100, completionTokens: 20 },
@@ -122,23 +131,25 @@ describe('SemanticClassifierService', () => {
       },
     )
 
-    const input: ClassificationInput = {
-      startScreenshot: {
-        id: 'start-1',
-        filepath: '/tmp/start.png',
-        timestamp: 1000,
-        display: { id: 1, width: 1920, height: 1080 },
-        trigger: { type: 'manual' },
+    const input: ActivityClassificationInput = {
+      activity: {
+        id: 'test-activity',
+        startTimestamp: 1000,
+        endTimestamp: 5000,
+        appName: 'VS Code',
+        windowTitle: 'index.ts',
+        screenshots: [],
+        interactions: [],
       },
-      events: [],
+      screenshotPaths: ['/tmp/start.png'],
+      previousSummaries: [],
     }
 
-    await service.classify(input)
+    await service.classifyActivity(input)
     expect(mockUsageTracker.recordUsage).toHaveBeenCalledWith(expect.objectContaining({ cost: 0 }))
   })
 
   it('should track cost normally for OpenRouter models', async () => {
-    vi.mocked(fs.readFileSync).mockReturnValue(Buffer.from('fake-image'))
     mockSend.mockResolvedValue({
       choices: [{ message: { content: 'Test summary' } }],
       usage: { promptTokens: 1_000_000, completionTokens: 1_000_000 },
@@ -151,18 +162,21 @@ describe('SemanticClassifierService', () => {
       mockUsageTracker,
     )
 
-    const input: ClassificationInput = {
-      startScreenshot: {
-        id: 'start-1',
-        filepath: '/tmp/start.png',
-        timestamp: 1000,
-        display: { id: 1, width: 1920, height: 1080 },
-        trigger: { type: 'manual' },
+    const input: ActivityClassificationInput = {
+      activity: {
+        id: 'test-activity',
+        startTimestamp: 1000,
+        endTimestamp: 5000,
+        appName: 'VS Code',
+        windowTitle: 'index.ts',
+        screenshots: [],
+        interactions: [],
       },
-      events: [],
+      screenshotPaths: ['/tmp/start.png'],
+      previousSummaries: [],
     }
 
-    await service.classify(input)
+    await service.classifyActivity(input)
     // mistral-small: 0.08 input + 0.2 output = 0.28
     expect(mockUsageTracker.recordUsage).toHaveBeenCalledWith(
       expect.objectContaining({ cost: expect.closeTo(0.28, 2) }),
@@ -255,8 +269,7 @@ describe('SemanticClassifierService', () => {
     expect(service.isUsingCustomEndpoint()).toBe(true)
   })
 
-  it('should return expected summary from classify()', async () => {
-    vi.mocked(fs.readFileSync).mockReturnValue(Buffer.from('fake-image'))
+  it('should return expected summary from classifyActivity()', async () => {
     mockSend.mockResolvedValue({
       choices: [{ message: { content: '  User opened a new tab  ' } }],
       usage: { promptTokens: 100, completionTokens: 20 },
@@ -269,18 +282,21 @@ describe('SemanticClassifierService', () => {
       mockUsageTracker,
     )
 
-    const input: ClassificationInput = {
-      startScreenshot: {
-        id: 'start-1',
-        filepath: '/tmp/start.png',
-        timestamp: 1000,
-        display: { id: 1, width: 1920, height: 1080 },
-        trigger: { type: 'manual' },
+    const input: ActivityClassificationInput = {
+      activity: {
+        id: 'test-activity',
+        startTimestamp: 1000,
+        endTimestamp: 5000,
+        appName: 'VS Code',
+        windowTitle: 'index.ts',
+        screenshots: [],
+        interactions: [],
       },
-      events: [],
+      screenshotPaths: ['/tmp/start.png'],
+      previousSummaries: [],
     }
 
-    const result = await service.classify(input)
+    const result = await service.classifyActivity(input)
     expect(result).toBe('User opened a new tab')
   })
 })
