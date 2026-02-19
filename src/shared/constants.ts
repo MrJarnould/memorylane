@@ -51,6 +51,11 @@ export const OCR_CONFIG = {
   RECOGNITION_MODE: 'accurate' as 'fast' | 'accurate', // macOS Vision recognition level
 }
 
+// Screen Capturer Configuration
+export const SCREEN_CAPTURER_CONFIG = {
+  DEFAULT_INTERVAL_MS: 1000,
+}
+
 // Managed Key / Subscription Configuration
 export const MANAGED_KEY_CONFIG = {
   BACKEND_URL:

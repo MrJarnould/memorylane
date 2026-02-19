@@ -132,6 +132,7 @@ playground/
 .debug-pipeline/
 debug-pipeline/
 .debug-native-screenshot/
+.debug-screen-capturer/
 
 # Compiled Swift binaries (built during packaging)
 build/swift/
