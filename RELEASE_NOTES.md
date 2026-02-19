@@ -1,12 +1,14 @@
-# MemoryLane v0.10.0
+# MemoryLane v0.11.0
 
 MemoryLane is a macOS system tray app that captures your screen activity, processes it with OCR and AI summarization, and makes it searchable through an MCP server — giving AI assistants like Claude and Cursor memory of what you've been working on.
 
 ## What's Changed
 
-- **Automatic updates** — the app now checks for new releases on launch and every 4 hours, downloads updates in the background, and shows an "Install Update Now" option in the tray menu when ready
-- **GitHub publish config** — `electron-builder.yml` now includes a GitHub publish provider, enabling `electron-updater` to detect and download new versions from GitHub Releases
-- **Simplified tray menu** — removed the per-session API usage stats submenu for a cleaner tray experience; database stats remain available
+- **Native Swift screenshot module** — added a new native macOS screenshot capture path using Swift, replacing the Electron desktopCapturer dependency for faster, lower-overhead screen capture
+- **Fixed-interval ScreenCapturer** — new `ScreenCapturer` class that supports fixed-interval frame capture alongside the existing event-driven mode
+- **Configurable capture settings UI** — adjust visual change threshold, typing timeout, and scroll timeout directly from the main window (#28, closes #33)
+- **URL parsing fix** — fixed URL parsing in the bundled app that could cause failures in production builds
+- **Internal improvements** — better bundleId separation for dev/production builds, updated MCP prompt quality, increased max history size, added migration tooling and architecture documentation
 
 ## Features
 
@@ -55,4 +57,4 @@ After launching:
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.9.1...v0.10.0
+https://github.com/deusXmachina-dev/memorylane/compare/v0.10.0...v0.11.0
