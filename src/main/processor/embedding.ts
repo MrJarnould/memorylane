@@ -2,6 +2,7 @@ import * as path from 'path'
 import * as os from 'os'
 import { pipeline, env } from '@huggingface/transformers'
 import log from '../logger'
+import type { ActivityEmbeddingService } from '../v2/activity-transformer-types'
 
 // 'all-MiniLM-L6-v2' is a good balance of speed and quality for local embeddings.
 const MODEL_NAME = 'Xenova/all-MiniLM-L6-v2'
@@ -30,7 +31,7 @@ function getModelCacheDir(): string {
 
 env.cacheDir = getModelCacheDir()
 
-export class EmbeddingService {
+export class EmbeddingService implements ActivityEmbeddingService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private pipe: any = null
 
@@ -68,5 +69,9 @@ export class EmbeddingService {
     // The result is a Tensor. We need to convert it to a plain array.
     // result.data is a Float32Array.
     return Array.from(result.data)
+  }
+
+  public async embed(text: string): Promise<number[]> {
+    return this.generateEmbedding(text)
   }
 }
