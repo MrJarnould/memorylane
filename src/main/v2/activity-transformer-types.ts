@@ -30,3 +30,7 @@ export interface ActivitySemanticService {
     ocrText: string
   }): Promise<string>
 }
+
+export interface ActivityEmbeddingService {
+  embed(text: string): Promise<number[]>
+}
