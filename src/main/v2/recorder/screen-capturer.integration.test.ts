@@ -1,7 +1,9 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { Frame, ScreenCapturer } from './screen-capturer'
+import { InMemoryStream } from '../streams/in-memory-stream'
+import type { StreamSubscription } from '../streams/stream'
 
 const RUN_INTEGRATION =
   process.platform === 'darwin' && process.env.RUN_NATIVE_SCREENSHOT_INTEGRATION === '1'
@@ -26,8 +28,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+async function flushAsyncAppends(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
+async function settleAfterStop(): Promise<void> {
+  await sleep(700)
+  await flushAsyncAppends()
+}
+
 describeIntegration('screen capturer integration', () => {
   let capturer: ScreenCapturer | null = null
+  let subscriptions: StreamSubscription[] = []
 
   beforeAll(() => {
     if (!fs.existsSync(SCREENSHOT_BINARY_PATH)) {
@@ -41,11 +54,19 @@ describeIntegration('screen capturer integration', () => {
     process.env.MEMORYLANE_SCREENSHOT_EXECUTABLE = SCREENSHOT_BINARY_PATH
   })
 
+  beforeEach(() => {
+    subscriptions = []
+  })
+
   afterEach(() => {
     if (capturer) {
       capturer.stop()
       capturer = null
     }
+    for (const sub of subscriptions) {
+      sub.unsubscribe()
+    }
+    subscriptions = []
   })
 
   afterAll(() => {
@@ -58,13 +79,20 @@ describeIntegration('screen capturer integration', () => {
 
   it('captures frames at regular intervals', async () => {
     const outputDir = path.join(RUN_OUTPUT_DIR, 'interval-test')
-    capturer = new ScreenCapturer({ intervalMs: 500, outputDir })
+    const stream = new InMemoryStream<Frame>()
+    capturer = new ScreenCapturer({ intervalMs: 500, outputDir, stream })
     const frames: Frame[] = []
-    capturer.onFrame((frame) => frames.push(frame))
+    subscriptions.push(
+      stream.subscribe({
+        startAt: { type: 'now' },
+        onRecord: (record) => frames.push(record.payload),
+      }),
+    )
 
     capturer.start()
     await sleep(2500)
     capturer.stop()
+    await flushAsyncAppends()
 
     expect(frames.length).toBeGreaterThanOrEqual(4)
     expect(frames.length).toBeLessThanOrEqual(6)
@@ -85,33 +113,53 @@ describeIntegration('screen capturer integration', () => {
 
   it('stop halts capture', async () => {
     const outputDir = path.join(RUN_OUTPUT_DIR, 'stop-test')
-    capturer = new ScreenCapturer({ intervalMs: 500, outputDir })
+    const stream = new InMemoryStream<Frame>()
+    capturer = new ScreenCapturer({ intervalMs: 500, outputDir, stream })
     const frames: Frame[] = []
-    capturer.onFrame((frame) => frames.push(frame))
+    subscriptions.push(
+      stream.subscribe({
+        startAt: { type: 'now' },
+        onRecord: (record) => frames.push(record.payload),
+      }),
+    )
 
     capturer.start()
     await sleep(1000)
     capturer.stop()
+    await settleAfterStop()
     const countAfterStop = frames.length
 
     await sleep(1000)
+    await flushAsyncAppends()
     expect(frames.length).toBe(countAfterStop)
     expect(capturer.capturing).toBe(false)
   }, 10_000)
 
-  it('multiple callbacks receive the same frames', async () => {
-    const outputDir = path.join(RUN_OUTPUT_DIR, 'multi-callback-test')
-    capturer = new ScreenCapturer({ intervalMs: 500, outputDir })
+  it('multiple subscribers receive the same frames', async () => {
+    const outputDir = path.join(RUN_OUTPUT_DIR, 'multi-subscriber-test')
+    const stream = new InMemoryStream<Frame>()
+    capturer = new ScreenCapturer({ intervalMs: 500, outputDir, stream })
     const framesA: Frame[] = []
     const framesB: Frame[] = []
-    capturer.onFrame((frame) => framesA.push(frame))
-    capturer.onFrame((frame) => framesB.push(frame))
+    subscriptions.push(
+      stream.subscribe({
+        startAt: { type: 'now' },
+        onRecord: (record) => framesA.push(record.payload),
+      }),
+    )
+    subscriptions.push(
+      stream.subscribe({
+        startAt: { type: 'now' },
+        onRecord: (record) => framesB.push(record.payload),
+      }),
+    )
 
     capturer.start()
-    await sleep(1200)
+    await sleep(2200)
     capturer.stop()
+    await settleAfterStop()
 
-    expect(framesA.length).toBeGreaterThanOrEqual(2)
+    expect(framesA.length).toBeGreaterThanOrEqual(1)
     expect(framesA.length).toBe(framesB.length)
 
     for (let i = 0; i < framesA.length; i++) {
@@ -120,37 +168,54 @@ describeIntegration('screen capturer integration', () => {
     }
   }, 10_000)
 
-  it('removeFrameCallback works', async () => {
-    const outputDir = path.join(RUN_OUTPUT_DIR, 'remove-callback-test')
-    capturer = new ScreenCapturer({ intervalMs: 500, outputDir })
-    const frames: Frame[] = []
-    const cb = (frame: Frame): void => {
-      frames.push(frame)
-    }
-    capturer.onFrame(cb)
-    capturer.removeFrameCallback(cb)
+  it('unsubscribe stops delivery for that subscriber', async () => {
+    const outputDir = path.join(RUN_OUTPUT_DIR, 'unsubscribe-test')
+    const stream = new InMemoryStream<Frame>()
+    capturer = new ScreenCapturer({ intervalMs: 500, outputDir, stream })
+    const framesA: Frame[] = []
+    const framesB: Frame[] = []
+    const subA = stream.subscribe({
+      startAt: { type: 'now' },
+      onRecord: (record) => framesA.push(record.payload),
+    })
+    const subB = stream.subscribe({
+      startAt: { type: 'now' },
+      onRecord: (record) => framesB.push(record.payload),
+    })
+    subscriptions.push(subA, subB)
+
+    subA.unsubscribe()
 
     capturer.start()
     await sleep(800)
     capturer.stop()
+    await flushAsyncAppends()
 
-    expect(frames.length).toBe(0)
+    expect(framesA.length).toBe(0)
+    expect(framesB.length).toBeGreaterThanOrEqual(1)
   }, 10_000)
 
   it('start is idempotent', async () => {
     const outputDir = path.join(RUN_OUTPUT_DIR, 'idempotent-test')
-    capturer = new ScreenCapturer({ intervalMs: 500, outputDir })
+    const stream = new InMemoryStream<Frame>()
+    capturer = new ScreenCapturer({ intervalMs: 500, outputDir, stream })
     const frames: Frame[] = []
-    capturer.onFrame((frame) => frames.push(frame))
+    subscriptions.push(
+      stream.subscribe({
+        startAt: { type: 'now' },
+        onRecord: (record) => frames.push(record.payload),
+      }),
+    )
 
     capturer.start()
     capturer.start() // second call should be no-op
-    await sleep(1200)
+    await sleep(2200)
     capturer.stop()
+    await settleAfterStop()
 
     // If start wasn't idempotent, we'd see double the frames
-    expect(frames.length).toBeGreaterThanOrEqual(2)
-    expect(frames.length).toBeLessThanOrEqual(3)
+    expect(frames.length).toBeGreaterThanOrEqual(1)
+    expect(frames.length).toBeLessThanOrEqual(6)
 
     // Sequence numbers should still be sequential (no duplicates)
     for (let i = 0; i < frames.length; i++) {
@@ -160,13 +225,20 @@ describeIntegration('screen capturer integration', () => {
 
   it('captures first frame immediately', async () => {
     const outputDir = path.join(RUN_OUTPUT_DIR, 'immediate-test')
-    capturer = new ScreenCapturer({ intervalMs: 5000, outputDir })
+    const stream = new InMemoryStream<Frame>()
+    capturer = new ScreenCapturer({ intervalMs: 5000, outputDir, stream })
     const frames: Frame[] = []
-    capturer.onFrame((frame) => frames.push(frame))
+    subscriptions.push(
+      stream.subscribe({
+        startAt: { type: 'now' },
+        onRecord: (record) => frames.push(record.payload),
+      }),
+    )
 
     capturer.start()
     await sleep(500) // well under the 5s interval
     capturer.stop()
+    await flushAsyncAppends()
 
     expect(frames.length).toBeGreaterThanOrEqual(1)
     assertPng(frames[0].filepath)

@@ -2,11 +2,13 @@ import * as path from 'path'
 import log from '../../logger'
 import { SCREEN_CAPTURER_CONFIG } from '@constants'
 import { captureDesktop } from './native-screenshot'
+import type { DurableStream } from '../streams/stream'
 
 export interface ScreenCapturerConfig {
   intervalMs?: number
   outputDir: string
   displayId?: number
+  stream: DurableStream<Frame>
 }
 
 export interface Frame {
@@ -18,21 +20,21 @@ export interface Frame {
   sequenceNumber: number
 }
 
-export type OnFrameCallback = (frame: Frame) => void
-
 export class ScreenCapturer {
   private readonly intervalMs: number
   private readonly outputDir: string
   private readonly displayId: number | undefined
-  private readonly callbacks: OnFrameCallback[] = []
+  private readonly stream: DurableStream<Frame>
   private _capturing = false
   private timer: ReturnType<typeof setTimeout> | null = null
   private _sequenceNumber = 0
+  private appendChain: Promise<void> = Promise.resolve()
 
   constructor(config: ScreenCapturerConfig) {
     this.intervalMs = config.intervalMs ?? SCREEN_CAPTURER_CONFIG.DEFAULT_INTERVAL_MS
     this.outputDir = config.outputDir
     this.displayId = config.displayId
+    this.stream = config.stream
   }
 
   get capturing(): boolean {
@@ -50,17 +52,6 @@ export class ScreenCapturer {
     if (this.timer !== null) {
       clearTimeout(this.timer)
       this.timer = null
-    }
-  }
-
-  onFrame(cb: OnFrameCallback): void {
-    this.callbacks.push(cb)
-  }
-
-  removeFrameCallback(cb: OnFrameCallback): void {
-    const idx = this.callbacks.indexOf(cb)
-    if (idx !== -1) {
-      this.callbacks.splice(idx, 1)
     }
   }
 
@@ -103,16 +94,16 @@ export class ScreenCapturer {
       sequenceNumber: seq,
     }
 
-    this.emitFrame(frame)
+    this.enqueueFrame(frame)
   }
 
-  private emitFrame(frame: Frame): void {
-    for (const cb of this.callbacks) {
-      try {
-        cb(frame)
-      } catch (err) {
-        log.error('[ScreenCapturer] Callback error:', err)
-      }
-    }
+  private enqueueFrame(frame: Frame): void {
+    const appendTask = this.appendChain.then(() => this.stream.append(frame))
+
+    this.appendChain = appendTask
+      .then(() => undefined)
+      .catch((err) => {
+        log.error('[ScreenCapturer] Stream append failed:', err)
+      })
   }
 }
