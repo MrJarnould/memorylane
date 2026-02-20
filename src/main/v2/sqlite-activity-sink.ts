@@ -1,0 +1,44 @@
+import type { StorageService } from '../storage'
+import type { ActivitySink , V2ExtractedActivity } from './activity-extraction-types'
+import type { V2Activity } from './activity-types'
+
+export class SqliteActivitySink implements ActivitySink {
+  private readonly storage: StorageService
+
+  constructor(storage: StorageService) {
+    this.storage = storage
+  }
+
+  async persist(input: { activity: V2Activity; extracted: V2ExtractedActivity }): Promise<void> {
+    const { activity, extracted } = input
+    if (extracted.activityId !== activity.id) {
+      throw new Error(
+        `[SqliteActivitySink] activityId mismatch: activity.id=${activity.id}, extracted.activityId=${extracted.activityId}`,
+      )
+    }
+
+    try {
+      await this.storage.addActivity({
+        id: extracted.activityId,
+        startTimestamp: extracted.startTimestamp,
+        endTimestamp: extracted.endTimestamp,
+        appName: extracted.appName,
+        windowTitle: extracted.windowTitle,
+        tld: extracted.tld ?? null,
+        summary: extracted.summary,
+        ocrText: extracted.ocrText,
+        vector: extracted.vector,
+      })
+    } catch (error) {
+      if (this.isDuplicateActivityIdError(error)) {
+        return
+      }
+      throw error
+    }
+  }
+
+  private isDuplicateActivityIdError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false
+    return error.message.includes('UNIQUE constraint failed: activities.id')
+  }
+}
