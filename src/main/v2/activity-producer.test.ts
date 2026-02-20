@@ -144,6 +144,9 @@ describe('ActivityProducer', () => {
     expect(activities[0].context.appName).toBe('Code')
     expect(activities[0].provenance.eventWindowOffsets).toEqual([eventOffset])
     expect(await eventStream.getAck('test:event')).toBe(eventOffset)
+    expect(await eventStream.getLowestAvailableOffset()).toBe(eventOffset + 1)
+    expect(await frameStream.getAck('test:frame')).toBe(1)
+    expect(await frameStream.getLowestAvailableOffset()).toBe(2)
   })
 
   it('emits deterministic UUIDv5 ids for the same source window chunk', async () => {
@@ -188,6 +191,48 @@ describe('ActivityProducer', () => {
     expect(firstId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     )
+  })
+
+  it('trims deferred event offsets when a later flush closes the pending activity', async () => {
+    const { producer, frameStream, eventStream } = createProducer()
+
+    await producer.start()
+    await frameStream.append(makeFrame(1_000, 0))
+    await frameStream.append(makeFrame(2_000, 1))
+
+    const firstOffset = await eventStream.append(
+      makeWindow({
+        id: 'deferred-window-1',
+        startTimestamp: 900,
+        endTimestamp: 1_500,
+        events: [
+          makeEvent(900, 'app_change', {
+            activeWindow: {
+              title: 'Repo',
+              processName: 'Code',
+              bundleId: 'com.microsoft.VSCode',
+            },
+          }),
+        ],
+      }),
+    )
+
+    const secondOffset = await eventStream.append(
+      makeWindow({
+        id: 'deferred-window-2',
+        startTimestamp: 1_600,
+        endTimestamp: 2_100,
+        closedBy: 'flush',
+        events: [makeEvent(1_650, 'keyboard')],
+      }),
+    )
+
+    await waitFor(
+      async () => (await eventStream.getAck('test:event')) === secondOffset,
+      'Expected event stream ack to include deferred offsets',
+    )
+    expect(firstOffset).toBeLessThan(secondOffset)
+    expect(await eventStream.getLowestAvailableOffset()).toBe(secondOffset + 1)
   })
 
   it('merges adjacent windows with same app + same tld and finalizes on context change', async () => {
@@ -367,6 +412,7 @@ describe('ActivityProducer', () => {
       async () => (await eventStream.getAck('test:event')) === noFrameOffset,
       'Expected dropped windows to be acked',
     )
+    expect(await eventStream.getLowestAvailableOffset()).toBe(noFrameOffset + 1)
     expect(activities).toHaveLength(0)
     expect(producer.getStats().droppedUnknownContextWindows).toBe(1)
     expect(producer.getStats().droppedNoFrameWindows).toBe(1)

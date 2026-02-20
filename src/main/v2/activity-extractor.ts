@@ -196,6 +196,7 @@ export class ActivityExtractor {
     if (highestContiguous === null) return
 
     await this.activityStream.ack(this.config.consumerId, highestContiguous)
+    await this.activityStream.trimBefore(highestContiguous + 1)
     this.lastAckedOffset = highestContiguous
   }
 

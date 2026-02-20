@@ -377,7 +377,7 @@ export class ActivityProducer {
         this.deferredEventAckOffset === null
           ? offset
           : Math.max(this.deferredEventAckOffset, offset)
-      await this.eventStream.ack(this.config.eventConsumerId, target)
+      await this.ackAndTrimEventStream(target)
       this.deferredEventAckOffset = null
       return
     }
@@ -390,8 +390,13 @@ export class ActivityProducer {
     if (this.pendingActivity !== null) return
     if (this.deferredEventAckOffset === null) return
 
-    await this.eventStream.ack(this.config.eventConsumerId, this.deferredEventAckOffset)
+    await this.ackAndTrimEventStream(this.deferredEventAckOffset)
     this.deferredEventAckOffset = null
+  }
+
+  private async ackAndTrimEventStream(offset: Offset): Promise<void> {
+    await this.eventStream.ack(this.config.eventConsumerId, offset)
+    await this.eventStream.trimBefore(offset + 1)
   }
 
   private canMergeContexts(left: V2ActivityContext, right: V2ActivityContext): boolean {
@@ -484,6 +489,7 @@ export class ActivityProducer {
     if (this.lastAckedFrameOffset !== null && ackTarget <= this.lastAckedFrameOffset) return
 
     await this.frameStream.ack(this.config.frameConsumerId, ackTarget)
+    await this.frameStream.trimBefore(ackTarget + 1)
     this.lastAckedFrameOffset = ackTarget
     this.frameBuffer = this.frameBuffer.filter((record) => record.offset > ackTarget)
   }

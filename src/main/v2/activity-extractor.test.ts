@@ -133,6 +133,7 @@ describe('ActivityExtractor', () => {
       async () => (await activityStream.getAck(consumerId)) === 1,
       'Expected ack to advance to latest offset',
     )
+    expect(await activityStream.getLowestAvailableOffset()).toBe(2)
     expect(extractor.getStats().succeeded).toBe(2)
   })
 
