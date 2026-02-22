@@ -60,6 +60,7 @@ export async function createV2MainRuntime(params?: {
     endpointConfig: savedEndpoint
       ? {
           serverURL: savedEndpoint.serverURL,
+          model: savedEndpoint.model,
           apiKey: savedEndpoint.apiKey,
         }
       : undefined,

@@ -57,6 +57,7 @@ export interface VideoAssetData {
 
 export interface V2SemanticEndpointConfig {
   serverURL: string
+  model: string
   apiKey?: string
 }
 

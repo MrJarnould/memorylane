@@ -137,6 +137,7 @@ describe('V2ActivitySemanticService', () => {
     new V2ActivitySemanticService('test-key', {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
+        model: 'custom-model',
       },
       usageTracker: { recordUsage: vi.fn() },
     })
@@ -151,6 +152,7 @@ describe('V2ActivitySemanticService', () => {
     new V2ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
+        model: 'custom-model',
       },
       usageTracker: { recordUsage: vi.fn() },
     })
@@ -165,6 +167,7 @@ describe('V2ActivitySemanticService', () => {
     new V2ActivitySemanticService('openrouter-key', {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
+        model: 'custom-model',
         apiKey: 'custom-key',
       },
       usageTracker: { recordUsage: vi.fn() },
@@ -185,9 +188,8 @@ describe('V2ActivitySemanticService', () => {
     const service = new V2ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
+        model: 'my-custom-model',
       },
-      videoModels: ['my-custom-model'],
-      snapshotModels: [],
       usageTracker: { recordUsage: vi.fn() },
     })
 
@@ -208,6 +210,7 @@ describe('V2ActivitySemanticService', () => {
 
     service.updateEndpoint({
       serverURL: 'http://localhost:11434/v1',
+      model: 'custom-model',
       apiKey: 'custom-key',
     })
 
@@ -223,6 +226,7 @@ describe('V2ActivitySemanticService', () => {
     const service = new V2ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
+        model: 'custom-model',
       },
       usageTracker: { recordUsage: vi.fn() },
     })
@@ -241,6 +245,7 @@ describe('V2ActivitySemanticService', () => {
     const service = new V2ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
+        model: 'custom-model',
       },
       usageTracker: { recordUsage: vi.fn() },
     })
@@ -255,6 +260,7 @@ describe('V2ActivitySemanticService', () => {
     const service = new V2ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
+        model: 'custom-model',
       },
       usageTracker: { recordUsage: vi.fn() },
     })
@@ -267,6 +273,7 @@ describe('V2ActivitySemanticService', () => {
     const service = new V2ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
+        model: 'custom-model',
       },
       usageTracker: { recordUsage: vi.fn() },
     })
@@ -363,6 +370,160 @@ describe('V2ActivitySemanticService', () => {
 
     const diagnostics = service.getLastRunDiagnostics()
     expect(diagnostics?.chosenMode).toBe('snapshot')
+  })
+
+  it('uses custom endpoint model for both video and snapshot attempts in v2', async () => {
+    const tempDir = createTempDir()
+    tempDirs.push(tempDir)
+    const videoPath = createVideoFile(tempDir)
+    const frames = [
+      makeFrame(createImageFile(tempDir, 'f0.png'), 1_000, 0),
+      makeFrame(createImageFile(tempDir, 'f1.png'), 25_000, 1),
+    ]
+
+    mockSend.mockImplementation(
+      async (request: { model: string; messages: Array<{ content: Array<{ type: string }> }> }) => {
+        const hasVideo = request.messages[0]?.content.some((item) => item.type === 'input_video')
+        if (hasVideo) {
+          throw new Error('input_video is not supported by this model')
+        }
+        return response('snapshot summary from custom model')
+      },
+    )
+
+    const service = new V2ActivitySemanticService(undefined, {
+      endpointConfig: {
+        serverURL: 'http://localhost:11434/v1',
+        model: 'moondream:latest',
+      },
+      usageTracker: { recordUsage: vi.fn() },
+    })
+
+    const result = await service.summarizeFromVideo({
+      activity: makeActivity({ frames }),
+      videoPath,
+      ocrText: 'ignored',
+    })
+
+    expect(result).toBe('snapshot summary from custom model')
+    expect(mockSend.mock.calls.map((call) => call[0].model)).toEqual([
+      'moondream:latest',
+      'moondream:latest',
+    ])
+    const diagnostics = service.getLastRunDiagnostics()
+    expect(diagnostics?.attempts.map((attempt) => attempt.mode)).toEqual(['video', 'snapshot'])
+    expect(diagnostics?.chosenMode).toBe('snapshot')
+    expect(diagnostics?.chosenModel).toBe('moondream:latest')
+  })
+
+  it('skips video on subsequent calls after custom model reports video unsupported', async () => {
+    const tempDir = createTempDir()
+    tempDirs.push(tempDir)
+    const videoPath = createVideoFile(tempDir)
+    const frames = [
+      makeFrame(createImageFile(tempDir, 'f0.png'), 1_000, 0),
+      makeFrame(createImageFile(tempDir, 'f1.png'), 25_000, 1),
+      makeFrame(createImageFile(tempDir, 'f2.png'), 45_000, 2),
+    ]
+
+    mockSend.mockImplementation(
+      async (request: { messages: Array<{ content: Array<{ type: string }> }> }) => {
+        const hasVideo = request.messages[0]?.content.some((item) => item.type === 'input_video')
+        if (hasVideo) {
+          throw new Error('video input not supported; input_video unsupported')
+        }
+        return response('snapshot summary')
+      },
+    )
+
+    const service = new V2ActivitySemanticService(undefined, {
+      endpointConfig: {
+        serverURL: 'http://localhost:11434/v1',
+        model: 'moondream:latest',
+      },
+      usageTracker: { recordUsage: vi.fn() },
+    })
+
+    await service.summarizeFromVideo({
+      activity: makeActivity({ frames }),
+      videoPath,
+      ocrText: 'ignored',
+    })
+
+    const firstDiagnostics = service.getLastRunDiagnostics()
+    expect(firstDiagnostics?.attempts.some((attempt) => attempt.mode === 'video')).toBe(true)
+    expect(firstDiagnostics?.chosenMode).toBe('snapshot')
+
+    mockSend.mockClear()
+
+    const secondResult = await service.summarizeFromVideo({
+      activity: makeActivity({ id: 'activity-2', frames }),
+      videoPath,
+      ocrText: 'ignored',
+    })
+
+    expect(secondResult).toBe('snapshot summary')
+    expect(mockSend).toHaveBeenCalledTimes(1)
+    expect(
+      mockSend.mock.calls[0][0].messages[0].content.some(
+        (item: { type: string }) => item.type === 'input_video',
+      ),
+    ).toBe(false)
+
+    const secondDiagnostics = service.getLastRunDiagnostics()
+    expect(secondDiagnostics?.attempts.map((attempt) => attempt.mode)).toEqual(['snapshot'])
+    expect(secondDiagnostics?.fallbackReason).toBe(
+      'custom endpoint model marked video-unsupported (session)',
+    )
+    expect(secondDiagnostics?.chosenMode).toBe('snapshot')
+  })
+
+  it('does not cache-skip video after generic failures', async () => {
+    const tempDir = createTempDir()
+    tempDirs.push(tempDir)
+    const videoPath = createVideoFile(tempDir)
+    const frames = [
+      makeFrame(createImageFile(tempDir, 'f0.png'), 1_000, 0),
+      makeFrame(createImageFile(tempDir, 'f1.png'), 25_000, 1),
+    ]
+
+    mockSend.mockImplementation(
+      async (request: { messages: Array<{ content: Array<{ type: string }> }> }) => {
+        const hasVideo = request.messages[0]?.content.some((item) => item.type === 'input_video')
+        if (hasVideo) {
+          throw new Error('network timeout')
+        }
+        return response('snapshot summary')
+      },
+    )
+
+    const service = new V2ActivitySemanticService(undefined, {
+      endpointConfig: {
+        serverURL: 'http://localhost:11434/v1',
+        model: 'moondream:latest',
+      },
+      usageTracker: { recordUsage: vi.fn() },
+    })
+
+    await service.summarizeFromVideo({
+      activity: makeActivity({ frames }),
+      videoPath,
+      ocrText: 'ignored',
+    })
+    const firstDiagnostics = service.getLastRunDiagnostics()
+    expect(firstDiagnostics?.attempts.map((attempt) => attempt.mode)).toEqual(['video', 'snapshot'])
+
+    mockSend.mockClear()
+    await service.summarizeFromVideo({
+      activity: makeActivity({ id: 'activity-3', frames }),
+      videoPath,
+      ocrText: 'ignored',
+    })
+    const secondDiagnostics = service.getLastRunDiagnostics()
+    expect(secondDiagnostics?.attempts.map((attempt) => attempt.mode)).toEqual([
+      'video',
+      'snapshot',
+    ])
   })
 
   it('snapshot sampling obeys maxSnapshots=6', async () => {

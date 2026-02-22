@@ -36,6 +36,9 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
   private readonly usesInjectedClient: boolean
   private openRouterApiKey: string | null
   private isCustomEndpoint = false
+  private customEndpointServerURL: string | null = null
+  private customEndpointModel: string | null = null
+  private readonly videoUnsupportedCustomModels = new Set<string>()
 
   private lastRunDiagnostics: V2SemanticRunDiagnostics | null = null
 
@@ -115,6 +118,8 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
 
     if (config) {
       this.isCustomEndpoint = true
+      this.customEndpointServerURL = config.serverURL
+      this.customEndpointModel = this.normalizeCustomModel(config.model)
       const effectiveKey = config.apiKey ?? ''
       this.client = new OpenRouter({
         apiKey: effectiveKey,
@@ -124,6 +129,8 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
     }
 
     this.isCustomEndpoint = false
+    this.customEndpointServerURL = null
+    this.customEndpointModel = null
     const normalizedOpenRouterKey =
       openRouterKey && openRouterKey.trim().length > 0 ? openRouterKey : null
     if (normalizedOpenRouterKey) {
@@ -173,31 +180,43 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
     const videoPrompt = buildSemanticPrompt(input.activity, 'video')
     diagnostics.promptChars = videoPrompt.length
 
-    const videoAsset = tryLoadVideoAsDataUrl(input.videoPath, this.maxVideoBytes)
-    if (videoAsset) {
-      diagnostics.videoSizeBytes = videoAsset.sizeBytes
-      diagnostics.videoMimeType = videoAsset.mimeType
-
-      const videoResult = await this.tryModelChain({
-        mode: 'video',
-        models: this.videoModels,
-        prompt: videoPrompt,
-        diagnostics,
-        buildContent: () => [
-          { type: 'text', text: videoPrompt },
-          { type: 'input_video', videoUrl: { url: videoAsset.dataUrl } },
-        ],
-      })
-
-      if (videoResult) {
-        diagnostics.chosenMode = 'video'
-        diagnostics.chosenModel = videoResult.model
-        return videoResult.summary
-      }
-
-      diagnostics.fallbackReason = 'all video models failed'
+    if (this.shouldSkipCustomEndpointVideo()) {
+      diagnostics.fallbackReason = 'custom endpoint model marked video-unsupported (session)'
+      log.info(
+        '[V2ActivitySemanticService] Skipping video summarization for custom endpoint model',
+        JSON.stringify({
+          activityId: input.activity.id,
+          serverURL: this.customEndpointServerURL,
+          model: this.customEndpointModel,
+        }),
+      )
     } else {
-      diagnostics.fallbackReason = 'video unavailable or exceeds configured size limit'
+      const videoAsset = tryLoadVideoAsDataUrl(input.videoPath, this.maxVideoBytes)
+      if (videoAsset) {
+        diagnostics.videoSizeBytes = videoAsset.sizeBytes
+        diagnostics.videoMimeType = videoAsset.mimeType
+
+        const videoResult = await this.tryModelChain({
+          mode: 'video',
+          models: this.getEffectiveVideoModels(),
+          prompt: videoPrompt,
+          diagnostics,
+          buildContent: () => [
+            { type: 'text', text: videoPrompt },
+            { type: 'input_video', videoUrl: { url: videoAsset.dataUrl } },
+          ],
+        })
+
+        if (videoResult) {
+          diagnostics.chosenMode = 'video'
+          diagnostics.chosenModel = videoResult.model
+          return videoResult.summary
+        }
+
+        diagnostics.fallbackReason = 'all video models failed'
+      } else {
+        diagnostics.fallbackReason = 'video unavailable or exceeds configured size limit'
+      }
     }
 
     const selectedSnapshots = selectSnapshotFrames({
@@ -227,7 +246,7 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
     const snapshotPrompt = buildSemanticPrompt(input.activity, 'snapshot')
     const snapshotResult = await this.tryModelChain({
       mode: 'snapshot',
-      models: this.snapshotModels,
+      models: this.getEffectiveSnapshotModels(),
       prompt: snapshotPrompt,
       diagnostics,
       buildContent: () => {
@@ -414,6 +433,10 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
             error: detail,
           }),
         )
+
+        if (params.mode === 'video' && this.isLikelyVideoUnsupportedError(detail)) {
+          this.markCustomEndpointVideoUnsupported(model, detail)
+        }
       }
     }
 
@@ -521,6 +544,76 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
     return String(error)
   }
 
+  private getEffectiveVideoModels(): string[] {
+    if (this.isCustomEndpoint && this.customEndpointModel) {
+      return [this.customEndpointModel]
+    }
+    return [...this.videoModels]
+  }
+
+  private getEffectiveSnapshotModels(): string[] {
+    if (this.isCustomEndpoint && this.customEndpointModel) {
+      return [this.customEndpointModel]
+    }
+    return [...this.snapshotModels]
+  }
+
+  private normalizeCustomModel(model: string | null | undefined): string | null {
+    if (typeof model !== 'string') return null
+    const normalized = model.trim()
+    return normalized.length > 0 ? normalized : null
+  }
+
+  private customEndpointCacheKey(): string | null {
+    if (!this.isCustomEndpoint) return null
+    if (!this.customEndpointServerURL || !this.customEndpointModel) return null
+    return `${this.customEndpointServerURL}::${this.customEndpointModel}`
+  }
+
+  private shouldSkipCustomEndpointVideo(): boolean {
+    const key = this.customEndpointCacheKey()
+    return key !== null && this.videoUnsupportedCustomModels.has(key)
+  }
+
+  private markCustomEndpointVideoUnsupported(model: string, reason: string): void {
+    if (!this.isCustomEndpoint) return
+    if (!this.customEndpointModel || this.customEndpointModel !== model) return
+
+    const key = this.customEndpointCacheKey()
+    if (!key || this.videoUnsupportedCustomModels.has(key)) return
+
+    this.videoUnsupportedCustomModels.add(key)
+    log.info(
+      '[V2ActivitySemanticService] Marked custom endpoint model as video-unsupported for session',
+      JSON.stringify({
+        serverURL: this.customEndpointServerURL,
+        model,
+        reason,
+      }),
+    )
+  }
+
+  private isLikelyVideoUnsupportedError(message: string): boolean {
+    if (!this.isCustomEndpoint) return false
+
+    const text = message.toLowerCase()
+    if (text.includes('input_video')) return true
+    if (text.includes('invalid message format')) return true
+
+    const hasVideoCue = ['video', 'mp4'].some((cue) => text.includes(cue))
+    if (!hasVideoCue) return false
+
+    return [
+      'unsupported',
+      'not supported',
+      'does not support',
+      'only image',
+      'images only',
+      'invalid type',
+      'unknown type',
+    ].some((cue) => text.includes(cue))
+  }
+
   private safeStringify(value: unknown): string {
     try {
       return `${JSON.stringify(value, null, 2)}\n`
@@ -561,6 +654,8 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
     if (endpointConfig) {
       const effectiveKey = endpointConfig.apiKey ?? this.openRouterApiKey ?? ''
       this.isCustomEndpoint = true
+      this.customEndpointServerURL = endpointConfig.serverURL
+      this.customEndpointModel = this.normalizeCustomModel(endpointConfig.model)
       this.client = new OpenRouter({
         apiKey: effectiveKey,
         serverURL: endpointConfig.serverURL,
@@ -569,6 +664,8 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
     }
 
     this.isCustomEndpoint = false
+    this.customEndpointServerURL = null
+    this.customEndpointModel = null
     if (this.openRouterApiKey) {
       this.client = new OpenRouter({
         apiKey: this.openRouterApiKey,
