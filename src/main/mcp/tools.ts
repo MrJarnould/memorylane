@@ -170,7 +170,7 @@ async function handleSearchContext(
       }
     }
 
-    const storage = processor.getStorageService()
+    const storage = processor.getStorage()
 
     // No query: fall back to chronological time-range listing
     if (!query) {
@@ -186,11 +186,9 @@ async function handleSearchContext(
         }
       }
 
-      const activities = await storage.getActivitiesByTimeRange(
-        startTime ?? null,
-        endTime ?? null,
-        { appName },
-      )
+      const activities = storage.activities.getByTimeRange(startTime ?? null, endTime ?? null, {
+        appName,
+      })
 
       const entries = activities.map(activityToTimelineEntry)
       const sampled = sampleEntries(entries, effectiveLimit, 'recent_first')
@@ -225,12 +223,12 @@ async function handleSearchContext(
     // Run embedding generation and FTS in parallel
     const [embedding, ftsResults] = await Promise.all([
       processor.getEmbeddingService().generateEmbedding(query),
-      storage.searchActivitiesFTS(query, effectiveLimit, filters).catch((err) => {
+      storage.activities.searchFTS(query, effectiveLimit, filters).catch((err) => {
         log.warn('FTS search failed, falling back to vector-only:', err)
         return []
       }),
     ])
-    const vectorResults = await storage.searchActivitiesVectors(embedding, effectiveLimit, filters)
+    const vectorResults = storage.activities.searchVectors(embedding, effectiveLimit, filters)
 
     // Deduplicate: vector results first (preserves relevance order), then FTS extras
     const seen = new Set<string>()
@@ -341,8 +339,8 @@ async function handleBrowseTimeline(
       }
     }
 
-    const storage = processor.getStorageService()
-    const activities = await storage.getActivitiesByTimeRange(startTime, endTime, { appName })
+    const storage = processor.getStorage()
+    const activities = storage.activities.getByTimeRange(startTime, endTime, { appName })
     const entries = activities.map(activityToTimelineEntry)
 
     if (entries.length === 0) {
@@ -406,8 +404,8 @@ async function handleGetActivityDetails(
   }
 
   try {
-    const storage = processor.getStorageService()
-    const activities = await storage.getActivitiesByIds(ids)
+    const storage = processor.getStorage()
+    const activities = storage.activities.getByIds(ids)
 
     if (activities.length === 0) {
       return {

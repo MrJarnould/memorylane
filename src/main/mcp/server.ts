@@ -108,7 +108,6 @@ export class MemoryLaneMCPServer {
       log.error(`Initializing services with DB path: ${resolvedPath}`)
 
       const storageService = new StorageService(resolvedPath)
-      await storageService.init()
 
       const embeddingService = new EmbeddingService()
       await embeddingService.init()

@@ -177,7 +177,7 @@ async function executeLocalTool(
       const daysBack = (args.days_back as number) || 7
       const limit = (args.limit as number) || 50
       const startTime = now - daysBack * 24 * 60 * 60 * 1000
-      const activities = await storageService.getActivitiesByTimeRange(startTime, now, {
+      const activities = storageService.activities.getByTimeRange(startTime, now, {
         appName: args.app_name as string | undefined,
       })
       return uniformSample(activities, limit).map(formatActivity)
@@ -187,14 +187,14 @@ async function executeLocalTool(
       const query = args.query as string
       if (!query) return { error: 'query parameter is required' }
       const limit = (args.limit as number) || 20
-      const results = await storageService.searchActivitiesFTS(query, limit)
+      const results = storageService.activities.searchFTS(query, limit)
       return results.map(formatActivity)
     }
 
     case 'get_app_usage_stats': {
       const daysBack = (args.days_back as number) || 7
       const startTime = now - daysBack * 24 * 60 * 60 * 1000
-      const activities = await storageService.getActivitiesByTimeRange(startTime, now)
+      const activities = storageService.activities.getByTimeRange(startTime, now)
 
       const stats: Record<
         string,
@@ -224,7 +224,7 @@ async function executeLocalTool(
     case 'get_daily_breakdown': {
       const daysBack = (args.days_back as number) || 7
       const startTime = now - daysBack * 24 * 60 * 60 * 1000
-      const activities = await storageService.getActivitiesByTimeRange(startTime, now, {
+      const activities = storageService.activities.getByTimeRange(startTime, now, {
         appName: args.app_name as string | undefined,
       })
 
@@ -251,7 +251,7 @@ async function executeLocalTool(
 
     case 'get_activity_details': {
       const ids = args.ids as string[]
-      const activities = await storageService.getActivitiesByIds(ids)
+      const activities = storageService.activities.getByIds(ids)
       return activities.map((a) => ({
         id: a.id,
         time: new Date(a.startTimestamp).toISOString(),
@@ -486,14 +486,13 @@ async function main() {
   console.log('')
 
   const storageService = new StorageService(dbPath)
-  await storageService.init()
 
-  const count = await storageService.countRows()
+  const count = storageService.activities.count()
   console.log(`Activities in DB: ${count}`)
 
   if (count === 0) {
     console.log('No activities to analyze.')
-    await storageService.close()
+    storageService.close()
     return
   }
 
@@ -502,7 +501,7 @@ async function main() {
     console.log('\n=== RESULTS ===\n')
     console.log(result)
   } finally {
-    await storageService.close()
+    storageService.close()
   }
 }
 

@@ -1,12 +1,12 @@
-import type { StorageService } from '../storage'
-import type { ActivitySink , V2ExtractedActivity } from './activity-extraction-types'
+import type { ActivityRepository } from '../storage/activity-repository'
+import type { ActivitySink, V2ExtractedActivity } from './activity-extraction-types'
 import type { V2Activity } from './activity-types'
 
 export class SqliteActivitySink implements ActivitySink {
-  private readonly storage: StorageService
+  private readonly repo: ActivityRepository
 
-  constructor(storage: StorageService) {
-    this.storage = storage
+  constructor(repo: ActivityRepository) {
+    this.repo = repo
   }
 
   async persist(input: { activity: V2Activity; extracted: V2ExtractedActivity }): Promise<void> {
@@ -18,7 +18,7 @@ export class SqliteActivitySink implements ActivitySink {
     }
 
     try {
-      await this.storage.addActivity({
+      this.repo.add({
         id: extracted.activityId,
         startTimestamp: extracted.startTimestamp,
         endTimestamp: extracted.endTimestamp,

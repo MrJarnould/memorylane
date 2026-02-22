@@ -54,10 +54,10 @@ const buildUsageStatsSubmenu = async (): Promise<Electron.MenuItemConstructorOpt
     return submenu
   }
 
-  const storage = deps.processor.getStorageService()
+  const storage = deps.processor.getStorage()
 
   try {
-    const activityCount = await storage.countRows()
+    const activityCount = storage.activities.count()
     const dbSize = storage.getDbSize()
 
     submenu.push(

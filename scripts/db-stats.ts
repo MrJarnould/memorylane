@@ -8,7 +8,7 @@
  */
 
 import * as fs from 'fs'
-import { StorageService } from '../src/main/processor/storage'
+import { StorageService } from '../src/main/storage'
 import { getDefaultDbPath } from '../src/main/paths'
 
 interface CLIArgs {
@@ -86,22 +86,21 @@ async function main() {
   console.log('')
 
   try {
-    // Initialize storage service
-    const storageService = new StorageService(dbPath)
-    await storageService.init()
+    // Initialize storage
+    const storage = new StorageService(dbPath)
 
     // Get row count
-    const count = await storageService.countRows()
+    const count = storage.activities.count()
     console.log(`Total entries: ${count.toLocaleString()}`)
 
     if (count === 0) {
       console.log('\nNo entries in database yet.')
-      await storageService.close()
+      storage.close()
       return
     }
 
     // Get date range
-    const dateRange = await storageService.getDateRange()
+    const dateRange = storage.activities.getDateRange()
 
     if (dateRange.oldest && dateRange.newest) {
       console.log('')
@@ -119,7 +118,7 @@ async function main() {
       }
     }
 
-    await storageService.close()
+    storage.close()
   } catch (error) {
     console.error('\nError:', error instanceof Error ? error.message : error)
     process.exit(1)

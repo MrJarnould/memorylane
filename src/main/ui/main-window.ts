@@ -122,7 +122,7 @@ async function buildStats(): Promise<MainWindowStats> {
     }
   }
 
-  const storage = deps.processor.getStorageService()
+  const storage = deps.processor.getStorage()
   const classifier = deps.processor.getClassifierService()
 
   let activityCount = 0
@@ -130,9 +130,9 @@ async function buildStats(): Promise<MainWindowStats> {
   const dateRange: { oldest: number | null; newest: number | null } = { oldest: null, newest: null }
 
   try {
-    activityCount = await storage.countRows()
+    activityCount = storage.activities.count()
     dbSize = storage.getDbSize()
-    const range = await storage.getDateRange()
+    const range = storage.activities.getDateRange()
     dateRange.oldest = range.oldest
     dateRange.newest = range.newest
   } catch (error) {

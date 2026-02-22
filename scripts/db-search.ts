@@ -9,7 +9,7 @@
  */
 
 import * as fs from 'fs'
-import { StorageService } from '../src/main/processor/storage'
+import { StorageService } from '../src/main/storage'
 import { EmbeddingService } from '../src/main/processor/embedding'
 import { getDefaultDbPath } from '../src/main/paths'
 
@@ -91,8 +91,7 @@ async function main() {
 
   try {
     // Initialize services
-    const storageService = new StorageService(dbPath)
-    await storageService.init()
+    const storage = new StorageService(dbPath)
 
     const embeddingService = new EmbeddingService()
     await embeddingService.init()
@@ -103,10 +102,8 @@ async function main() {
 
     // Run both searches
     console.log('Searching...')
-    const [vectorResults, ftsResults] = await Promise.all([
-      storageService.searchActivitiesVectors(queryVector, limit),
-      storageService.searchActivitiesFTS(query, limit),
-    ])
+    const vectorResults = storage.activities.searchVectors(queryVector, limit)
+    const ftsResults = storage.activities.searchFTS(query, limit)
 
     // Display vector search results
     console.log('\n=== Vector Search Results ===\n')
@@ -117,13 +114,6 @@ async function main() {
         console.log(`[${index + 1}] ${formatTimestamp(result.startTimestamp)}`)
         console.log(`    ID: ${result.id}`)
         console.log(`    App: ${result.appName}`)
-        if (result.windowTitle) {
-          console.log(`    Window: ${truncateText(result.windowTitle, 120)}`)
-        }
-        console.log(`    Duration: ${Math.round(result.durationMs / 1000)}s`)
-        if (includeOcr) {
-          console.log(`    OCR Text: ${truncateText(result.ocrText)}`)
-        }
         console.log(`    Summary: ${truncateText(result.summary)}`)
         console.log('')
       })
@@ -138,13 +128,6 @@ async function main() {
         console.log(`[${index + 1}] ${formatTimestamp(result.startTimestamp)}`)
         console.log(`    ID: ${result.id}`)
         console.log(`    App: ${result.appName}`)
-        if (result.windowTitle) {
-          console.log(`    Window: ${truncateText(result.windowTitle, 120)}`)
-        }
-        console.log(`    Duration: ${Math.round(result.durationMs / 1000)}s`)
-        if (includeOcr) {
-          console.log(`    OCR Text: ${truncateText(result.ocrText)}`)
-        }
         console.log(`    Summary: ${truncateText(result.summary)}`)
         console.log('')
       })
@@ -154,7 +137,7 @@ async function main() {
     console.log('---')
     console.log(`Vector results: ${vectorResults.length}, FTS results: ${ftsResults.length}`)
 
-    await storageService.close()
+    storage.close()
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : error)
     process.exit(1)

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as fs from 'fs'
 import * as path from 'path'
-import type { StorageService } from '../storage'
-import { StorageService as RealStorageService } from '../storage'
+import type { ActivityRepository } from '../storage/activity-repository'
+import { StorageService } from '../storage'
 import type { V2ExtractedActivity } from './activity-extraction-types'
 import type { V2Activity } from './activity-types'
 import { SqliteActivitySink } from './sqlite-activity-sink'
@@ -44,16 +44,16 @@ function makeExtracted(activityId: string): V2ExtractedActivity {
 
 describe('SqliteActivitySink', () => {
   it('persists mapped extracted activity', async () => {
-    const addActivity = vi.fn<StorageService['addActivity']>().mockResolvedValue(undefined)
-    const storage = { addActivity } as unknown as StorageService
-    const sink = new SqliteActivitySink(storage)
+    const add = vi.fn()
+    const repo = { add } as unknown as ActivityRepository
+    const sink = new SqliteActivitySink(repo)
     const activity = makeActivity('activity-1')
     const extracted = makeExtracted('activity-1')
 
     await sink.persist({ activity, extracted })
 
-    expect(addActivity).toHaveBeenCalledTimes(1)
-    expect(addActivity).toHaveBeenCalledWith({
+    expect(add).toHaveBeenCalledTimes(1)
+    expect(add).toHaveBeenCalledWith({
       id: 'activity-1',
       startTimestamp: 1_000,
       endTimestamp: 2_000,
@@ -67,34 +67,36 @@ describe('SqliteActivitySink', () => {
   })
 
   it('throws on activityId mismatch', async () => {
-    const addActivity = vi.fn<StorageService['addActivity']>().mockResolvedValue(undefined)
-    const storage = { addActivity } as unknown as StorageService
-    const sink = new SqliteActivitySink(storage)
+    const add = vi.fn()
+    const repo = { add } as unknown as ActivityRepository
+    const sink = new SqliteActivitySink(repo)
     const activity = makeActivity('activity-1')
     const extracted = makeExtracted('activity-2')
 
     await expect(sink.persist({ activity, extracted })).rejects.toThrow('activityId mismatch')
-    expect(addActivity).not.toHaveBeenCalled()
+    expect(add).not.toHaveBeenCalled()
   })
 
   it('ignores duplicate insert error', async () => {
-    const addActivity = vi
-      .fn<StorageService['addActivity']>()
-      .mockRejectedValue(new Error('UNIQUE constraint failed: activities.id'))
-    const storage = { addActivity } as unknown as StorageService
-    const sink = new SqliteActivitySink(storage)
+    const add = vi.fn().mockImplementation(() => {
+      throw new Error('UNIQUE constraint failed: activities.id')
+    })
+    const repo = { add } as unknown as ActivityRepository
+    const sink = new SqliteActivitySink(repo)
     const activity = makeActivity('activity-1')
     const extracted = makeExtracted('activity-1')
 
     await expect(sink.persist({ activity, extracted })).resolves.toBeUndefined()
-    expect(addActivity).toHaveBeenCalledTimes(1)
+    expect(add).toHaveBeenCalledTimes(1)
   })
 
   it('rethrows non-duplicate storage errors', async () => {
     const storageError = new Error('database unavailable')
-    const addActivity = vi.fn<StorageService['addActivity']>().mockRejectedValue(storageError)
-    const storage = { addActivity } as unknown as StorageService
-    const sink = new SqliteActivitySink(storage)
+    const add = vi.fn().mockImplementation(() => {
+      throw storageError
+    })
+    const repo = { add } as unknown as ActivityRepository
+    const sink = new SqliteActivitySink(repo)
     const activity = makeActivity('activity-1')
     const extracted = makeExtracted('activity-1')
 
@@ -114,8 +116,8 @@ describe('SqliteActivitySink', () => {
 
     deleteDbFiles()
 
-    const storage = new RealStorageService(testDbPath)
-    const sink = new SqliteActivitySink(storage)
+    const storage = new StorageService(testDbPath)
+    const sink = new SqliteActivitySink(storage.activities)
     const activity = makeActivity('real-storage-1')
     const extracted = makeExtracted('real-storage-1')
     extracted.vector = Object.assign(new Array(384).fill(0), [0.1, 0.2, 0.3])
@@ -123,7 +125,7 @@ describe('SqliteActivitySink', () => {
     try {
       await sink.persist({ activity, extracted })
 
-      const rows = await storage.getActivitiesByIds(['real-storage-1'])
+      const rows = storage.activities.getByIds(['real-storage-1'])
       expect(rows).toHaveLength(1)
       expect(rows[0]).toEqual(
         expect.objectContaining({
@@ -142,7 +144,7 @@ describe('SqliteActivitySink', () => {
       expect(rows[0].vector[1]).toBeCloseTo(0.2, 5)
       expect(rows[0].vector[2]).toBeCloseTo(0.3, 5)
     } finally {
-      await storage.close()
+      storage.close()
       deleteDbFiles()
     }
   })

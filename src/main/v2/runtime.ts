@@ -75,7 +75,7 @@ export async function createV2MainRuntime(params?: {
     new EmbeddingService(),
     { outputDir },
   )
-  const sink = new SqliteActivitySink(storage)
+  const sink = new SqliteActivitySink(storage.activities)
 
   const harness = createV2PipelineHarness({
     outputDir,
@@ -127,7 +127,7 @@ export async function createV2MainRuntime(params?: {
         }
 
         try {
-          await storage.close()
+          storage.close()
         } catch (error) {
           log.warn('[V2Runtime] Failed to close storage:', error)
         }

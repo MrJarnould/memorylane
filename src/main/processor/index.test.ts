@@ -63,8 +63,9 @@ describe('ActivityProcessor', () => {
     } as unknown as EmbeddingService
 
     mockStorageService = {
-      addActivity: vi.fn().mockResolvedValue(undefined),
-      init: vi.fn(),
+      activities: {
+        add: vi.fn(),
+      },
       close: vi.fn(),
     } as unknown as StorageService
 
@@ -107,7 +108,7 @@ describe('ActivityProcessor', () => {
     )
 
     // Stored as activity
-    expect(mockStorageService.addActivity).toHaveBeenCalledWith(
+    expect(mockStorageService.activities.add).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'activity-1',
         appName: 'VS Code',
@@ -138,7 +139,7 @@ describe('ActivityProcessor', () => {
     expect(mockClassifierService.classifyActivity).toHaveBeenCalled()
 
     // Storage still called with empty OCR text
-    expect(mockStorageService.addActivity).toHaveBeenCalledWith(
+    expect(mockStorageService.activities.add).toHaveBeenCalledWith(
       expect.objectContaining({
         ocrText: '\n---\n',
       }),
@@ -160,6 +161,6 @@ describe('ActivityProcessor', () => {
 
     // Still classified and stored
     expect(mockClassifierService.classifyActivity).toHaveBeenCalled()
-    expect(mockStorageService.addActivity).toHaveBeenCalled()
+    expect(mockStorageService.activities.add).toHaveBeenCalled()
   })
 })

@@ -9,16 +9,16 @@ import log from '../logger'
 
 export class ActivityProcessor {
   private embeddingService: EmbeddingService
-  private storageService: StorageService
+  private storage: StorageService
   private classifierService: SemanticClassifierService | null = null
 
   constructor(
     embeddingService: EmbeddingService,
-    storageService: StorageService,
+    storage: StorageService,
     classifierService?: SemanticClassifierService,
   ) {
     this.embeddingService = embeddingService
-    this.storageService = storageService
+    this.storage = storage
     this.classifierService = classifierService || null
   }
 
@@ -69,7 +69,7 @@ export class ActivityProcessor {
       const vector = await this.embeddingService.generateEmbedding(embeddingText)
 
       // 5. Store as activity
-      await this.storageService.addActivity({
+      this.storage.activities.add({
         id: activity.id,
         startTimestamp: activity.startTimestamp,
         endTimestamp: activity.endTimestamp ?? Date.now(),
@@ -183,10 +183,10 @@ export class ActivityProcessor {
   }
 
   /**
-   * Get the storage service instance
+   * Get the storage manager instance
    */
-  public getStorageService(): StorageService {
-    return this.storageService
+  public getStorage(): StorageService {
+    return this.storage
   }
 
   /**
