@@ -91,4 +91,88 @@ export function registerPrompts(server: McpServer): void {
       ],
     }),
   )
+
+  server.registerPrompt(
+    'automate_patterns',
+    {
+      title: 'Automate Patterns',
+      description:
+        'Review detected workflow patterns and generate Claude Code skill files for each ' +
+        'automatable pattern. The skills are written to .claude/skills/ so Claude can ' +
+        'execute them automatically next time the pattern is triggered.',
+      argsSchema: {
+        focus: z
+          .string()
+          .optional()
+          .describe(
+            'Optional focus area to narrow the review. ' +
+              'Examples: "most frequent", "Chrome workflows", "all"',
+          ),
+      },
+    },
+    ({ focus }) => {
+      const focusLine = focus ? `\nFocus area: ${focus}` : ''
+      return {
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text:
+                `Look at my detected workflow patterns and automate everything you can.${focusLine}\n\n` +
+                '## Step 1 — Discover\n\n' +
+                'Call list_patterns to get all detected patterns with stats.\n' +
+                'For the top patterns (by sighting count), call get_pattern_details to ' +
+                'understand the evidence and the automation idea already stored with the pattern.\n' +
+                'If a pattern is unclear, use browse_timeline or search_context to examine ' +
+                'the underlying activity for more context.\n\n' +
+                '## Step 2 — Triage\n\n' +
+                'For each pattern, quickly decide:\n' +
+                '- **Automatable**: You can build a skill that does the thing (or most of it) ' +
+                'next time it comes up. Proceed to step 3.\n' +
+                '- **Not automatable**: The pattern is just normal work, requires too much ' +
+                'creative judgment, or has fewer than 2 sightings. Skip it — mention it in ' +
+                'the summary with a one-line reason.\n\n' +
+                'Be honest. "User writes code in VS Code" is not automatable. ' +
+                '"User copies Jira ticket ID, creates git branch, opens PR template" is.\n\n' +
+                '## Step 3 — Generate skills\n\n' +
+                'For each automatable pattern, write a Claude Code skill file to:\n' +
+                '`.claude/skills/<pattern-slug>/SKILL.md`\n\n' +
+                'The skill must follow this exact format:\n\n' +
+                '```\n' +
+                '---\n' +
+                'name: <kebab-case-name>\n' +
+                'description: <Natural language description of when to use this skill. ' +
+                'Claude reads this to decide whether to auto-invoke, so write it as: ' +
+                '"Do X when the user Y." Include trigger phrases the user might say.>\n' +
+                '---\n\n' +
+                '# <Skill Title>\n\n' +
+                '<Instructions for Claude to execute the automation. Write these as if you ' +
+                'are telling a future Claude session exactly what to do. Be concrete:\n' +
+                '- Specific shell commands to run\n' +
+                '- Files to read or write\n' +
+                '- MCP tools to call (e.g., search_context, browse_timeline)\n' +
+                '- What to ask the user vs what to do automatically\n' +
+                '- Edge cases and what to do when things go wrong>\n' +
+                '```\n\n' +
+                'Key rules for generated skills:\n' +
+                '- The skill should be immediately executable by Claude — not a plan, not a ' +
+                'suggestion, but actual instructions Claude follows to do the work.\n' +
+                '- If the pattern involves apps Claude cannot control (e.g., clicking in a browser), ' +
+                'the skill should automate what it CAN do and tell the user what to do manually.\n' +
+                '- Build on the automation_idea already stored in the pattern — it was written by ' +
+                'the pattern detector and may already have good ideas.\n' +
+                '- Add `allowed-tools` in frontmatter if the skill needs specific tools ' +
+                '(e.g., `allowed-tools: Bash, Read, Write`).\n\n' +
+                '## Step 4 — Report\n\n' +
+                'After writing all skill files, give a brief summary:\n' +
+                '- Which patterns got skills (with the `/skill-name` to invoke each)\n' +
+                '- Which patterns were skipped and why\n' +
+                '- Any patterns that are close to automatable but need more sightings first',
+            },
+          },
+        ],
+      }
+    },
+  )
 }

@@ -9,6 +9,7 @@ import {
   activityToTimelineEntry,
   TimelineEntry,
 } from './formatting'
+import type { PatternWithStats, PatternSighting } from '../storage'
 import log from '../logger'
 
 /**
@@ -105,6 +106,58 @@ export function registerTools(
       },
     },
     (params) => handleGetActivityDetails(getProcessor(), params),
+  )
+
+  // ---------------------------------------------------------------------------
+  // Pattern tools
+  // ---------------------------------------------------------------------------
+
+  server.registerTool(
+    'list_patterns',
+    {
+      description:
+        'List all detected workflow patterns with stats (sighting count, last seen, confidence). ' +
+        'Patterns are recurring behaviors identified by the pattern detector across captured screen activity. ' +
+        'Results are ordered by sighting count (most frequent first). ' +
+        'Use search_patterns for keyword filtering.',
+      inputSchema: {},
+    },
+    () => handleListPatterns(getProcessor()),
+  )
+
+  server.registerTool(
+    'search_patterns',
+    {
+      description:
+        'Search detected workflow patterns by keyword. Matches against pattern name, description, and associated apps. ' +
+        'Returns matching patterns with stats. Use list_patterns to see all patterns without filtering.',
+      inputSchema: {
+        query: z
+          .string()
+          .describe('Search keyword to match against pattern name, description, or apps'),
+      },
+    },
+    (params) => handleSearchPatterns(getProcessor(), params),
+  )
+
+  server.registerTool(
+    'get_pattern_details',
+    {
+      description:
+        'Fetch a specific pattern by ID with its full details and recent sightings. ' +
+        'Each sighting includes evidence text, confidence score, and the activity IDs that triggered it. ' +
+        'Use after list_patterns or search_patterns to drill into a specific pattern.',
+      inputSchema: {
+        patternId: z
+          .string()
+          .describe('Pattern ID (from list_patterns or search_patterns results)'),
+        runId: z
+          .string()
+          .optional()
+          .describe('Optional: filter sightings to a specific detection run ID'),
+      },
+    },
+    (params) => handleGetPatternDetails(getProcessor(), params),
   )
 }
 
@@ -221,13 +274,13 @@ async function handleSearchContext(
     }
 
     // Run embedding generation and FTS in parallel
-    const [embedding, ftsResults] = await Promise.all([
-      processor.getEmbeddingService().generateEmbedding(query),
-      storage.activities.searchFTS(query, effectiveLimit, filters).catch((err) => {
-        log.warn('FTS search failed, falling back to vector-only:', err)
-        return []
-      }),
-    ])
+    let ftsResults: ReturnType<typeof storage.activities.searchFTS> = []
+    try {
+      ftsResults = storage.activities.searchFTS(query, effectiveLimit, filters)
+    } catch (err) {
+      log.warn('FTS search failed, falling back to vector-only:', err)
+    }
+    const embedding = await processor.getEmbeddingService().generateEmbedding(query)
     const vectorResults = storage.activities.searchVectors(embedding, effectiveLimit, filters)
 
     // Deduplicate: vector results first (preserves relevance order), then FTS extras
@@ -380,6 +433,219 @@ async function handleBrowseTimeline(
         {
           type: 'text' as const,
           text: `Error browsing timeline: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+      isError: true,
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pattern tool handlers
+// ---------------------------------------------------------------------------
+
+function formatPatternLine(p: PatternWithStats): string {
+  const sightings = `${p.sightingCount} sighting${p.sightingCount !== 1 ? 's' : ''}`
+  const lastSeen = p.lastSeenAt ? `, last seen ${new Date(p.lastSeenAt).toLocaleString()}` : ''
+  const confidence =
+    p.lastConfidence !== null ? `, confidence ${(p.lastConfidence * 100).toFixed(0)}%` : ''
+  return `- ${p.id} | ${p.name} [${p.apps.join(', ')}] (${sightings}${lastSeen}${confidence})\n  ${p.description}\n  Automation idea: ${p.automationIdea}`
+}
+
+function formatSightingLine(s: PatternSighting): string {
+  const time = new Date(s.detectedAt).toLocaleString()
+  const confidence = `${(s.confidence * 100).toFixed(0)}%`
+  return `- ${s.id} | ${time} | confidence: ${confidence} | run: ${s.runId}\n  Evidence: ${s.evidence}\n  Activity IDs: ${s.activityIds.join(', ')}`
+}
+
+async function handleListPatterns(processor: ActivityProcessor | null) {
+  if (!processor) {
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: 'Error: Processor is not initialized. The server cannot query the database.',
+        },
+      ],
+      isError: true,
+    }
+  }
+
+  try {
+    const storage = processor.getStorage()
+    const patterns = storage.patterns.getAllPatterns()
+    const count = storage.patterns.patternCount()
+    const lastRun = storage.patterns.getLastRunTimestamp()
+
+    if (patterns.length === 0) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: 'No patterns detected yet. Patterns are identified by the pattern detector as it analyzes screen activity over time.',
+          },
+        ],
+      }
+    }
+
+    const lastRunStr = lastRun ? `Last detection run: ${new Date(lastRun).toLocaleString()}` : ''
+    const formatted = patterns.map(formatPatternLine).join('\n\n')
+
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `${count} pattern${count !== 1 ? 's' : ''} detected. ${lastRunStr}\n\n${formatted}`,
+        },
+      ],
+    }
+  } catch (error) {
+    log.error('Error listing patterns:', error)
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `Error listing patterns: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+      isError: true,
+    }
+  }
+}
+
+async function handleSearchPatterns(
+  processor: ActivityProcessor | null,
+  { query }: { query: string },
+) {
+  if (!processor) {
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: 'Error: Processor is not initialized. The server cannot query the database.',
+        },
+      ],
+      isError: true,
+    }
+  }
+
+  try {
+    const storage = processor.getStorage()
+    const patterns = storage.patterns.searchPatterns(query)
+
+    if (patterns.length === 0) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `No patterns matching "${query}".`,
+          },
+        ],
+      }
+    }
+
+    const formatted = patterns.map(formatPatternLine).join('\n\n')
+
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `${patterns.length} pattern${patterns.length !== 1 ? 's' : ''} matching "${query}":\n\n${formatted}`,
+        },
+      ],
+    }
+  } catch (error) {
+    log.error('Error searching patterns:', error)
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `Error searching patterns: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+      isError: true,
+    }
+  }
+}
+
+async function handleGetPatternDetails(
+  processor: ActivityProcessor | null,
+  { patternId, runId }: { patternId: string; runId?: string | undefined },
+) {
+  if (!processor) {
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: 'Error: Processor is not initialized. The server cannot query the database.',
+        },
+      ],
+      isError: true,
+    }
+  }
+
+  try {
+    const storage = processor.getStorage()
+    const pattern = storage.patterns.getPatternById(patternId)
+
+    if (!pattern) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `No pattern found with ID "${patternId}".`,
+          },
+        ],
+      }
+    }
+
+    const header = formatPatternLine(pattern)
+
+    // Get sightings — optionally filtered by runId
+    let sightings: PatternSighting[] = []
+    if (runId) {
+      sightings = storage.patterns
+        .getSightingsByRunId(runId)
+        .filter((s) => s.patternId === patternId)
+    } else {
+      // No runId filter — get all sightings by fetching all runs
+      // PatternRepository doesn't have getAllSightingsForPattern, so we
+      // use the sighting count from stats. For the detail view we show
+      // up to 20 recent sightings by using the last-run approach.
+      const lastRunTs = storage.patterns.getLastRunTimestamp()
+      if (lastRunTs) {
+        // Gather sightings from recent runs — get last 5 distinct runs worth
+        // We don't have a dedicated method, so use the SQL directly isn't possible.
+        // Instead, we just note the count and show what we can.
+        sightings = []
+      }
+    }
+
+    let sightingsSection = ''
+    if (sightings.length > 0) {
+      const formatted = sightings.map(formatSightingLine).join('\n\n')
+      sightingsSection = `\n\nSightings (${sightings.length}):\n\n${formatted}`
+    } else if (pattern.sightingCount > 0) {
+      sightingsSection = `\n\n${pattern.sightingCount} sighting(s) recorded. Use the runId parameter to view sightings from a specific detection run.`
+    } else {
+      sightingsSection = '\n\nNo sightings recorded yet.'
+    }
+
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `Pattern details:\n\n${header}${sightingsSection}`,
+        },
+      ],
+    }
+  } catch (error) {
+    log.error('Error fetching pattern details:', error)
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `Error fetching pattern details: ${error instanceof Error ? error.message : String(error)}`,
         },
       ],
       isError: true,

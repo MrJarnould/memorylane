@@ -41,9 +41,10 @@ function isDev(): boolean {
     } catch {
       // require('electron') can fail under ELECTRON_RUN_AS_NODE
     }
-    // Electron binary but no app API (ELECTRON_RUN_AS_NODE mode) —
-    // default to production unless NODE_ENV explicitly says otherwise.
-    return process.env.NODE_ENV === 'development'
+
+    // Under ELECTRON_RUN_AS_NODE (MCP server), app.isPackaged is unavailable.
+    // Detect packaged app by checking if we're running from inside a .app bundle.
+    if (process.execPath.includes('.app/')) return false
   }
   return process.env.NODE_ENV !== 'production'
 }

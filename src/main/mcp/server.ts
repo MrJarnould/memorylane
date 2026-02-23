@@ -50,6 +50,12 @@ Results are ranked by semantic relevance and return summary-first context.
 - **get_activity_details** — fetch full activity details including OCR screen text \
 for specific activity IDs returned by the other tools. Use this only when exact \
 on-screen text is needed; do not use OCR as the primary source for inferring user activity.
+- **list_patterns** — show all detected workflow patterns with sighting counts. \
+Use for "what patterns have you found?", "show my habits", or pattern review prompts.
+- **search_patterns** — find patterns matching a keyword. Use when the user asks \
+about patterns involving a specific app or workflow.
+- **get_pattern_details** — drill into a specific pattern to see its evidence and \
+sightings. Use after list_patterns or search_patterns.
 
 ## Typical workflows
 
@@ -57,6 +63,7 @@ on-screen text is needed; do not use OCR as the primary source for inferring use
 2. Exact-text question: search_context/browse_timeline → get_activity_details on key IDs → quote OCR text.
 3. Drill-down: start broad with browse_timeline, then refine with search_context.
 4. Mixed question: use summaries for narrative and OCR only for precise supporting details.
+5. Automate patterns: list_patterns → get_pattern_details → write .claude/skills/ for each automatable pattern.
 
 ## Tips
 
