@@ -47,6 +47,11 @@ interface MainWindowStatus {
 
 let mainWindow: BrowserWindow | null = null
 let deps: MainWindowDependencies | null = null
+let isQuitting = false
+
+app.on('before-quit', () => {
+  isQuitting = true
+})
 
 function buildStatus(): MainWindowStatus {
   return {
@@ -97,7 +102,7 @@ export function openMainWindow(): void {
   }
 
   mainWindow.on('close', (e) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    if (!isQuitting && mainWindow && !mainWindow.isDestroyed()) {
       e.preventDefault()
       mainWindow.hide()
     }

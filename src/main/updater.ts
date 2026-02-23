@@ -5,19 +5,30 @@ import log from './logger'
 export type UpdateState = 'idle' | 'downloading' | 'ready'
 let state: UpdateState = 'idle'
 let reminderInterval: ReturnType<typeof setInterval> | null = null
+// Must be kept in module scope so the click handler isn't garbage-collected.
+let currentNotification: Notification | null = null
 
 export const getUpdateState = (): UpdateState => state
 
-export const quitAndInstall = (): void => autoUpdater.quitAndInstall()
+export const quitAndInstall = (): void => {
+  if (reminderInterval) {
+    clearInterval(reminderInterval)
+    reminderInterval = null
+  }
+  // isForceRunAfter=true is required for tray apps that have no main window,
+  // otherwise the quit sequence can stall.
+  autoUpdater.quitAndInstall(false, true)
+}
 
 const showUpdateNotification = (version: string): void => {
-  const notification = new Notification({
+  if (currentNotification) currentNotification.close()
+  currentNotification = new Notification({
     title: 'MemoryLane Update Ready',
     body: `Version ${version} is ready. Click to restart and update.`,
     silent: true,
   })
-  notification.on('click', () => quitAndInstall())
-  notification.show()
+  currentNotification.on('click', () => quitAndInstall())
+  currentNotification.show()
 }
 
 export const initAutoUpdater = (onUpdateStateChange: () => void): void => {

@@ -83,7 +83,9 @@ version:
 
 ```bash
 ls dist/MemoryLane-arm64-mac.zip
+ls dist/MemoryLane-arm64-mac.zip.blockmap
 ls dist/MemoryLane-arm64-mac.dmg
+ls dist/MemoryLane-arm64-mac.dmg.blockmap
 cat dist/latest-mac.yml  # version field must match the new release
 ```
 
@@ -112,13 +114,15 @@ Run outside the sandbox (`required_permissions: ["all"]`):
 ```bash
 gh release create vX.Y.Z \
   dist/MemoryLane-arm64-mac.zip \
+  dist/MemoryLane-arm64-mac.zip.blockmap \
   dist/MemoryLane-arm64-mac.dmg \
+  dist/MemoryLane-arm64-mac.dmg.blockmap \
   dist/latest-mac.yml \
   --title "vX.Y.Z" \
   --notes-file RELEASE_NOTES.md
 ```
 
-`latest-mac.yml` is required by `electron-updater` to detect new versions. It must be uploaded with every release alongside the ZIP and DMG.
+`latest-mac.yml` is required by `electron-updater` to detect new versions. The `.blockmap` files are required by `electron-updater` for differential (delta) updates — without them, the updater falls back to downloading the full file. All five artifacts must be uploaded with every release.
 
 ## Checklist
 
@@ -131,7 +135,9 @@ Before finishing, verify:
 - [ ] `npm run format` and `npm run lint` pass
 - [ ] Tag is pushed to origin
 - [ ] `dist/MemoryLane-arm64-mac.zip` exists
+- [ ] `dist/MemoryLane-arm64-mac.zip.blockmap` exists
 - [ ] `dist/MemoryLane-arm64-mac.dmg` exists
+- [ ] `dist/MemoryLane-arm64-mac.dmg.blockmap` exists
 - [ ] `dist/latest-mac.yml` contains the correct version (not stale from a previous build)
 - [ ] Notarization verified (`spctl --assess` reports `accepted`)
-- [ ] GitHub release is published with ZIP, DMG, and `latest-mac.yml` attached
+- [ ] GitHub release is published with ZIP, DMG, blockmaps, and `latest-mac.yml` attached
