@@ -1,5 +1,7 @@
 # MemoryLane
 
+[![Discord](https://img.shields.io/badge/Discord-Join%20our%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/qVbEWnNf)
+
 ## Installation
 
 ### macOS (Apple Silicon)
@@ -144,6 +146,12 @@ If you prefer local or self-hosted inference, you can now configure custom OpenA
 - **Browser integration** — deeper context from browser tabs and web apps
 - **Managed cloud service** — hosted version with richer integrations, online LLM tool access, and zero setup
 - **Cross-platform parity** — Intel Mac and Linux support, plus polished Windows UX
+
+## Community
+
+Questions, feedback, and feature ideas are welcome in our Discord server.
+
+[Join the MemoryLane Discord](https://discord.gg/qVbEWnNf)
 
 ## Star History
 
