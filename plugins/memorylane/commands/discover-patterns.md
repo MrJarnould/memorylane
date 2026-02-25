@@ -97,14 +97,16 @@ Rank patterns by **automation impact** — frequency x time per loop x ease of a
 
 ```html
 <div
-  style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 720px; color: #1a1a2e;"
+  style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 720px; margin: 0 auto; color: #0f172a;"
 >
   <!-- HEADER -->
   <div
-    style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 12px; padding: 24px 28px; margin-bottom: 24px; color: white;"
+    style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 16px; padding: 32px; margin-bottom: 28px; color: white;"
   >
-    <div style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">Pattern Report</div>
-    <div style="font-size: 13px; opacity: 0.85;">
+    <div style="font-size: 24px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.5px;">
+      Pattern Report
+    </div>
+    <div style="font-size: 14px; opacity: 0.85; line-height: 1.5;">
       {analysis_window} · {total_activities_analyzed} activities analyzed · {pattern_count} patterns
       found
     </div>
@@ -112,103 +114,133 @@ Rank patterns by **automation impact** — frequency x time per loop x ease of a
 
   <!-- PATTERN CARD — repeat for each pattern -->
   <div
-    style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; background: #fff;"
+    style="border: 1px solid #e2e8f0; border-left: 4px solid {category_color}; border-radius: 12px; margin-bottom: 20px; background: #fff; overflow: hidden;"
   >
-    <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
-      <span style="font-size: 16px; font-weight: 600; color: #1a1a2e;">{pattern_name}</span>
-      <span
-        style="font-size: 11px; font-weight: 600; color: white; background: {category_color}; padding: 2px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.5px;"
-        >{category_name}</span
-      >
-    </div>
-    <div style="font-size: 14px; color: #475569; line-height: 1.5; margin-bottom: 14px;">
-      {description}
+    <!-- Card Header -->
+    <div style="padding: 20px 24px 16px; border-bottom: 1px solid #f1f5f9;">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+        <span
+          style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: {category_color}; color: white; font-size: 13px; font-weight: 700; border-radius: 8px;"
+          >{rank}</span
+        >
+        <span style="font-size: 18px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px;"
+          >{pattern_name}</span
+        >
+        <span
+          style="font-size: 11px; font-weight: 600; color: white; background: {category_color}; padding: 3px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.5px;"
+          >{category_name}</span
+        >
+      </div>
+      <div style="font-size: 14px; color: #64748b; line-height: 1.6;">{description}</div>
     </div>
 
-    <!-- STATS ROW -->
-    <div style="display: flex; gap: 24px; margin-bottom: 14px; flex-wrap: wrap;">
-      <div>
+    <!-- Stats Row -->
+    <div
+      style="display: flex; padding: 16px 24px; gap: 12px; flex-wrap: wrap; background: #f8fafc; border-bottom: 1px solid #f1f5f9;"
+    >
+      <div
+        style="flex: 1; min-width: 100px; background: white; border-radius: 8px; padding: 10px 14px; border: 1px solid #e2e8f0;"
+      >
         <div
-          style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;"
+          style="font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;"
         >
           Frequency
         </div>
-        <div style="font-size: 14px; font-weight: 600; color: #1e293b;">{frequency}</div>
+        <div style="font-size: 15px; font-weight: 700; color: #0f172a;">{frequency}</div>
       </div>
-      <div>
+      <div
+        style="flex: 1; min-width: 100px; background: white; border-radius: 8px; padding: 10px 14px; border: 1px solid #e2e8f0;"
+      >
         <div
-          style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;"
+          style="font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;"
         >
-          Time per loop
+          Time / loop
         </div>
-        <div style="font-size: 14px; font-weight: 600; color: #1e293b;">{time_per_loop}</div>
+        <div style="font-size: 15px; font-weight: 700; color: #0f172a;">{time_per_loop}</div>
       </div>
-      <div>
+      <div
+        style="flex: 1; min-width: 100px; background: white; border-radius: 8px; padding: 10px 14px; border: 1px solid #e2e8f0;"
+      >
         <div
-          style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;"
+          style="font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;"
         >
           Apps
         </div>
-        <div style="font-size: 14px; font-weight: 600; color: #1e293b;">{apps_involved}</div>
+        <div style="font-size: 15px; font-weight: 700; color: #0f172a;">{apps_involved}</div>
       </div>
-      <div>
+      <div
+        style="flex: 1; min-width: 100px; background: white; border-radius: 8px; padding: 10px 14px; border: 1px solid #e2e8f0;"
+      >
         <div
-          style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;"
+          style="font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;"
         >
-          Effort to automate
+          Effort
         </div>
-        <div style="font-size: 14px; font-weight: 600; color: {effort_color};">{effort}</div>
+        <div style="font-size: 15px; font-weight: 700; color: {effort_color};">{effort}</div>
       </div>
     </div>
 
-    <!-- LOOP STRUCTURE -->
-    <div style="background: #f8fafc; border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;">
+    <!-- Card Body -->
+    <div style="padding: 16px 24px 20px;">
+      <!-- Loop Structure -->
       <div
-        style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;"
-      >
-        Loop structure
-      </div>
-      <div
-        style="font-size: 13px; color: #334155; font-family: 'SF Mono', Monaco, Consolas, monospace;"
-      >
-        {loop_structure}
-      </div>
-    </div>
-
-    <!-- WHAT VARIES vs WHAT'S CONSTANT -->
-    <div style="display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
-      <div
-        style="flex: 1; min-width: 200px; background: #fef3c7; border-radius: 8px; padding: 12px 16px;"
+        style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px;"
       >
         <div
-          style="font-size: 11px; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;"
+          style="font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; font-weight: 600;"
         >
-          What varies
+          Loop structure
         </div>
-        <div style="font-size: 13px; color: #78350f;">{what_varies}</div>
+        <div
+          style="font-size: 13px; color: #334155; font-family: 'SF Mono', Monaco, Consolas, monospace; line-height: 1.6;"
+        >
+          {loop_structure}
+        </div>
       </div>
+
+      <!-- What Varies vs What's Constant -->
+      <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+        <div
+          style="flex: 1; min-width: 200px; background: #fef3c7; border-radius: 8px; padding: 12px 16px;"
+        >
+          <div
+            style="font-size: 10px; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600;"
+          >
+            What varies
+          </div>
+          <div style="font-size: 13px; color: #78350f; line-height: 1.5;">{what_varies}</div>
+        </div>
+        <div
+          style="flex: 1; min-width: 200px; background: #d1fae5; border-radius: 8px; padding: 12px 16px;"
+        >
+          <div
+            style="font-size: 10px; color: #065f46; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600;"
+          >
+            What's constant
+          </div>
+          <div style="font-size: 13px; color: #064e3b; line-height: 1.5;">
+            {what_stays_constant}
+          </div>
+        </div>
+      </div>
+
+      <!-- Automation Suggestion -->
       <div
-        style="flex: 1; min-width: 200px; background: #d1fae5; border-radius: 8px; padding: 12px 16px;"
+        style="background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%); border: 1px solid #c7d2fe; border-radius: 8px; padding: 16px;"
       >
         <div
-          style="font-size: 11px; color: #065f46; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;"
+          style="font-size: 11px; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;"
         >
-          What's constant
+          Automation suggestion
         </div>
-        <div style="font-size: 13px; color: #064e3b;">{what_stays_constant}</div>
-      </div>
-    </div>
-
-    <!-- AUTOMATION SUGGESTION -->
-    <div style="border-top: 1px solid #e2e8f0; padding-top: 14px;">
-      <div style="font-size: 12px; font-weight: 600; color: #6366f1; margin-bottom: 6px;">
-        Automation suggestion
-      </div>
-      <div style="font-size: 14px; color: #334155; line-height: 1.5; margin-bottom: 8px;">
-        {automation_approach}
-      </div>
-      <div style="font-size: 12px; color: #94a3b8;">
-        <strong>Method:</strong> {automation_method}
+        <div style="font-size: 14px; color: #1e293b; line-height: 1.6; margin-bottom: 10px;">
+          {automation_approach}
+        </div>
+        <div
+          style="display: inline-block; background: white; border: 1px solid #c7d2fe; border-radius: 6px; padding: 4px 12px; font-size: 12px; color: #4f46e5; font-weight: 600;"
+        >
+          {automation_method}
+        </div>
       </div>
     </div>
   </div>
@@ -216,11 +248,11 @@ Rank patterns by **automation impact** — frequency x time per loop x ease of a
 
   <!-- SUMMARY FOOTER -->
   <div
-    style="background: #f8fafc; border-radius: 10px; padding: 16px 20px; border: 1px solid #e2e8f0;"
+    style="background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border-radius: 12px; padding: 20px 24px; border: 1px solid #bbf7d0;"
   >
-    <div style="font-size: 13px; color: #64748b; line-height: 1.5;">
-      <strong style="color: #1e293b;">Estimated total time savings:</strong> {total_time_savings}
-      per week if all suggested automations are implemented.
+    <div style="font-size: 14px; color: #166534; line-height: 1.5;">
+      <strong>Estimated time savings:</strong> {total_time_savings} per week if all suggested
+      automations are implemented.
     </div>
   </div>
 </div>
@@ -228,6 +260,7 @@ Rank patterns by **automation impact** — frequency x time per loop x ease of a
 
 #### Template Variables
 
+- `{rank}` — the pattern's position number, ranked by automation impact (1 = highest)
 - `{category_name}` — one of: Data Shuttle, Reporting Ritual, Review Pipeline, Data Entry, Alert Response
 - `{category_color}` — the badge color from the table above (`#3b82f6`, `#8b5cf6`, `#ec4899`, `#f97316`, `#14b8a6`)
 - `{automation_method}` — one of: API script, n8n/Make/Zapier, cron + script, browser automation, webhook
@@ -270,7 +303,7 @@ After saving the HTML report, use the `AskUserQuestion` tool to present two inte
       "options": [
         {
           "label": "Generate PDD",
-          "description": "Create a process description document — via /pdd"
+          "description": "Create a process description document as PDF — via /process-to-pdf"
         },
         {
           "label": "Create runbook",
@@ -285,7 +318,7 @@ After saving the HTML report, use the `AskUserQuestion` tool to present two inte
           "description": "Skip — I'll come back to this later"
         }
       ],
-      "multiSelect": false
+      "multiSelect": true
     }
   ]
 }

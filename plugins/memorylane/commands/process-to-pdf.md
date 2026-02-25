@@ -1,15 +1,15 @@
 ---
 allowed-tools: mcp__memorylane__browse_timeline, mcp__memorylane__search_context, mcp__memorylane__get_activity_details
-description: Generate a process briefing document from a detected pattern
+description: Generate a process description document as a downloadable PDF from a detected pattern
 ---
 
-# Process Description Document
+# Process to PDF
 
-Generate a shareable process briefing from a detected pattern or user-described workflow — a visual process map, step-by-step walkthrough, occurrence stats, and improvement opportunities.
+Generate a shareable process briefing from a detected pattern or user-described workflow — a visual process map, step-by-step walkthrough, occurrence stats, and improvement opportunities. Output is a downloadable PDF.
 
 ## Instructions
 
-The full methodology, document structure, process map design, and HTML output template live in `skills/pdd/SKILL.md`. This command orchestrates the workflow.
+The full methodology, document structure, process map design, and HTML template live in `skills/process-to-pdf/SKILL.md`. This command orchestrates the workflow.
 
 ### Step 1 — Identify the Process
 
@@ -57,11 +57,11 @@ If fewer than 3 instances were found in Step 2:
 2. `browse_timeline` around each known date with a ±2 hour window:
 
 ```
-browse_timeline(startTime="<known_date> - 2 hours", endTime="<known_date> + 2 hours", limit=200, sampling="uniform")
+browse_timeline(startTime="<known_date> - 2 hours", endTime="<known_date> + 2 hours", limit=50, sampling="uniform")
 ```
 
 3. Reconstruct the process sequence from surrounding context.
-4. If still fewer than 2 clear instances after fallback, tell the user there isn't enough data to produce a reliable PDD. Suggest they try again after performing the process a few more times with MemoryLane running.
+4. If still fewer than 2 clear instances after fallback, tell the user there isn't enough data to produce a reliable document. Suggest they try again after performing the process a few more times with MemoryLane running.
 
 ### Step 6 — Synthesize
 
@@ -73,7 +73,7 @@ Cross-reference all deep-dived instances to build:
 4. **Timing** — average duration overall and per step (from timestamps)
 5. **Opportunity** — biggest time sink and what's automatable
 
-### Step 7 — Render the PDD
+### Step 7 — Render as PDF
 
 Use the HTML template from the skill file to produce the final document. Include:
 
@@ -85,11 +85,51 @@ Use the HTML template from the skill file to produce the final document. Include
 6. **Opportunity section** — time sink, automatable parts, concrete suggestion
 7. **Footer** with methodology note
 
-Output the HTML directly in your response.
+**Convert to PDF:**
+
+1. Wrap the filled-in HTML template in a full HTML document:
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @page {
+        margin: 24px;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+      }
+      @media print {
+        body {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- filled-in template HTML here -->
+  </body>
+</html>
+```
+
+2. Write to `/tmp/pdd-temp.html` using the Write tool.
+3. Convert to PDF using Bash — use a slugified version of the process name (e.g., "Client Onboarding" → `client-onboarding-pdd.pdf`):
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --disable-gpu --no-pdf-header-footer --print-to-pdf="<slug>-pdd.pdf" /tmp/pdd-temp.html 2>/dev/null && rm /tmp/pdd-temp.html
+```
+
+If Chrome is not installed, fall back to saving as `<slug>-pdd.html` and tell the user.
+
+4. Tell the user the PDF has been saved and they can open it.
 
 ## Notes
 
-- **Don't duplicate** — the document structure, process map design, and HTML template live in `skills/pdd/SKILL.md`. Always reference that file.
-- **Minimum data threshold** — need at least 2 clear instances to produce a PDD. Below that, tell the user.
+- **Don't duplicate** — the document structure, process map design, and HTML template live in `skills/process-to-pdf/SKILL.md`. Always reference that file.
+- **Minimum data threshold** — need at least 2 clear instances to produce a document. Below that, tell the user.
 - **Privacy** — summaries are the primary data source. Only use `get_activity_details` for the deep-dive step. Never reproduce raw OCR in the output.
-- **Scope** — one PDD per process. If the user wants multiple processes documented, run this command once per process.
+- **Scope** — one document per process. If the user wants multiple processes documented, run this command once per process.

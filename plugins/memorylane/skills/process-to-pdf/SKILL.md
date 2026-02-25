@@ -1,6 +1,6 @@
 ---
-name: pdd
-description: Process Description Document generator. Takes a detected pattern or user-described process and produces a shareable briefing document with a visual process map, step details, occurrence stats, and improvement opportunities. Requires MemoryLane MCP tools.
+name: process-to-pdf
+description: Process Description Document generator. Takes a detected pattern or user-described process and produces a downloadable PDF briefing with a visual process map, step details, occurrence stats, and improvement opportunities. Requires MemoryLane MCP tools.
 ---
 
 # Process Description Document (PDD)
@@ -224,7 +224,7 @@ The process map uses pure inline CSS (no classes, no external styles). It follow
 
 ## HTML Template
 
-Output this directly in your response. Replace all `{placeholders}` with actual data.
+Replace all `{placeholders}` with actual data. The command file handles wrapping this in a full HTML document and converting to PDF — this template is just the body content.
 
 ```html
 <div
