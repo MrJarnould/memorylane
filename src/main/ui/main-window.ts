@@ -15,7 +15,12 @@ import { registerWithClaudeCode } from '../integrations/claude-code'
 import type { ApiKeyManager } from '../settings/api-key-manager'
 import type { CustomEndpointManager } from '../settings/custom-endpoint-manager'
 import type { ManagedKeyService } from '../services/managed-key-service'
-import type { CustomEndpointConfig, MainWindowStats, CaptureSettings } from '../../shared/types'
+import type {
+  CustomEndpointConfig,
+  MainWindowStats,
+  CaptureSettings,
+  SubscriptionPlan,
+} from '../../shared/types'
 import type { CaptureSettingsManager } from '../settings/capture-settings-manager'
 import type { StorageService } from '../storage'
 import type { UsageTracker } from '../services/usage-tracker'
@@ -284,9 +289,9 @@ export function initMainWindowIPC(dependencies: MainWindowDependencies): void {
     }
   })
 
-  ipcMain.handle('main-window:startCheckout', async () => {
+  ipcMain.handle('main-window:startCheckout', async (_event, plan: SubscriptionPlan) => {
     if (!deps) return
-    await deps.managedKeyService.startCheckout()
+    await deps.managedKeyService.startCheckout(plan)
   })
 
   ipcMain.handle('main-window:openSubscriptionPortal', async () => {
