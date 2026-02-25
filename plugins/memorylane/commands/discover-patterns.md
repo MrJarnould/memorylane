@@ -5,7 +5,7 @@ description: Discover repeated workflow patterns from screen activity and sugges
 
 # Discover Patterns
 
-Mine the user's screen activity for repeated workflows — the kind worth automating. This command does its own pattern detection by scanning timeline data directly.
+Mine the user's screen activity for repeated workflows worth automating — via native integrations, n8n/Make/Zapier, or custom scripts. This command scans timeline data directly, applies aggressive filtering to discard casual activity, and surfaces only patterns with real automation potential.
 
 ## Instructions
 
@@ -25,23 +25,62 @@ After each day's scan, run Step 2 on that batch before moving to the next day.
 
 ### Step 2 — Identify Candidates
 
-For each day's batch, look for **goal-directed sequences** — multi-step workflows where someone is trying to accomplish a specific outcome:
+For each day's batch, apply the analysis structure below, then run every candidate through the **Automation Fitness Filter**.
 
-| Signal                   | Example                                           | What it suggests       |
-| ------------------------ | ------------------------------------------------- | ---------------------- |
-| **App-switching loops**  | Chrome → Notion → Chrome → Notion                 | "Test and record" loop |
-| **Semantic repetition**  | "Reviewing model X", then "Reviewing model Y"     | Evaluation loop        |
-| **Cross-day recurrence** | Same workflow appearing Monday, Wednesday, Friday | Established process    |
-| **Multi-step pipelines** | GitHub → Cursor → Terminal → GitHub, consistently | End-to-end workflow    |
+#### Analysis Per Batch
+
+```
+STEP 1 — App frequency
+Which apps appear most? What pairs appear together?
+
+STEP 2 — Semantic clustering
+Group activities by what they describe. Are there clusters of similar descriptions?
+
+STEP 3 — Temporal sequences
+Within each cluster, do activities follow a consistent order?
+
+STEP 4 — Repetition detection
+For each sequence, does it repeat? How many times? Over what time span?
+
+STEP 4.5 — Automation fitness check
+Apply the filter below. Discard anything on the DISCARD list.
+Only keep candidates that match a REPORT category.
+
+STEP 5 — Variation analysis
+Within repeated sequences, what changes between iterations? What stays the same?
+
+STEP 6 — Automation assessment
+For the "stays the same" parts — can these be scripted, scheduled, or API-driven?
+```
+
+#### Automation Fitness Filter
+
+The core question for every candidate: **"Could a native integration, n8n/Make/Zapier workflow, or custom script replace this entire workflow end-to-end?"**
+
+If no, discard it. If yes, classify it into one of the categories below.
+
+**REPORT — these 5 categories only:**
+
+| Category             | Badge Color      | Signal                                       | Example                               |
+| -------------------- | ---------------- | -------------------------------------------- | ------------------------------------- |
+| **Data Shuttle**     | blue `#3b82f6`   | Copy-paste structured data between apps      | Stripe → Sheets, CRM → billing        |
+| **Reporting Ritual** | purple `#8b5cf6` | Same app sequence on a schedule              | Monday: analytics → chart → Slack     |
+| **Review Pipeline**  | pink `#ec4899`   | Queue → cross-reference → decide             | Expense PDF → policy check → approve  |
+| **Data Entry**       | orange `#f97316` | Read source, type into forms                 | Contract email → CRM fields → billing |
+| **Alert Response**   | teal `#14b8a6`   | Notification → switch → act → return, 5+/day | Zendesk alert → dashboard → respond   |
+
+**DISCARD — explicit noise list:**
+
+- **Personal messaging** — iMessage, WhatsApp, Telegram, Discord DMs, Signal
+- **Learning/studying** — docs, tutorials, papers, Stack Overflow, course platforms
+- **General browsing** — Reddit, HN, news sites, shopping, social media
+- **Programming** — writing code, debugging, tests, PRs, commits, code review (core creative work, not automatable)
+- **Entertainment** — Spotify, Netflix, YouTube non-work, games
+- **Email/Slack triage** — general inbox checking, message reading (unless it's a trigger for a specific cross-app workflow)
+- **IDE usage alone** — "uses VS Code" or "writes code in Cursor" is too broad
+- **File management** — unless part of a larger cross-app workflow
 
 Maintain a running candidate list across all days. A pattern spotted on multiple days is stronger evidence — merge duplicates and increase confidence.
-
-**Noise to ignore:**
-
-- One-off occurrences (must appear **3+ times** to report)
-- Background app switches (email, Slack, Reddit)
-- Overly broad patterns — "uses Cursor and Chrome" is useless
-- Trivial sequences — a 2-step process done twice isn't worth documenting
 
 ### Step 3 — Confirm Top Candidates
 
@@ -50,34 +89,222 @@ For each candidate with 3+ occurrences:
 1. `search_context(query)` — widen to 30 days to verify the pattern holds beyond the scan window.
 2. `get_activity_details(ids)` — only for high-confidence candidates where OCR text would reveal automation-relevant specifics (URLs, field names, data being moved). Keep to a minimum.
 
-### Step 4 — Present Ranked Results
+### Step 4 — Present Results as HTML
 
-Present patterns as a numbered list, ranked by automation impact (frequency × estimated time per loop × ease of automation). For each pattern:
+Render results as inline HTML. Rank patterns by **automation impact** — frequency x time per loop x ease of automation.
 
+Output this directly in your response. Repeat the pattern card block for each detected pattern.
+
+```html
+<div
+  style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 720px; color: #1a1a2e;"
+>
+  <!-- HEADER -->
+  <div
+    style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 12px; padding: 24px 28px; margin-bottom: 24px; color: white;"
+  >
+    <div style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">Pattern Report</div>
+    <div style="font-size: 13px; opacity: 0.85;">
+      {analysis_window} · {total_activities_analyzed} activities analyzed · {pattern_count} patterns
+      found
+    </div>
+  </div>
+
+  <!-- PATTERN CARD — repeat for each pattern -->
+  <div
+    style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; background: #fff;"
+  >
+    <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 16px; font-weight: 600; color: #1a1a2e;">{pattern_name}</span>
+      <span
+        style="font-size: 11px; font-weight: 600; color: white; background: {category_color}; padding: 2px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.5px;"
+        >{category_name}</span
+      >
+    </div>
+    <div style="font-size: 14px; color: #475569; line-height: 1.5; margin-bottom: 14px;">
+      {description}
+    </div>
+
+    <!-- STATS ROW -->
+    <div style="display: flex; gap: 24px; margin-bottom: 14px; flex-wrap: wrap;">
+      <div>
+        <div
+          style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;"
+        >
+          Frequency
+        </div>
+        <div style="font-size: 14px; font-weight: 600; color: #1e293b;">{frequency}</div>
+      </div>
+      <div>
+        <div
+          style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;"
+        >
+          Time per loop
+        </div>
+        <div style="font-size: 14px; font-weight: 600; color: #1e293b;">{time_per_loop}</div>
+      </div>
+      <div>
+        <div
+          style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;"
+        >
+          Apps
+        </div>
+        <div style="font-size: 14px; font-weight: 600; color: #1e293b;">{apps_involved}</div>
+      </div>
+      <div>
+        <div
+          style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;"
+        >
+          Effort to automate
+        </div>
+        <div style="font-size: 14px; font-weight: 600; color: {effort_color};">{effort}</div>
+      </div>
+    </div>
+
+    <!-- LOOP STRUCTURE -->
+    <div style="background: #f8fafc; border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;">
+      <div
+        style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;"
+      >
+        Loop structure
+      </div>
+      <div
+        style="font-size: 13px; color: #334155; font-family: 'SF Mono', Monaco, Consolas, monospace;"
+      >
+        {loop_structure}
+      </div>
+    </div>
+
+    <!-- WHAT VARIES vs WHAT'S CONSTANT -->
+    <div style="display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
+      <div
+        style="flex: 1; min-width: 200px; background: #fef3c7; border-radius: 8px; padding: 12px 16px;"
+      >
+        <div
+          style="font-size: 11px; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;"
+        >
+          What varies
+        </div>
+        <div style="font-size: 13px; color: #78350f;">{what_varies}</div>
+      </div>
+      <div
+        style="flex: 1; min-width: 200px; background: #d1fae5; border-radius: 8px; padding: 12px 16px;"
+      >
+        <div
+          style="font-size: 11px; color: #065f46; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;"
+        >
+          What's constant
+        </div>
+        <div style="font-size: 13px; color: #064e3b;">{what_stays_constant}</div>
+      </div>
+    </div>
+
+    <!-- AUTOMATION SUGGESTION -->
+    <div style="border-top: 1px solid #e2e8f0; padding-top: 14px;">
+      <div style="font-size: 12px; font-weight: 600; color: #6366f1; margin-bottom: 6px;">
+        Automation suggestion
+      </div>
+      <div style="font-size: 14px; color: #334155; line-height: 1.5; margin-bottom: 8px;">
+        {automation_approach}
+      </div>
+      <div style="font-size: 12px; color: #94a3b8;">
+        <strong>Method:</strong> {automation_method}
+      </div>
+    </div>
+  </div>
+  <!-- END PATTERN CARD -->
+
+  <!-- SUMMARY FOOTER -->
+  <div
+    style="background: #f8fafc; border-radius: 10px; padding: 16px 20px; border: 1px solid #e2e8f0;"
+  >
+    <div style="font-size: 13px; color: #64748b; line-height: 1.5;">
+      <strong style="color: #1e293b;">Estimated total time savings:</strong> {total_time_savings}
+      per week if all suggested automations are implemented.
+    </div>
+  </div>
+</div>
 ```
-**N. [Pattern Name]**
-- **What it does**: [1-2 sentence description of the end-to-end process]
-- **Frequency**: [count] occurrences over [time span]
-- **Confidence**: [high/medium/low]
-- **Apps involved**: [list of apps]
-- **Loop structure**: [e.g., "Email → CRM → Billing → Email"]
-- **What varies**: [parameters that change each run]
-- **What's constant**: [fixed elements — URLs, templates, sequences]
-- **Automation idea**: [concrete suggestion for how to automate]
-```
 
-After the list, show a summary:
+#### Template Variables
 
-```
-**Total**: X patterns found. Estimated Y hours/week savings if all were automated.
-```
+- `{category_name}` — one of: Data Shuttle, Reporting Ritual, Review Pipeline, Data Entry, Alert Response
+- `{category_color}` — the badge color from the table above (`#3b82f6`, `#8b5cf6`, `#ec4899`, `#f97316`, `#14b8a6`)
+- `{automation_method}` — one of: API script, n8n/Make/Zapier, cron + script, browser automation, webhook
 
-### Step 5 — Let User Select
+**Effort colors** for `{effort_color}`:
 
-Ask the user which pattern(s) they'd like to turn into automation runbooks. Mention they can use `/create-runbook` to generate a detailed step-by-step runbook file from any pattern they choose.
+| Effort | Color             |
+| ------ | ----------------- |
+| Easy   | `#10b981` (green) |
+| Medium | `#f59e0b` (amber) |
+| Hard   | `#ef4444` (red)   |
+
+If no patterns survive the filter, say so directly: "No automatable patterns found in the last N days. Your activity was mostly [programming / browsing / messaging / etc.]. Try again after a week that includes cross-app operational workflows."
+
+### Step 5 — Prompt for Next Steps
+
+After presenting the HTML report, ask the user what they'd like to do next. Offer these options:
+
+1. Generate a **PDD** (process description document) for a specific pattern — via `/pdd`
+2. Create an **automation runbook** for a specific pattern — via `/create-runbook`
+3. Both (PDD + runbook) for a pattern
+4. Nothing for now
+
+Tell them to reference patterns by number from the report.
+
+## Calibration Examples
+
+These show the level of specificity to aim for. Each example: observable screen behavior → concrete automation suggestion.
+
+### REPORT — Automatable Workflows
+
+**Finance & Accounting**
+
+1. User downloads bank statement CSV, opens QuickBooks, manually enters each transaction, cross-references against invoices in Google Drive. Every Monday morning, ~45 min. → Bank feed integration with auto-matching rules. **(Data Entry)**
+
+2. User pulls revenue numbers from Stripe dashboard, copies into a Google Sheet, applies formulas, then pastes the summary into a Slack channel for the weekly finance update. → Scheduled script that queries Stripe API, computes metrics, posts to Slack. **(Reporting Ritual)**
+
+3. User reviews each expense report by opening the PDF, checking line items against policy in a separate browser tab, then entering approval/rejection in the expense tool. 10-15 reports per batch. → Policy-checking script that pre-flags violations, surfaces only exceptions for human review. **(Review Pipeline)**
+
+**Operations & Back-Office**
+
+4. User receives client onboarding forms via email, manually copies fields (name, company, billing address, tax ID) into CRM, then into billing system, then sends a welcome email template with the same details. Per new client, ~20 min. → Intake form that auto-populates CRM + billing via API, triggers welcome email. **(Data Entry)**
+
+5. User checks Zendesk queue every 2 hours, scans for high-priority tickets, copies ticket summaries into a Slack channel for the ops team. → Webhook that auto-posts P0/P1 tickets to Slack with summary and link. **(Alert Response)**
+
+6. User exports weekly sales data from CRM, imports into Excel, builds a pivot table, screenshots the chart, pastes into a PowerPoint slide deck for the Monday review. Every Friday, ~1 hour. → Automated report generation from CRM API to formatted slides. **(Reporting Ritual)**
+
+7. User checks LinkedIn, Crunchbase, and the company website before every sales call to build a prospect brief in Notion. 3-5 calls/day, ~10 min each. → Enrichment script that auto-generates prospect briefs from company domain. **(Data Shuttle)**
+
+**HR & Compliance**
+
+8. User receives signed offer letters via DocuSign, downloads PDF, enters start date + salary + role into HRIS, then creates accounts in Slack + Google Workspace + Jira. Per new hire, ~30 min. → Webhook on DocuSign completion triggers HRIS entry + account provisioning. **(Data Entry)**
+
+9. User opens the compliance training dashboard weekly to check which employees haven't completed required training, then sends individual reminder emails. → Scheduled check with auto-reminder emails for overdue training. **(Reporting Ritual)**
+
+**Engineering**
+
+10. User scrapes GitHub stargazers, cleans data in Sheets, imports to email tool, writes personalized emails with Claude. → End-to-end script from repo URL to campaign launch. **(Data Shuttle)**
+
+11. User opens Datadog dashboard 4-5 times/day to check error rates after a deploy. → Slack alert triggered by error rate threshold, with auto-rollback on spike. **(Alert Response)**
+
+### DISCARD — Not Automatable
+
+These would appear as repeated patterns but should **never** be reported:
+
+- User chats with friends on iMessage and WhatsApp throughout the day. _(Personal messaging — not a workflow)_
+- User reads Hacker News, Reddit, and tech blogs for 30 min each morning. _(General browsing — leisure/learning)_
+- User writes code in Cursor, runs tests in terminal, pushes to GitHub. _(Programming — core creative work, not automatable)_
+- User studies React docs, follows a tutorial, reads Stack Overflow answers. _(Learning — not a repeatable operational task)_
+- User reviews PRs on GitHub, leaves comments, approves/rejects. _(Code review — requires human judgment on creative work)_
+- User edits hero.tsx → Chrome preview → CSS tweak → preview again. _(Programming iteration loop — creative work)_
+- User listens to Spotify while working, occasionally switching tracks. _(Entertainment — background noise)_
+- User checks email inbox periodically, reads and archives messages. _(Email triage — too broad unless triggering a specific cross-app workflow)_
 
 ## Notes
 
+- **Aggressive filtering philosophy** — most screen activity is not automatable. Programming, browsing, messaging, and learning are valuable human activities but not workflow automation candidates. This command deliberately has a high bar: if a pattern doesn't fit one of the 5 REPORT categories, it doesn't make the cut.
 - **Summaries are the primary source of truth.** Reserve `get_activity_details` for high-confidence candidates only.
 - **Privacy** — never reproduce raw OCR (passwords, API keys, personal messages) in the output.
-- **Granularity sweet spot** — specific enough to write an automation for, general enough to be a repeatable process. "Writes code in Cursor" is too broad. "Edits hero.tsx → Chrome preview → CSS tweak → preview again" is just right.
+- **Granularity sweet spot** — specific enough to write an automation for, general enough to be a repeatable process. "Writes code in Cursor" is too broad. "Downloads CSV from Stripe → copies into Sheets → posts summary to Slack" is just right.

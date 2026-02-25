@@ -15,7 +15,7 @@ The full methodology, document structure, process map design, and HTML output te
 
 Determine which process to document:
 
-1. If the user names a specific pattern (e.g., from a previous `/detect-patterns` run), use that as the starting point.
+1. If the user names a specific pattern (e.g., from a previous `/discover-patterns` run), use that as the starting point.
 2. If the user describes a process vaguely ("the thing I do with invoices"), ask a clarifying question to get the key apps and actions involved.
 3. If nothing is specified, ask: "Which process would you like me to document? Name it or describe the key apps/steps and I'll find it in your activity."
 
