@@ -1,137 +1,185 @@
 ---
 name: pattern-detector
-description: Analyze MemoryLane activity data to detect repeated workflow patterns and suggest automations. Use when the user asks about their habits, recurring workflows, automatable tasks, or when proactively reviewing activity for optimization opportunities. Requires MemoryLane MCP tools.
+description: Process mining from screen activity. Observes what users actually do — not what they say they do — to extract repeated workflows and produce process documentation. Replaces business analyst interviews with ground-truth observation. Requires MemoryLane MCP tools.
 ---
 
 # Pattern Detector
 
-Detect repeated workflow patterns from MemoryLane screen activity data and suggest concrete automations.
+Process mining from screen activity — extract real workflows, not self-reported ones.
 
-## Overview
+## The Goal
 
-Users accumulate thousands of screen activity records in MemoryLane — app switches, page visits, code edits, form fills. Hidden in this noise are **repeated workflow loops**: sequences of actions the user performs multiple times with slight variations. These loops are prime automation candidates.
-
-This skill extracts those patterns, maintains a persistent memory of known patterns, and generates actionable automation suggestions.
-
-## When to Use
-
-- User asks: "what do I keep doing?", "find automatable tasks", "what are my patterns?"
-- User asks: "what did I spend time on?" and wants optimization insights, not just a summary
-- Proactive analysis: user wants periodic pattern reviews
-- User references MemoryLane data and wants workflow insights
-
-## Available MCP Tools
-
-This skill uses the following MemoryLane MCP tools:
-
-### Data Gathering Tools
-
-- **`memorylane:browse_timeline`** — List activity during a time period with sampling. Best for broad "what did I do?" questions. Returns compact one-line summaries.
-
-  ```
-  browse_timeline(startTime="7 days ago", endTime="now", limit=50, sampling="uniform")
-  ```
-
-- **`memorylane:search_context`** — Semantic search over recorded screen activity. Returns id, time, app, and AI summary for each result. Use for targeted queries like "when did I review PR #142?".
-
-  ```
-  search_context(query="[pattern-specific query]", startTime="30 days ago", endTime="now", limit=20)
-  ```
-
-- **`memorylane:get_activity_details`** — Fetch full activity details by ID, including raw OCR screen text. Use after browse_timeline or search_context when exact on-screen text is needed.
-  ```
-  get_activity_details(ids=["id1", "id2", "id3"])
-  ```
-
-### Pattern Tools
-
-- **`memorylane:list_patterns`** — List all detected workflow patterns with stats (sighting count, last seen, confidence). Ordered by frequency. Always call this first to see what patterns already exist.
-
-- **`memorylane:search_patterns`** — Search detected workflow patterns by keyword against name, description, and associated apps. Use to check if a candidate pattern already exists before creating new analysis.
-
-- **`memorylane:get_pattern_details`** — Fetch a specific pattern by ID with full details and recent sightings including evidence and confidence scores.
-
-## Workflow
-
-### Step 1: Check Existing Patterns
-
-Always start by checking what patterns have already been detected:
+Replace business analyst interviews with ground-truth observation:
 
 ```
-list_patterns()
+7 days of screen activity (~400 app switches)
+              ↓ Pattern Detector analyzes
+
+Process Documentation:
+1. "Model Evaluation" — 8-step loop across OpenRouter + Notion, 3x/week
+2. "PR Review Pipeline" — GitHub → Cursor → Terminal → GitHub, daily
+3. "Campaign Check" — Smartlead dashboard scan, 2-3x/day
+
+Each process: exact steps, frequency, what varies between runs,
+what's constant, and a concrete automation path.
 ```
 
-If patterns exist, fetch details on the most relevant ones using `get_pattern_details`. Use `search_patterns` if the user is asking about a specific type of workflow.
+A business analyst interviews users and gets idealized descriptions. Users forget steps, omit workarounds, describe what they _think_ they do. MemoryLane captures what actually happens on screen — the real process, including:
 
-### Step 2: Gather Raw Activity Data
+- **Steps users don't mention** — "I always check Slack first"
+- **Workarounds that became habit** — "I copy-paste from the CRM because the export is broken"
+- **Time users underestimate** — "I spend 20 min/day just switching between dashboards"
 
-Start broad, then drill in. Use a timeline scan to understand the scope.
+The output is what a BA would produce after a week of shadowing — except it's derived from actual screen data, not recall.
 
-```
-browse_timeline(startTime="7 days ago", endTime="now", limit=50, sampling="uniform")
-```
+## What You're Looking For
 
-50 entries across 7 days is a good starting density. For intra-day pattern detection, use a tighter window:
+Not everything that repeats is a process. Checking email, switching to Slack, browsing Reddit — background behavior, not automatable work. You're looking for **goal-directed sequences**: multi-step workflows where someone is trying to accomplish a specific outcome.
 
-```
-browse_timeline(startTime="4 hours ago", endTime="now", limit=50, sampling="uniform")
-```
+### Signals
 
-### Step 3: Identify Candidate Patterns
+| Signal                   | Example                                           | What it suggests       |
+| ------------------------ | ------------------------------------------------- | ---------------------- |
+| **App-switching loops**  | Chrome (OpenRouter) → Notion → Chrome → Notion    | "Test and record" loop |
+| **Semantic repetition**  | "Reviewing model X", then "Reviewing model Y"     | Evaluation loop        |
+| **Cross-day recurrence** | Same workflow appearing Monday, Wednesday, Friday | Established process    |
+| **Multi-step pipelines** | GitHub → Cursor → Terminal → GitHub, consistently | End-to-end workflow    |
 
-From the timeline results, look for these signals:
+### Noise to Ignore
 
-**App-switching loops**: The same sequence of apps appearing repeatedly. Example:
+- One-off occurrences (must appear **3+ times** to report)
+- Background app switches (email, Slack, Reddit)
+- Overly broad patterns — "uses Cursor and Chrome" is useless
+- Trivial sequences — a 2-step process done twice isn't worth documenting
 
-- Chrome (OpenRouter) → Notion → Chrome (OpenRouter) → Notion
-- This suggests a "test and record" loop.
-
-**Semantic repetition**: Multiple activity summaries describing the same action with different subjects. Example:
-
-- "Reviewing model X on OpenRouter"
-- "Reviewing model Y on OpenRouter"
-- This suggests a "comparison/evaluation" loop.
-
-**Cross-day recurrence**: The same activity type appearing on multiple different days.
-
-**Multi-step workflows**: A consistent sequence of different actions forming a pipeline.
-
-### Step 4: Deep-Dive on Candidates
-
-For each candidate pattern, use targeted searches to confirm and enrich:
+### Granularity
 
 ```
-search_context(query="[pattern-specific query]", startTime="30 days ago", endTime="now", limit=20)
+Too broad:  "writes code in Cursor"
+Just right: "edits hero.tsx → Chrome preview → Cursor → CSS tweak → preview again"
+Too narrow: "pressed Cmd+S in Cursor at 2:47pm"
 ```
 
-For high-confidence patterns, fetch full details:
+The sweet spot: specific enough to write an automation for, general enough to be a repeatable process.
+
+## Data Layer
+
+Three MCP tools, used in sequence — scan, confirm, zoom in:
+
+**`browse_timeline`** — The scanner. Compact one-line summaries of app switches.
+
+```
+browse_timeline(startTime="today", endTime="now", limit=200, sampling="uniform")
+```
+
+- Each activity = one app switch (new app or context comes into focus)
+- Typical density: 40–100 activities/day
+- Response header shows `"Showing X of Y activities"` when results are sampled
+- **Always scan one day at a time with `limit=200`** (see Scanning Strategy)
+
+**`search_context`** — The confirmer. Semantic search across all recorded activity.
+
+```
+search_context(query="reviewing models on OpenRouter", startTime="30 days ago", endTime="now", limit=20)
+```
+
+- Use after spotting a candidate pattern to verify it across a wider window
+- Returns: id, time, app, AI summary
+
+**`get_activity_details`** — The microscope. Full details including raw OCR screen text.
 
 ```
 get_activity_details(ids=["id1", "id2", "id3"])
 ```
 
-The OCR text reveals what was actually on screen — crucial for generating specific automation suggestions.
+- Use sparingly — only for high-confidence candidates where exact screen content matters
+- OCR reveals what was actually on screen (crucial for specific automation suggestions)
+- **Privacy**: never reproduce passwords, API keys, or personal messages from OCR
 
-### Step 5: Classify Each Pattern
+## Scanning Strategy
 
-| Type                     | Description                                               | Automation Approach                                         |
-| ------------------------ | --------------------------------------------------------- | ----------------------------------------------------------- |
-| **Evaluation loop**      | Testing/comparing multiple options with the same criteria | Batch script that runs all options and generates comparison |
-| **Monitoring check**     | Periodically checking a dashboard or status page          | Scheduled alert/digest that only notifies on changes        |
-| **Data pipeline**        | Multi-step process moving data between tools              | End-to-end workflow automation (n8n, script, API chain)     |
-| **Iterative refinement** | Repeated small edits with preview cycles                  | Better tooling, hot reload, design tokens, templates        |
-| **Manual data entry**    | Copying information between apps/screens                  | API integration or sync between the tools                   |
-| **Research gathering**   | Visiting multiple sources to collect related info         | Aggregation script or custom dashboard                      |
+Pattern detection requires **sequential context** — the order of app switches within a day reveals the loops. A single `browse_timeline` across 7 days with `limit=50` yields ~7 entries/day after uniform sampling, destroying this sequential context.
 
-### Step 6: Present Results as HTML
+**Iterate day by day**, analyze each batch, maintain a running candidate list:
 
-**CRITICAL**: The final output MUST be rendered as inline HTML. Use the HTML template below, filling in the detected patterns. The HTML is self-contained with inline styles so it renders well in chat.
+```
+Day 0 (today):
+  browse_timeline(startTime="today", endTime="now", limit=200, sampling="uniform")
+  → Analyze batch, extract candidates
 
-Rank patterns by **automation impact** — a function of frequency, time per loop, and automation ease.
+Day 1 (yesterday):
+  browse_timeline(startTime="2 days ago", endTime="1 day ago", limit=200, sampling="uniform")
+  → Analyze batch, merge with existing candidates
 
-## HTML Output Template
+Day 2:
+  browse_timeline(startTime="3 days ago", endTime="2 days ago", limit=200, sampling="uniform")
+  → Cross-reference — patterns on multiple days get higher confidence
 
-Output this HTML directly in your response, substituting the placeholder values with real data. Repeat the `<!-- PATTERN CARD -->` block for each detected pattern. Remove placeholder comments.
+... continue for at least 7 days
+```
+
+**Bail-out rules:**
+
+- < 10 total activities after 7 days → extend to 14 days
+- < 5 total activities after 14 days → not enough data, tell the user
+
+**Intra-day deep dives** (when you spot a suspicious cluster):
+
+```
+browse_timeline(startTime="4 hours ago", endTime="now", limit=200, sampling="uniform")
+```
+
+## Analysis Per Batch
+
+For each day's data, apply this reasoning structure:
+
+```
+STEP 1 — App frequency
+Which apps appear most? What pairs appear together?
+
+STEP 2 — Semantic clustering
+Group activities by what they describe. Are there clusters of similar descriptions?
+
+STEP 3 — Temporal sequences
+Within each cluster, do activities follow a consistent order?
+
+STEP 4 — Repetition detection
+For each sequence, does it repeat? How many times? Over what time span?
+
+STEP 5 — Variation analysis
+Within repeated sequences, what changes between iterations? What stays the same?
+
+STEP 6 — Automation assessment
+For the "stays the same" parts — can these be scripted, scheduled, or API-driven?
+```
+
+After each day, merge new candidates with the running list. A pattern spotted on day 3 that also appeared on day 1 is stronger — increase its confidence.
+
+## Confirming Candidates
+
+For each candidate with 3+ occurrences:
+
+1. **Widen the window** — `search_context(query)` with pattern-specific queries to check the full 30-day history. Does it hold up beyond the 7-day scan?
+2. **Zoom into details** — `get_activity_details(ids)` only for high-confidence candidates where the OCR text would reveal specifics needed for the automation suggestion. Keep this to a minimum.
+
+## Process Classification
+
+| Type                     | What it looks like                                    | Automation path                                          |
+| ------------------------ | ----------------------------------------------------- | -------------------------------------------------------- |
+| **Evaluation loop**      | Testing/comparing multiple options with same criteria | Batch script that runs all options, generates comparison |
+| **Monitoring check**     | Periodically checking a dashboard or status page      | Scheduled alert/digest, notify only on changes           |
+| **Data pipeline**        | Multi-step process moving data between tools          | End-to-end workflow (n8n, script, API chain)             |
+| **Iterative refinement** | Repeated small edits with preview cycles              | Better tooling, hot reload, templates                    |
+| **Manual data entry**    | Copying information between apps/screens              | API integration or sync between tools                    |
+| **Research gathering**   | Visiting multiple sources for related info            | Aggregation script or custom dashboard                   |
+
+## Output
+
+Render results as inline HTML. Rank patterns by **automation impact** — frequency × time per loop × ease of automation.
+
+### HTML Template
+
+Output this directly in your response. Repeat the pattern card block for each detected pattern.
 
 ```html
 <div
@@ -259,9 +307,9 @@ Output this HTML directly in your response, substituting the placeholder values 
 </div>
 ```
 
-### Type color mapping
+### Color Mappings
 
-Use these colors for the `{type_color}` placeholder based on pattern type:
+**Type colors** for `{type_color}`:
 
 | Type                 | Color                |
 | -------------------- | -------------------- |
@@ -272,7 +320,7 @@ Use these colors for the `{type_color}` placeholder based on pattern type:
 | manual_data_entry    | `#ef4444` (red)      |
 | research_gathering   | `#10b981` (emerald)  |
 
-### Effort color mapping
+**Effort colors** for `{effort_color}`:
 
 | Effort | Color             |
 | ------ | ----------------- |
@@ -280,51 +328,42 @@ Use these colors for the `{type_color}` placeholder based on pattern type:
 | Medium | `#f59e0b` (amber) |
 | Hard   | `#ef4444` (red)   |
 
-## Analysis Prompt Template
+## Calibration Examples
 
-When analyzing activity batches for patterns, use this internal reasoning structure:
+These show the level of specificity to aim for — across engineering, back-office, finance, and ops work.
 
-```
-I'm analyzing {N} activities from {time_range}.
+### Engineering & Product
 
-STEP 1 - App frequency:
-Which apps appear most? What pairs of apps appear together?
+1. **Evaluation loop** — User tests 8 AI models one by one on OpenRouter, recording results in Notion after each test. → Batch API script that runs all models and generates a comparison table.
 
-STEP 2 - Semantic clustering:
-Group activities by what they describe. Are there clusters of similar descriptions?
+2. **Iterative refinement** — User makes small CSS changes, previews in browser, adjusts, previews again, sometimes discards everything. → Component playground or hot-reload setup.
 
-STEP 3 - Temporal sequences:
-Within each cluster, do activities follow a consistent order?
+3. **Data pipeline** — User scrapes GitHub stargazers, cleans data in Sheets, imports to email tool, writes personalized emails with Claude. → End-to-end script from repo URL to campaign launch.
 
-STEP 4 - Repetition detection:
-For each sequence, does it repeat? How many times? Over what time span?
+4. **Monitoring check** — User opens Datadog dashboard 4–5 times/day to check error rates after a deploy. → Slack alert triggered by error rate threshold, with auto-rollback on spike.
 
-STEP 5 - Variation analysis:
-Within repeated sequences, what changes between iterations?
-What stays the same?
+### Finance & Accounting
 
-STEP 6 - Automation assessment:
-For the "stays the same" parts — can these be scripted, scheduled, or API-driven?
-```
+5. **Manual data entry** — User downloads bank statement CSV, opens QuickBooks, manually enters each transaction, cross-references against invoices in Google Drive. Every Monday morning, ~45 min. → Bank feed integration with auto-matching rules.
 
-## Important Considerations
+6. **Data pipeline** — User pulls revenue numbers from Stripe dashboard, copies into a Google Sheet, applies formulas, then pastes the summary into a Slack channel for the weekly finance update. → Scheduled script that queries Stripe API, computes metrics, posts to Slack.
 
-**Noise filtering**: Not everything that repeats is a pattern worth flagging. Checking email, switching to Slack, browsing Reddit — these are background behaviors, not automatable workflows. Focus on **goal-directed sequences** where the user is trying to accomplish a specific outcome through a series of steps.
+7. **Research gathering** — User checks 3 different currency exchange rate sites before processing international vendor payments, copies rates into a spreadsheet to compare. → API-based rate aggregator that auto-selects best rate at payment time.
 
-**Granularity matters**: A pattern like "writes code in Cursor" is too broad to be useful. A pattern like "edits hero.tsx, switches to Chrome to preview, switches back to Cursor, makes small CSS tweak, previews again" is specific enough to suggest better tooling.
+8. **Evaluation loop** — User reviews each expense report by opening the PDF, checking line items against policy in a separate browser tab, then entering approval/rejection in the expense tool. 10–15 reports per batch. → Policy-checking script that pre-flags violations, surfaces only exceptions for human review.
 
-**Don't over-suggest**: Only flag patterns where automation would genuinely save meaningful time. A 2-step process done twice isn't worth automating. An 8-step process done daily is.
+### Operations & Back-Office
 
-**Privacy-aware**: Activity data may contain sensitive information visible in OCR text. Don't reproduce passwords, API keys, or personal messages in pattern descriptions. Summarize at the workflow level.
+9. **Manual data entry** — User receives client onboarding forms via email, manually copies fields (name, company, billing address, tax ID) into CRM, then into billing system, then sends a welcome email template with the same details. Per new client, ~20 min. → Intake form that auto-populates CRM + billing via API, triggers welcome email.
 
-## Example Patterns (for calibration)
+10. **Monitoring check** — User checks Zendesk queue every 2 hours, scans for high-priority tickets, copies ticket summaries into a Slack channel for the ops team. → Webhook that auto-posts P0/P1 tickets to Slack with summary and link.
 
-1. **Evaluation loop**: User tests 8 AI models one by one on OpenRouter, recording results in Notion after each test. → Automate with batch API script.
+11. **Data pipeline** — User exports weekly sales data from CRM, imports into Excel, builds a pivot table, screenshots the chart, pastes into a PowerPoint slide deck for the Monday review. Every Friday, ~1 hour. → Automated report generation from CRM API to formatted slides.
 
-2. **Outreach pipeline**: User scrapes GitHub stargazers, cleans data in Sheets, imports to email tool, writes personalized emails with Claude. → Automate with end-to-end script from repo URL to campaign launch.
+12. **Research gathering** — User checks LinkedIn, Crunchbase, and the company website before every sales call to build a prospect brief in Notion. 3–5 calls/day, ~10 min each. → Enrichment script that auto-generates prospect briefs from company domain.
 
-3. **Monitoring check**: User opens Smartlead dashboard 2-3 times per day to check campaign metrics. → Automate with scheduled digest notification.
+### HR & Compliance
 
-4. **Performance debugging**: User repeatedly opens Activity Monitor to check CPU usage of their app during development. → Automate with built-in telemetry/logging.
+13. **Manual data entry** — User receives signed offer letters via DocuSign, downloads PDF, enters start date + salary + role into HRIS, then creates accounts in Slack + Google Workspace + Jira. Per new hire, ~30 min. → Webhook on DocuSign completion triggers HRIS entry + account provisioning.
 
-5. **Iterative design**: User makes small CSS changes, previews in browser, adjusts, previews again, sometimes discards all changes. → Suggest component playground or hot-reload improvements.
+14. **Monitoring check** — User opens the compliance training dashboard weekly to check which employees haven't completed required training, then sends individual reminder emails. → Scheduled check with auto-reminder emails for overdue training.
