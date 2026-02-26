@@ -27,6 +27,7 @@ export class ScreenCapturer {
   private readonly backend: ScreenCaptureBackend
   private _capturing = false
   private _sequenceNumber = 0
+  private _currentDisplayId: number | null | undefined = undefined
 
   constructor(config: ScreenCapturerConfig) {
     this.intervalMs = config.intervalMs ?? SCREEN_CAPTURER_CONFIG.DEFAULT_INTERVAL_MS
@@ -41,7 +42,10 @@ export class ScreenCapturer {
   }
 
   setDisplayId(displayId: number | undefined): void {
-    this.backend.send({ displayId: displayId ?? null })
+    const normalized = displayId ?? null
+    if (normalized === this._currentDisplayId) return
+    this._currentDisplayId = normalized
+    this.backend.send({ displayId: normalized })
   }
 
   setIntervalMs(ms: number): void {

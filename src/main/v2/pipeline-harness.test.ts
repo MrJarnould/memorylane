@@ -48,7 +48,6 @@ vi.mock('./recorder/native-screenshot', () => ({
             height: 720,
             displayId: (mockBackendState.lastDisplayId as number) ?? 1,
           })
-          frameIndex++
         }
       }, mockBackendState.intervalMs)
     }),

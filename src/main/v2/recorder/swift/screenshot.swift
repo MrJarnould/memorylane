@@ -258,8 +258,22 @@ class AutonomousCapture: NSObject, SCStreamOutput {
     }
 
     func updateDisplayId(_ displayId: UInt32?) async {
+        // Resolve first so we can compare against currentDisplayId
+        let resolvedId: CGDirectDisplayID
         do {
-            try await startStream(displayId: displayId)
+            resolvedId = try resolveDisplayId(displayId)
+        } catch {
+            fputs("[daemon] Failed to resolve display: \(error)\n", stderr)
+            return
+        }
+
+        if resolvedId == self.currentDisplayId {
+            fputs("[daemon] Display \(resolvedId) already active, skipping stream restart\n", stderr)
+            return
+        }
+
+        do {
+            try await startStream(displayId: resolvedId)
         } catch {
             fputs("[daemon] Failed to switch display: \(error)\n", stderr)
         }
