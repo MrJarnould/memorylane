@@ -53,7 +53,7 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
       ? [...config.snapshotModels]
       : [...DEFAULT_SNAPSHOT_MODELS]
     this.maxSnapshots = config?.maxSnapshots ?? 6
-    this.minSnapshotGapMs = config?.minSnapshotGapMs ?? 20_000
+    this.minSnapshotGapMs = config?.minSnapshotGapMs ?? 5_000
     this.maxVideoBytes = config?.maxVideoBytes ?? 25 * 1024 * 1024
     this.requestTimeoutMs = config?.requestTimeoutMs ?? 45_000
     this.usageTracker = config?.usageTracker ?? new UsageTracker()
