@@ -257,22 +257,22 @@ describe('EventCapturer', () => {
     expect(windows[1].closedBy).toBe('flush')
     expect(windows[1].events).toHaveLength(1)
     expect(windows[1].events[0].type).toBe('app_change')
-    expect(windows[1].startTimestamp).toBe(10050)
+    expect(windows[1].startTimestamp).toBe(10100)
   })
 
-  it('keeps non-negative duration when a late event timestamp is older than carried window start', async () => {
+  it('keeps non-negative duration when a late event timestamp is older than new app_change window start', async () => {
     capturer.handleEvent(makeEvent({ type: 'keyboard', timestamp: 12000 }))
     capturer.handleEvent(makeEvent({ type: 'app_change', timestamp: 12100 }))
     await flushAsyncAppends()
 
-    // New window starts at previous window end (12000), then receives a late/backdated
-    // event with an older timestamp.
+    // New window starts at app_change boundary (12100), then we receive a late/backdated
+    // event that should be routed into the prior pending window.
     capturer.handleEvent(makeEvent({ type: 'scroll', timestamp: 11900 }))
     capturer.flush()
     await flushAsyncAppends()
 
     expect(windows).toHaveLength(2)
-    expect(windows[1].startTimestamp).toBe(12000)
+    expect(windows[1].startTimestamp).toBe(12100)
     expect(windows[1].endTimestamp).toBe(12100)
     expect(windows[1].endTimestamp - windows[1].startTimestamp).toBeGreaterThanOrEqual(0)
   })

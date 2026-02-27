@@ -79,6 +79,7 @@ export class EventCapturer {
       this.closeWindow('app_change', {
         boundaryTimestamp: event.timestamp,
         includeBoundaryTimestamp: false,
+        nextWindowStartTimestamp: event.timestamp,
       })
     }
 
@@ -261,7 +262,7 @@ export class EventCapturer {
       closedBy: pendingWindow.closedBy,
     }
 
-    if (this.currentWindow === null) {
+    if (this.currentWindow === null && this.nextWindowStartTimestamp === null) {
       this.nextWindowStartTimestamp = window.endTimestamp
     }
 

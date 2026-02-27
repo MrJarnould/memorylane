@@ -89,7 +89,7 @@ describe('EventCapturer late event handling', () => {
     expect(windows[1].closedBy).toBe('flush')
     expect(windows[1].events).toHaveLength(1)
     expect(windows[1].events[0].type).toBe('app_change')
-    expect(windows[1].startTimestamp).toBe(1_000)
+    expect(windows[1].startTimestamp).toBe(2_000)
     expect(windows[1].endTimestamp).toBe(2_000)
   })
 })
