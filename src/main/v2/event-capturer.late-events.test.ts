@@ -81,7 +81,7 @@ describe('EventCapturer late event handling', () => {
     expect(windows[0].closedBy).toBe('app_change')
     expect(windows[0].events.map((event) => event.timestamp)).toEqual([1_000, 1_700])
     expect(windows[0].startTimestamp).toBe(1_000)
-    expect(windows[0].endTimestamp).toBe(1_700)
+    expect(windows[0].endTimestamp).toBe(2_000)
 
     capturer.flush()
     await flushAsyncAppends()

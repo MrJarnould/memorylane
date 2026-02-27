@@ -224,6 +224,8 @@ describe('EventCapturer', () => {
     expect(windows[0].id).not.toBe(windows[1].id)
     expect(windows[0].closedBy).toBe('gap')
     expect(windows[1].closedBy).toBe('gap')
+    expect(windows[0].startTimestamp).toBe(8000)
+    expect(windows[1].startTimestamp).toBe(9000)
   })
 
   it('splits window on app_change — previous window emitted, app_change becomes first event of new window', async () => {
@@ -247,7 +249,7 @@ describe('EventCapturer', () => {
     expect(windows[0].events).toHaveLength(2)
     expect(windows[0].events[0].type).toBe('keyboard')
     expect(windows[0].events[1].type).toBe('keyboard')
-    expect(windows[0].endTimestamp).toBe(10050)
+    expect(windows[0].endTimestamp).toBe(10100)
 
     // The app_change event is in a new (still open) window — flush to verify
     capturer.flush()
