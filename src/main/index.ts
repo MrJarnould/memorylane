@@ -68,6 +68,7 @@ app.on('ready', async () => {
       void updateTrayMenu()
       void sendStatusToRenderer()
     },
+    semanticPipelinePreference: captureSettingsManager.get().semanticPipelineMode,
   })
 
   patternDetector = new PatternDetector(runtime.storage, runtime.apiKeyManager)

@@ -7,7 +7,7 @@ import { DatabaseExportSection } from './components/DatabaseExportSection'
 import { CustomEndpointSection } from './components/CustomEndpointSection'
 import { ManageKeySection } from './components/ManageKeySection'
 import { useMainWindowAPI } from '@/renderer/hooks/use-main-window-api'
-import type { CaptureSettings, CustomEndpointStatus, KeyStatus } from '@types'
+import type { CaptureSettings, CustomEndpointStatus, KeyStatus, SemanticPipelineMode } from '@types'
 
 // base-ui fires onValueChange with `number | readonly number[]` depending on
 // how the value prop was typed — normalise to a plain number either way.
@@ -80,8 +80,15 @@ export function AdvancedSettingsPage({ onBack }: { onBack: () => void }): React.
     void load()
   }, [load])
 
-  const set = (key: keyof CaptureSettings, value: number): void => {
+  type NumericCaptureSetting = Exclude<keyof CaptureSettings, 'semanticPipelineMode'>
+
+  const set = (key: NumericCaptureSetting, value: number): void => {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev))
+    setDirty(true)
+  }
+
+  const setSemanticPipelineMode = (mode: SemanticPipelineMode): void => {
+    setForm((prev) => (prev ? { ...prev, semanticPipelineMode: mode } : prev))
     setDirty(true)
   }
 
@@ -151,6 +158,47 @@ export function AdvancedSettingsPage({ onBack }: { onBack: () => void }): React.
 
       {form && (
         <>
+          <div className="border-t border-border" />
+
+          <section className="space-y-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Semantic Media Pipeline
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Choose how summaries are generated for each activity.
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant={form.semanticPipelineMode === 'auto' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSemanticPipelineMode('auto')}
+              >
+                Auto
+              </Button>
+              <Button
+                variant={form.semanticPipelineMode === 'video' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSemanticPipelineMode('video')}
+              >
+                Video only
+              </Button>
+              <Button
+                variant={form.semanticPipelineMode === 'image' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSemanticPipelineMode('image')}
+              >
+                Image only
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {form.semanticPipelineMode === 'auto'
+                ? 'Tries video first, then falls back to images when needed.'
+                : form.semanticPipelineMode === 'video'
+                  ? 'Uses only the video pipeline and never falls back to images.'
+                  : 'Uses only image snapshots and skips video requests.'}
+            </p>
+          </section>
+
           <div className="border-t border-border" />
 
           <section className="space-y-3">

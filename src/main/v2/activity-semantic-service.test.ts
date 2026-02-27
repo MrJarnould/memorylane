@@ -372,6 +372,77 @@ describe('V2ActivitySemanticService', () => {
     expect(diagnostics?.chosenMode).toBe('snapshot')
   })
 
+  it('supports image-only mode without attempting video', async () => {
+    const tempDir = createTempDir()
+    tempDirs.push(tempDir)
+    const videoPath = createVideoFile(tempDir)
+
+    const frames = [
+      makeFrame(createImageFile(tempDir, 'f0.png'), 1_000, 0),
+      makeFrame(createImageFile(tempDir, 'f1.png'), 25_000, 1),
+    ]
+
+    const send = vi.fn().mockResolvedValue(response('image summary only'))
+    const service = new V2ActivitySemanticService(undefined, {
+      client: { chat: { send } },
+      pipelinePreference: 'image',
+      usageTracker: { recordUsage: vi.fn() },
+    })
+
+    const result = await service.summarizeFromVideo({
+      activity: makeActivity({ frames }),
+      videoPath,
+      ocrText: 'ignored',
+    })
+
+    expect(result).toBe('image summary only')
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(
+      send.mock.calls[0][0].messages[0].content.some(
+        (item: { type: string }) => item.type === 'input_video',
+      ),
+    ).toBe(false)
+    const diagnostics = service.getLastRunDiagnostics()
+    expect(diagnostics?.pipelinePreference).toBe('image')
+    expect(diagnostics?.attempts.map((attempt) => attempt.mode)).toEqual(['snapshot'])
+    expect(diagnostics?.chosenMode).toBe('snapshot')
+  })
+
+  it('supports video-only mode without snapshot fallback', async () => {
+    const tempDir = createTempDir()
+    tempDirs.push(tempDir)
+    const videoPath = createVideoFile(tempDir)
+
+    const frames = [
+      makeFrame(createImageFile(tempDir, 'f0.png'), 1_000, 0),
+      makeFrame(createImageFile(tempDir, 'f1.png'), 25_000, 1),
+    ]
+
+    const send = vi.fn().mockRejectedValue(new Error('video failed'))
+    const service = new V2ActivitySemanticService(undefined, {
+      client: { chat: { send } },
+      pipelinePreference: 'video',
+      usageTracker: { recordUsage: vi.fn() },
+    })
+
+    const result = await service.summarizeFromVideo({
+      activity: makeActivity({ frames }),
+      videoPath,
+      ocrText: 'ignored',
+    })
+
+    expect(result).toBe('')
+    expect(send.mock.calls.map((call) => call[0].model)).toEqual(DEFAULT_VIDEO_MODELS)
+    const diagnostics = service.getLastRunDiagnostics()
+    expect(diagnostics?.pipelinePreference).toBe('video')
+    expect(diagnostics?.attempts.map((attempt) => attempt.mode)).toEqual([
+      'video',
+      'video',
+      'video',
+    ])
+    expect(diagnostics?.chosenMode).toBeNull()
+  })
+
   it('uses custom endpoint model for both video and snapshot attempts in v2', async () => {
     const tempDir = createTempDir()
     tempDirs.push(tempDir)

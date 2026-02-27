@@ -1,6 +1,7 @@
 import type { V2ActivityFrame } from '../activity-types'
 
 export type SemanticMode = 'video' | 'snapshot'
+export type SemanticPipelinePreference = 'auto' | 'video' | 'image'
 
 export type ChatContentItem =
   | { type: 'text'; text: string }
@@ -64,6 +65,7 @@ export interface V2SemanticEndpointConfig {
 export interface V2ActivitySemanticServiceConfig {
   videoModels?: string[]
   snapshotModels?: string[]
+  pipelinePreference?: SemanticPipelinePreference
   maxSnapshots?: number
   minSnapshotGapMs?: number
   maxVideoBytes?: number
@@ -86,6 +88,7 @@ export interface V2SemanticAttempt {
 
 export interface V2SemanticRunDiagnostics {
   activityId: string
+  pipelinePreference: SemanticPipelinePreference
   promptChars: number
   chosenMode: SemanticMode | null
   chosenModel: string | null

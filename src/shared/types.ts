@@ -154,7 +154,10 @@ export interface CaptureSettings {
   minActivityDurationMs: number
   maxActivityDurationMs: number
   maxScreenshotsPerActivity: number
+  semanticPipelineMode: SemanticPipelineMode
 }
+
+export type SemanticPipelineMode = 'auto' | 'video' | 'image'
 
 export type UpdateState = 'idle' | 'downloading' | 'ready'
 

@@ -20,6 +20,7 @@ import type {
   CustomEndpointConfig,
   MainWindowStats,
   CaptureSettings,
+  SemanticPipelineMode,
   SubscriptionPlan,
 } from '../../shared/types'
 import type { CaptureSettingsManager } from '../settings/capture-settings-manager'
@@ -29,6 +30,7 @@ import type { UsageTracker } from '../services/usage-tracker'
 interface SemanticService {
   updateApiKey(apiKey: string | null): void
   updateEndpoint(config: CustomEndpointConfig | null, openRouterKey?: string | null): void
+  updatePipelinePreference(preference: SemanticPipelineMode): void
 }
 
 interface MainWindowDependencies {
@@ -329,6 +331,9 @@ export function initMainWindowIPC(dependencies: MainWindowDependencies): void {
       try {
         deps.captureSettingsManager.save(partial)
         deps.captureSettingsManager.applyToConstants()
+        deps.semanticService.updatePipelinePreference(
+          deps.captureSettingsManager.get().semanticPipelineMode,
+        )
         return { success: true }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
@@ -342,6 +347,9 @@ export function initMainWindowIPC(dependencies: MainWindowDependencies): void {
     try {
       deps.captureSettingsManager.reset()
       deps.captureSettingsManager.applyToConstants()
+      deps.semanticService.updatePipelinePreference(
+        deps.captureSettingsManager.get().semanticPipelineMode,
+      )
       return { success: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
