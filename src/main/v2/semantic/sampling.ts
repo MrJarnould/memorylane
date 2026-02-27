@@ -183,8 +183,20 @@ async function applyVisualThreshold(
   }
 
   const last = frames[frames.length - 1]
-  if (frameKey(kept[kept.length - 1]) !== frameKey(last)) {
-    kept.push(last)
+  const latestKept = kept[kept.length - 1]
+  if (frameKey(latestKept) !== frameKey(last)) {
+    const [leftHash, rightHash] = await Promise.all([
+      getHash(latestKept.frame.filepath),
+      getHash(last.frame.filepath),
+    ])
+    const difference = leftHash && rightHash ? dHashDifferencePercent(leftHash, rightHash) : null
+
+    // Keep the timeline boundary frame, but avoid duplicate-looking tail pairs.
+    if (difference !== null && difference < visualThresholdPercent && kept.length > 1) {
+      kept[kept.length - 1] = last
+    } else {
+      kept.push(last)
+    }
   }
 
   return kept

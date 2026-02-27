@@ -1,9 +1,23 @@
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { V2ActivityFrame } from '../activity-types'
 import { selectSnapshotFrames } from './sampling'
+
+vi.mock('./visual-diff', () => ({
+  loadImageDHash: vi.fn(async (filepath: string) => {
+    const normalized = filepath.replaceAll('\\', '/')
+    return normalized.slice(normalized.lastIndexOf('/') + 1)
+  }),
+  dHashDifferencePercent: vi.fn((leftHash: string, rightHash: string) => {
+    if (leftHash === rightHash) return 0
+    const pair = [leftHash, rightHash].sort().join('|')
+    if (pair === 'f0.png|f1.png') return 20
+    if (pair === 'f1.png|f2.png') return 1
+    return 50
+  }),
+}))
 
 function makeFrame(filepath: string, timestamp: number, sequenceNumber: number): V2ActivityFrame {
   return {
@@ -104,6 +118,29 @@ describe('selectSnapshotFrames anchor directionality', () => {
 
     expect(selected.map((frame) => path.basename(frame.frame.filepath))).toEqual([
       'f1.png',
+      'f2.png',
+    ])
+  })
+
+  it('drops penultimate frame when it is near-identical to the final frame', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sampling-tail-dedupe-test-'))
+    tempDirs.push(dir)
+
+    const frames = [
+      makeFrame(createImageFile(dir, 'f0.png'), 1_000, 0),
+      makeFrame(createImageFile(dir, 'f1.png'), 2_000, 1),
+      makeFrame(createImageFile(dir, 'f2.png'), 3_000, 2),
+    ]
+
+    const selected = await selectSnapshotFrames({
+      frames,
+      maxSnapshots: 10,
+      interactionAnchorTimestamps: [2_000],
+      visualThresholdPercent: 8,
+    })
+
+    expect(selected.map((frame) => path.basename(frame.frame.filepath))).toEqual([
+      'f0.png',
       'f2.png',
     ])
   })
