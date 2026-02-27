@@ -1,12 +1,13 @@
-# MemoryLane v0.13.1
+# MemoryLane v0.13.2
 
 MemoryLane is a macOS system tray app that captures your screen activity, processes it with OCR and AI summarization, and makes it searchable through an MCP server — giving AI assistants like Claude and Cursor memory of what you've been working on.
 
 ## What's Changed
 
-- **Better semantic prompt quality (main update)** — aligned the v2 semantic prompt with the proven v1 phrasing to improve activity summary recall and consistency
-- **Faster snapshot fallback cadence** — reduced the default v2 semantic snapshot spacing to 5 seconds for denser visual context when video mode falls back
-- **Accurate usage cost tracking for video defaults** — added missing pricing entries for default v2 semantic video models so reported token costs are correct
+- **v2 snapshots now behave closer to v1 (main update)** — reused v1 snapshot settings and tightened frame retention rules so fallback snapshots better match the proven v1 capture behavior
+- **More accurate activity boundaries and frame timing** — fixed event/window boundary start timestamps and callback-time frame timestamps to improve temporal consistency in produced activities
+- **Sharper snapshot boundary selection** — constrained boundary anchor selection by direction and added tests around late events and boundary edges
+- **Settings and app polish** — added semantic mode selection in advanced settings and fixed macOS tray auto-update quit behavior
 
 ## Features
 
@@ -26,7 +27,7 @@ MemoryLane is a macOS system tray app that captures your screen activity, proces
 - **Semantic search** — vector embeddings (all-MiniLM-L6-v2) + SQLite FTS5 for full-text and semantic search over your activity history
 - **MCP server** — exposes `search_context`, `browse_timeline`, and `get_event_details` tools plus time tracking and recent activity prompts for AI assistants
 - **One-click integrations** — register the MCP server with Claude Desktop or Cursor from the tray menu
-- **Configurable capture settings** — adjust visual change threshold, typing timeout, scroll timeout via the UI
+- **Configurable capture and semantic settings** — adjust visual change threshold, typing timeout, scroll timeout, and semantic mode behavior via the UI
 - **Secure API key storage** — uses Electron's safeStorage for encrypted key persistence
 - **Usage tracking** — monitors API requests, token usage, and costs
 - **Richer activity summaries** — improved summary quality for timeline and search context questions
@@ -60,4 +61,4 @@ After launching:
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.13.0...v0.13.1
+https://github.com/deusXmachina-dev/memorylane/compare/v0.13.1...v0.13.2
