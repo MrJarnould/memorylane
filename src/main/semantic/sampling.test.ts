@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { V2ActivityFrame } from '../activity-types'
+import type { ActivityFrame } from '../activity-types'
 import { selectSnapshotFrames } from './sampling'
 
 vi.mock('./visual-diff', () => ({
@@ -19,7 +19,7 @@ vi.mock('./visual-diff', () => ({
   }),
 }))
 
-function makeFrame(filepath: string, timestamp: number, sequenceNumber: number): V2ActivityFrame {
+function makeFrame(filepath: string, timestamp: number, sequenceNumber: number): ActivityFrame {
   return {
     offset: sequenceNumber,
     frame: {

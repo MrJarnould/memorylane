@@ -10,33 +10,33 @@ import { StorageService } from './storage'
 import { EmbeddingService } from './processor/embedding'
 import { activityOcrService } from './processor/ocr'
 import { UsageTracker } from './services/usage-tracker'
-import { createV2PipelineHarness } from './pipeline-harness'
+import { createPipelineHarness } from './pipeline-harness'
 import { DefaultActivityTransformer } from './activity-transformer'
 import { SqliteActivitySink } from './sqlite-activity-sink'
 import { FfmpegVideoStitcher } from './video/video-stitcher'
-import { V2ActivitySemanticService, V2SemanticFileDebugDumper } from './activity-semantic-service'
+import { ActivitySemanticService, SemanticFileDebugDumper } from './activity-semantic-service'
 import type { SemanticPipelinePreference } from './activity-semantic-service'
 import {
-  createV2CaptureController,
+  createCaptureController,
   type RuntimeCapture,
   type RuntimeCaptureController,
 } from './capture-controller'
 
-export interface V2MainRuntime {
+export interface MainRuntime {
   capture: RuntimeCapture
   storage: StorageService
   usageTracker: UsageTracker
   apiKeyManager: ApiKeyManager
   customEndpointManager: CustomEndpointManager
-  semanticService: V2ActivitySemanticService
+  semanticService: ActivitySemanticService
   managedKeyService: ManagedKeyService
   dispose(): Promise<void>
 }
 
-export async function createV2MainRuntime(params?: {
+export async function createMainRuntime(params?: {
   onCaptureStateChanged?: () => void
   semanticPipelinePreference?: SemanticPipelinePreference
-}): Promise<V2MainRuntime> {
+}): Promise<MainRuntime> {
   const onCaptureStateChanged = params?.onCaptureStateChanged ?? (() => undefined)
 
   const interactionMonitor = await import('./recorder/interaction-monitor')
@@ -48,7 +48,7 @@ export async function createV2MainRuntime(params?: {
 
   const debugDumper =
     !app.isPackaged && process.env.DEBUG_PIPELINE
-      ? new V2SemanticFileDebugDumper({
+      ? new SemanticFileDebugDumper({
           rootDir: path.join(app.getAppPath(), '.debug-pipeline'),
           cleanRootDir: true,
           copyMediaAssets: true,
@@ -56,7 +56,7 @@ export async function createV2MainRuntime(params?: {
       : undefined
 
   const savedEndpoint = customEndpointManager.getEndpoint()
-  const semanticService = new V2ActivitySemanticService(apiKeyManager.getApiKey() || undefined, {
+  const semanticService = new ActivitySemanticService(apiKeyManager.getApiKey() || undefined, {
     usageTracker,
     debugDumper,
     pipelinePreference: params?.semanticPipelinePreference,
@@ -84,13 +84,13 @@ export async function createV2MainRuntime(params?: {
   )
   const sink = new SqliteActivitySink(storage.activities)
 
-  const harness = createV2PipelineHarness({
+  const harness = createPipelineHarness({
     outputDir,
     extractorTransformer: transformer,
     extractorSink: sink,
   })
 
-  const capture: RuntimeCaptureController = createV2CaptureController({
+  const capture: RuntimeCaptureController = createCaptureController({
     harness,
     interactionMonitor,
     outputDir,
@@ -124,19 +124,19 @@ export async function createV2MainRuntime(params?: {
           capture.stopCapture()
           await capture.waitForIdle()
         } catch (error) {
-          log.warn('[V2Runtime] Error while stopping capture during dispose:', error)
+          log.warn('[Runtime] Error while stopping capture during dispose:', error)
         }
 
         try {
           interactionMonitor.clearInteractionCallback(interactionHandler)
         } catch (error) {
-          log.warn('[V2Runtime] Failed to clear interaction callback:', error)
+          log.warn('[Runtime] Failed to clear interaction callback:', error)
         }
 
         try {
           storage.close()
         } catch (error) {
-          log.warn('[V2Runtime] Failed to close storage:', error)
+          log.warn('[Runtime] Failed to close storage:', error)
         }
       })()
 

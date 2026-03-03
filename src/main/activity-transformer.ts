@@ -1,5 +1,5 @@
-import type { V2Activity } from './activity-types'
-import type { ActivityTransformer, V2ExtractedActivity } from './activity-extraction-types'
+import type { Activity } from './activity-types'
+import type { ActivityTransformer, ExtractedActivity } from './activity-extraction-types'
 import type {
   ActivityVideoStitcher,
   ActivityVideoFrameInput,
@@ -26,7 +26,7 @@ export class DefaultActivityTransformer implements ActivityTransformer {
     private config: DefaultActivityTransformerConfig,
   ) {}
 
-  async transform(activity: V2Activity): Promise<V2ExtractedActivity> {
+  async transform(activity: Activity): Promise<ExtractedActivity> {
     const frames: ActivityVideoFrameInput[] = activity.frames.map((f) => ({
       filepath: f.frame.filepath,
       timestamp: f.frame.timestamp,
@@ -64,7 +64,7 @@ export class DefaultActivityTransformer implements ActivityTransformer {
     }
   }
 
-  private async extractOcrText(activity: V2Activity): Promise<string> {
+  private async extractOcrText(activity: Activity): Promise<string> {
     if (activity.frames.length === 0) return ''
     const ocrFrame =
       activity.frames.length >= OCR_FRAME_POSITION_FROM_END

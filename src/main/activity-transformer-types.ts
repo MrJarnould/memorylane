@@ -1,4 +1,4 @@
-import type { V2Activity } from './activity-types'
+import type { Activity } from './activity-types'
 
 export interface ActivityVideoFrameInput {
   filepath: string
@@ -25,7 +25,7 @@ export interface ActivityOcrService {
 
 export interface ActivitySemanticService {
   summarizeFromVideo(input: {
-    activity: V2Activity
+    activity: Activity
     videoPath?: string
     ocrText: string
   }): Promise<string>

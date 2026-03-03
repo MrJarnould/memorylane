@@ -3,7 +3,7 @@ import * as path from 'path'
 import sharp from 'sharp'
 import { LLM_IMAGE_MAX_WIDTH } from './constants'
 import type { EncodedImage, VideoAssetData } from './types'
-import type { V2ActivityFrame } from '../activity-types'
+import type { ActivityFrame } from '../activity-types'
 
 export function tryLoadVideoAsDataUrl(
   videoPath: string,
@@ -30,7 +30,7 @@ export function tryLoadVideoAsDataUrl(
 }
 
 export async function encodeSnapshots(params: {
-  frames: V2ActivityFrame[]
+  frames: ActivityFrame[]
   onEncodeError?: (input: { filepath: string; error: unknown }) => void
 }): Promise<EncodedImage[]> {
   const { frames, onEncodeError } = params

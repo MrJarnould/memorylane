@@ -1,16 +1,16 @@
 import log from './logger'
-import type { V2Activity } from './activity-types'
+import type { Activity } from './activity-types'
 import {
-  DEFAULT_V2_ACTIVITY_EXTRACTOR_CONFIG,
+  DEFAULT_ACTIVITY_EXTRACTOR_CONFIG,
   type ActivityExtractorStats,
   type ActivitySink,
   type ActivityTransformer,
-  type V2ActivityExtractorConfig,
+  type ActivityExtractorConfig,
 } from './activity-extraction-types'
 import type { DurableStream, Offset, StreamRecord, StreamSubscription } from './streams/stream'
 
 interface ExtractionTask {
-  record: StreamRecord<V2Activity>
+  record: StreamRecord<Activity>
   attempt: number
 }
 
@@ -19,10 +19,10 @@ function sleep(ms: number): Promise<void> {
 }
 
 export class ActivityExtractor {
-  private readonly activityStream: DurableStream<V2Activity>
+  private readonly activityStream: DurableStream<Activity>
   private readonly transformer: ActivityTransformer
   private readonly sink: ActivitySink
-  private readonly config: V2ActivityExtractorConfig
+  private readonly config: ActivityExtractorConfig
 
   private subscription: StreamSubscription | null = null
   private started = false
@@ -44,16 +44,16 @@ export class ActivityExtractor {
   }
 
   constructor(params: {
-    activityStream: DurableStream<V2Activity>
+    activityStream: DurableStream<Activity>
     transformer: ActivityTransformer
     sink: ActivitySink
-    config?: Partial<V2ActivityExtractorConfig>
+    config?: Partial<ActivityExtractorConfig>
   }) {
     this.activityStream = params.activityStream
     this.transformer = params.transformer
     this.sink = params.sink
     this.config = {
-      ...DEFAULT_V2_ACTIVITY_EXTRACTOR_CONFIG,
+      ...DEFAULT_ACTIVITY_EXTRACTOR_CONFIG,
       ...(params.config ?? {}),
     }
 
@@ -107,7 +107,7 @@ export class ActivityExtractor {
     }
   }
 
-  private enqueue(record: StreamRecord<V2Activity>): void {
+  private enqueue(record: StreamRecord<Activity>): void {
     if (!this.started) return
     this.pending.push({ record, attempt: 0 })
     this.tryDispatch()

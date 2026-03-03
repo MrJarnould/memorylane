@@ -1,15 +1,15 @@
 import * as fs from 'fs'
-import type { V2ActivityFrame } from '../activity-types'
+import type { ActivityFrame } from '../activity-types'
 import { dHashDifferencePercent, loadImageDHash } from './visual-diff'
 
 export async function selectSnapshotFrames(params: {
-  frames: V2ActivityFrame[]
+  frames: ActivityFrame[]
   maxSnapshots: number
   interactionAnchorTimestamps?: number[]
   startAnchorTimestamp?: number
   endAnchorTimestamp?: number
   visualThresholdPercent?: number
-}): Promise<V2ActivityFrame[]> {
+}): Promise<ActivityFrame[]> {
   const {
     frames,
     maxSnapshots,
@@ -39,7 +39,7 @@ export async function selectSnapshotFrames(params: {
   }
 
   const anchors = uniqueSortedTimestamps(interactionAnchorTimestamps)
-  const selectedByKey = new Map<string, V2ActivityFrame>()
+  const selectedByKey = new Map<string, ActivityFrame>()
 
   if (startAnchorTimestamp !== undefined) {
     const firstAtOrAfter = findFirstFrameAtOrAfter(available, startAnchorTimestamp)
@@ -85,9 +85,9 @@ export async function selectSnapshotFrames(params: {
 }
 
 function findNearestFrame(
-  sortedFrames: V2ActivityFrame[],
+  sortedFrames: ActivityFrame[],
   timestamp: number,
-): V2ActivityFrame | undefined {
+): ActivityFrame | undefined {
   if (sortedFrames.length === 0) return undefined
 
   let lo = 0
@@ -112,9 +112,9 @@ function findNearestFrame(
 }
 
 function findFirstFrameAtOrAfter(
-  sortedFrames: V2ActivityFrame[],
+  sortedFrames: ActivityFrame[],
   timestamp: number,
-): V2ActivityFrame | undefined {
+): ActivityFrame | undefined {
   let lo = 0
   let hi = sortedFrames.length
   while (lo < hi) {
@@ -129,9 +129,9 @@ function findFirstFrameAtOrAfter(
 }
 
 function findLastFrameAtOrBefore(
-  sortedFrames: V2ActivityFrame[],
+  sortedFrames: ActivityFrame[],
   timestamp: number,
-): V2ActivityFrame | undefined {
+): ActivityFrame | undefined {
   let lo = 0
   let hi = sortedFrames.length
   while (lo < hi) {
@@ -147,9 +147,9 @@ function findLastFrameAtOrBefore(
 }
 
 async function applyVisualThreshold(
-  frames: V2ActivityFrame[],
+  frames: ActivityFrame[],
   visualThresholdPercent: number,
-): Promise<V2ActivityFrame[]> {
+): Promise<ActivityFrame[]> {
   if (frames.length <= 2 || visualThresholdPercent <= 0) {
     return frames
   }
@@ -162,7 +162,7 @@ async function applyVisualThreshold(
     return hashCache.get(filepath) ?? null
   }
 
-  const kept: V2ActivityFrame[] = [frames[0]]
+  const kept: ActivityFrame[] = [frames[0]]
   for (let i = 1; i < frames.length - 1; i++) {
     const previous = kept[kept.length - 1]
     const candidate = frames[i]
@@ -202,7 +202,7 @@ async function applyVisualThreshold(
   return kept
 }
 
-function capSelectedSnapshots(frames: V2ActivityFrame[], maxSnapshots: number): V2ActivityFrame[] {
+function capSelectedSnapshots(frames: ActivityFrame[], maxSnapshots: number): ActivityFrame[] {
   if (frames.length <= maxSnapshots) {
     return frames
   }
@@ -212,7 +212,7 @@ function capSelectedSnapshots(frames: V2ActivityFrame[], maxSnapshots: number): 
   const middle = frames.slice(1, -1)
   const middleSlots = Math.max(maxSnapshots - 2, 0)
 
-  const result: V2ActivityFrame[] = [first]
+  const result: ActivityFrame[] = [first]
   if (middleSlots > 0 && middle.length > 0) {
     const step = (middle.length - 1) / Math.max(middleSlots - 1, 1)
     for (let i = 0; i < middleSlots && i < middle.length; i++) {
@@ -227,9 +227,9 @@ function capSelectedSnapshots(frames: V2ActivityFrame[], maxSnapshots: number): 
   return dedupeFrames(result)
 }
 
-function dedupeFrames(frames: V2ActivityFrame[]): V2ActivityFrame[] {
+function dedupeFrames(frames: ActivityFrame[]): ActivityFrame[] {
   const seen = new Set<string>()
-  const deduped: V2ActivityFrame[] = []
+  const deduped: ActivityFrame[] = []
   for (const frame of frames) {
     const key = frameKey(frame)
     if (seen.has(key)) continue
@@ -245,6 +245,6 @@ function uniqueSortedTimestamps(values: number[]): number[] {
   return unique
 }
 
-function frameKey(frame: V2ActivityFrame): string {
+function frameKey(frame: ActivityFrame): string {
   return `${frame.frame.filepath}:${frame.frame.timestamp}:${frame.frame.sequenceNumber}`
 }

@@ -1,5 +1,5 @@
 import log from './logger'
-import type { V2PipelineHarness } from './pipeline-harness'
+import type { PipelineHarness } from './pipeline-harness'
 
 type InteractionMonitorModule = typeof import('./recorder/interaction-monitor')
 type CaptureState = 'stopped' | 'starting' | 'running' | 'stopping'
@@ -20,8 +20,8 @@ export interface RuntimeCaptureController extends RuntimeCapture {
   waitForIdle(): Promise<void>
 }
 
-export function createV2CaptureController(params: {
-  harness: V2PipelineHarness
+export function createCaptureController(params: {
+  harness: PipelineHarness
   interactionMonitor: InteractionMonitorModule
   outputDir: string
   onStateChanged: () => void
@@ -37,7 +37,7 @@ export function createV2CaptureController(params: {
     transition = transition
       .then(task)
       .catch((error) => {
-        log.error('[V2Capture] Transition failed:', error)
+        log.error('[Capture] Transition failed:', error)
       })
       .finally(() => {
         notify()
@@ -58,7 +58,7 @@ export function createV2CaptureController(params: {
           await params.harness.start()
           params.interactionMonitor.startInteractionMonitoring()
           state = 'running'
-          log.info('[V2Capture] Started')
+          log.info('[Capture] Started')
         } catch (error) {
           state = 'stopped'
           try {
@@ -79,12 +79,12 @@ export function createV2CaptureController(params: {
         try {
           params.interactionMonitor.stopInteractionMonitoring()
         } catch (error) {
-          log.error('[V2Capture] Failed to stop interaction monitor:', error)
+          log.error('[Capture] Failed to stop interaction monitor:', error)
         }
 
         try {
           await params.harness.stop()
-          log.info('[V2Capture] Stopped')
+          log.info('[Capture] Stopped')
         } finally {
           state = 'stopped'
         }

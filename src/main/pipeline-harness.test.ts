@@ -1,9 +1,9 @@
 import * as path from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { V2ExtractedActivity } from './activity-extraction-types'
-import type { V2Activity } from './activity-types'
+import type { ExtractedActivity } from './activity-extraction-types'
+import type { Activity } from './activity-types'
 import type { StreamSubscription } from './streams/stream'
-import { createV2PipelineHarness } from './pipeline-harness'
+import { createPipelineHarness } from './pipeline-harness'
 import type {
   CaptureBackendConfig,
   CaptureBackendCommand,
@@ -84,7 +84,7 @@ async function waitFor(
   throw new Error(message)
 }
 
-describe('v2 pipeline harness', () => {
+describe('pipeline harness', () => {
   const subscriptions: StreamSubscription[] = []
 
   afterEach(() => {
@@ -101,8 +101,8 @@ describe('v2 pipeline harness', () => {
   })
 
   it('wires screen + event + activity producer with in-memory streams', async () => {
-    const harness = createV2PipelineHarness({
-      outputDir: path.join(process.cwd(), '.tmp-v2-harness'),
+    const harness = createPipelineHarness({
+      outputDir: path.join(process.cwd(), '.tmp-harness'),
       frameIntervalMs: 10,
       activityProducerConfig: {
         frameJoinGraceMs: 0,
@@ -114,7 +114,7 @@ describe('v2 pipeline harness', () => {
     })
     expect(harness.activityExtractor).toBeUndefined()
 
-    const activities: V2Activity[] = []
+    const activities: Activity[] = []
     subscriptions.push(
       harness.activityStream.subscribe({
         startAt: { type: 'now' },
@@ -153,8 +153,8 @@ describe('v2 pipeline harness', () => {
   })
 
   it('retargets captures when app_change reports a different display', async () => {
-    const harness = createV2PipelineHarness({
-      outputDir: path.join(process.cwd(), '.tmp-v2-harness-display-retarget'),
+    const harness = createPipelineHarness({
+      outputDir: path.join(process.cwd(), '.tmp-harness-display-retarget'),
       frameIntervalMs: 20,
       activityProducerConfig: {
         frameJoinGraceMs: 0,
@@ -191,8 +191,8 @@ describe('v2 pipeline harness', () => {
     const transformedActivityIds: string[] = []
     const persistedActivityIds: string[] = []
 
-    const harness = createV2PipelineHarness({
-      outputDir: path.join(process.cwd(), '.tmp-v2-harness-extractor'),
+    const harness = createPipelineHarness({
+      outputDir: path.join(process.cwd(), '.tmp-harness-extractor'),
       frameIntervalMs: 10,
       activityProducerConfig: {
         frameJoinGraceMs: 0,
@@ -208,7 +208,7 @@ describe('v2 pipeline harness', () => {
         retryBackoffMs: 0,
       },
       extractorTransformer: {
-        transform: async (activity): Promise<V2ExtractedActivity> => {
+        transform: async (activity): Promise<ExtractedActivity> => {
           transformedActivityIds.push(activity.id)
           return {
             activityId: activity.id,

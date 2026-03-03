@@ -24,7 +24,7 @@ export function recordSemanticUsageSafe(input: {
     })
   } catch (error) {
     log.warn(
-      '[V2ActivitySemanticService] Usage tracking failed',
+      '[ActivitySemanticService] Usage tracking failed',
       JSON.stringify({
         model: input.model,
         error: describeSemanticError(error),

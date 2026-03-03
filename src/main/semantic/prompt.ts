@@ -1,8 +1,8 @@
 import type { InteractionContext } from '../../shared/types'
-import type { V2Activity } from '../activity-types'
+import type { Activity } from '../activity-types'
 import type { SemanticMode } from './types'
 
-export function buildSemanticPrompt(activity: V2Activity, mode: SemanticMode): string {
+export function buildSemanticPrompt(activity: Activity, mode: SemanticMode): string {
   const durationMs = Math.max(0, activity.endTimestamp - activity.startTimestamp)
   const durationStr = formatDuration(durationMs)
   const sourceNote =
@@ -65,7 +65,7 @@ export function buildSemanticPrompt(activity: V2Activity, mode: SemanticMode): s
   return prompt
 }
 
-function buildInteractionTimeline(activity: V2Activity): string {
+function buildInteractionTimeline(activity: Activity): string {
   const interactions = [...activity.interactions].sort((a, b) => a.timestamp - b.timestamp)
   if (interactions.length === 0) {
     return '- No interaction events captured.'

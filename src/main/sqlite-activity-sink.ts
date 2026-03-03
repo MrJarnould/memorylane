@@ -1,6 +1,6 @@
 import type { ActivityRepository } from './storage/activity-repository'
-import type { ActivitySink, V2ExtractedActivity } from './activity-extraction-types'
-import type { V2Activity } from './activity-types'
+import type { ActivitySink, ExtractedActivity } from './activity-extraction-types'
+import type { Activity } from './activity-types'
 
 export class SqliteActivitySink implements ActivitySink {
   private readonly repo: ActivityRepository
@@ -9,7 +9,7 @@ export class SqliteActivitySink implements ActivitySink {
     this.repo = repo
   }
 
-  async persist(input: { activity: V2Activity; extracted: V2ExtractedActivity }): Promise<void> {
+  async persist(input: { activity: Activity; extracted: ExtractedActivity }): Promise<void> {
     const { activity, extracted } = input
     if (extracted.activityId !== activity.id) {
       throw new Error(

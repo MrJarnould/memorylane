@@ -2,8 +2,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import sharp from 'sharp'
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { V2Activity, V2ActivityFrame } from './activity-types'
-import { V2ActivitySemanticService, V2SemanticFileDebugDumper } from './activity-semantic-service'
+import type { Activity, ActivityFrame } from './activity-types'
+import { ActivitySemanticService, SemanticFileDebugDumper } from './activity-semantic-service'
 import { FfmpegVideoStitcher } from './video/video-stitcher'
 
 const RUN_INTEGRATION = process.env.RUN_SEMANTIC_OLLAMA_INTEGRATION === '1'
@@ -32,7 +32,7 @@ async function createFrame(
     .toFile(filepath)
 }
 
-function makeActivity(id: string, frames: V2ActivityFrame[]): V2Activity {
+function makeActivity(id: string, frames: ActivityFrame[]): Activity {
   const startTimestamp = frames[0]?.frame.timestamp ?? Date.now()
   const endTimestamp = frames[frames.length - 1]?.frame.timestamp ?? startTimestamp
 
@@ -74,7 +74,7 @@ function makeActivity(id: string, frames: V2ActivityFrame[]): V2Activity {
   }
 }
 
-describeIntegration('v2 semantic service ollama custom endpoint integration', () => {
+describeIntegration('semantic service ollama custom endpoint integration', () => {
   beforeAll(() => {
     fs.mkdirSync(RUN_OUTPUT_DIR, { recursive: true })
   })
@@ -96,7 +96,7 @@ describeIntegration('v2 semantic service ollama custom endpoint integration', ()
     await createFrame(framePaths[3], { r: 180, g: 110, b: 210 })
 
     const frameTimestamps = [1_000, 21_000, 41_000, 61_000]
-    const frames: V2ActivityFrame[] = framePaths.map((filepath, index) => ({
+    const frames: ActivityFrame[] = framePaths.map((filepath, index) => ({
       offset: index,
       frame: {
         filepath,
@@ -119,12 +119,12 @@ describeIntegration('v2 semantic service ollama custom endpoint integration', ()
       outputPath: videoPath,
     })
 
-    const debugDumper = new V2SemanticFileDebugDumper({
+    const debugDumper = new SemanticFileDebugDumper({
       rootDir: path.join(RUN_OUTPUT_DIR, 'llm-round-trips'),
       copyMediaAssets: true,
     })
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: OLLAMA_BASE_URL,
         model: OLLAMA_MODEL,

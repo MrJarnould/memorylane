@@ -47,33 +47,6 @@ export interface ClassificationResult {
   timestamp: number
 }
 
-export interface ActivityScreenshot {
-  id: string
-  filepath: string
-  timestamp: number
-  trigger: 'activity_start' | 'activity_end' | 'visual_change'
-  display: { id: number; width: number; height: number }
-}
-
-export interface Activity {
-  id: string
-  startTimestamp: number
-  endTimestamp?: number
-  appName: string
-  bundleId?: string
-  windowTitle: string
-  url?: string
-  tld?: string
-  screenshots: ActivityScreenshot[]
-  interactions: InteractionContext[]
-}
-
-export interface ActivityClassificationInput {
-  activity: Activity
-  screenshotPaths: string[] // paths of selected screenshots (up to MAX_SCREENSHOTS_FOR_LLM)
-  previousSummaries: ClassificationResult[]
-}
-
 export interface SearchFilters {
   startTime?: number | undefined // Unix ms
   endTime?: number | undefined // Unix ms

@@ -3,11 +3,11 @@ import * as fs from 'fs'
 import * as path from 'path'
 import type { ActivityRepository } from './storage/activity-repository'
 import { StorageService } from './storage'
-import type { V2ExtractedActivity } from './activity-extraction-types'
-import type { V2Activity } from './activity-types'
+import type { ExtractedActivity } from './activity-extraction-types'
+import type { Activity } from './activity-types'
 import { SqliteActivitySink } from './sqlite-activity-sink'
 
-function makeActivity(id: string): V2Activity {
+function makeActivity(id: string): Activity {
   return {
     id,
     startTimestamp: 1_000,
@@ -28,7 +28,7 @@ function makeActivity(id: string): V2Activity {
   }
 }
 
-function makeExtracted(activityId: string): V2ExtractedActivity {
+function makeExtracted(activityId: string): ExtractedActivity {
   return {
     activityId,
     startTimestamp: 1_000,
@@ -104,7 +104,7 @@ describe('SqliteActivitySink', () => {
   })
 
   it('persists to real sqlite storage', async () => {
-    const testDbPath = path.join(process.cwd(), 'temp_v2_sqlite_activity_sink.db')
+    const testDbPath = path.join(process.cwd(), 'temp_sqlite_activity_sink.db')
     const deleteDbFiles = (): void => {
       for (const suffix of ['', '-wal', '-shm']) {
         const filepath = testDbPath + suffix

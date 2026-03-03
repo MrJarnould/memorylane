@@ -1,6 +1,6 @@
-import type { V2Activity } from './activity-types'
+import type { Activity } from './activity-types'
 
-export interface V2ExtractedActivity {
+export interface ExtractedActivity {
   activityId: string
   startTimestamp: number
   endTimestamp: number
@@ -13,19 +13,19 @@ export interface V2ExtractedActivity {
 }
 
 export interface ActivityTransformer {
-  transform(activity: V2Activity): Promise<V2ExtractedActivity>
+  transform(activity: Activity): Promise<ExtractedActivity>
 }
 
 export interface ActivitySink {
-  persist(input: { activity: V2Activity; extracted: V2ExtractedActivity }): Promise<void>
+  persist(input: { activity: Activity; extracted: ExtractedActivity }): Promise<void>
 }
 
-export interface V2ActivityExtractorConfig {
+export interface ActivityExtractorConfig {
   consumerId: string
   maxConcurrent: number
   maxRetries: number
   retryBackoffMs: number
-  onTaskComplete?: (activity: V2Activity, outcome: 'succeeded' | 'dead-lettered') => void
+  onTaskComplete?: (activity: Activity, outcome: 'succeeded' | 'dead-lettered') => void
 }
 
 export interface ActivityExtractorStats {
@@ -38,8 +38,8 @@ export interface ActivityExtractorStats {
   ackedOffset: number | null
 }
 
-export const DEFAULT_V2_ACTIVITY_EXTRACTOR_CONFIG: V2ActivityExtractorConfig = {
-  consumerId: 'v2-activity-extractor:activity-stream',
+export const DEFAULT_ACTIVITY_EXTRACTOR_CONFIG: ActivityExtractorConfig = {
+  consumerId: 'activity-extractor:activity-stream',
   maxConcurrent: 1,
   maxRetries: 2,
   retryBackoffMs: 100,

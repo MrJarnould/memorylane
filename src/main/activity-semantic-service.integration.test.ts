@@ -2,8 +2,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import sharp from 'sharp'
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { V2Activity, V2ActivityFrame } from './activity-types'
-import { V2ActivitySemanticService, V2SemanticFileDebugDumper } from './activity-semantic-service'
+import type { Activity, ActivityFrame } from './activity-types'
+import { ActivitySemanticService, SemanticFileDebugDumper } from './activity-semantic-service'
 import { FfmpegVideoStitcher } from './video/video-stitcher'
 
 const RUN_INTEGRATION =
@@ -31,12 +31,12 @@ async function createFrame(
     .toFile(filepath)
 }
 
-function makeActivity(frames: V2ActivityFrame[]): V2Activity {
+function makeActivity(frames: ActivityFrame[]): Activity {
   const startTimestamp = frames[0]?.frame.timestamp ?? Date.now()
   const endTimestamp = frames[frames.length - 1]?.frame.timestamp ?? startTimestamp
 
   return {
-    id: 'integration-v2-semantic-1',
+    id: 'integration-semantic-1',
     startTimestamp,
     endTimestamp,
     context: {
@@ -79,7 +79,7 @@ function makeActivity(frames: V2ActivityFrame[]): V2Activity {
   }
 }
 
-describeIntegration('v2 semantic service integration', () => {
+describeIntegration('semantic service integration', () => {
   beforeAll(() => {
     fs.mkdirSync(RUN_OUTPUT_DIR, { recursive: true })
   })
@@ -101,7 +101,7 @@ describeIntegration('v2 semantic service integration', () => {
     await createFrame(framePaths[3], { r: 180, g: 110, b: 210 })
 
     const frameTimestamps = [1_000, 21_000, 41_000, 61_000]
-    const frames: V2ActivityFrame[] = framePaths.map((filepath, index) => ({
+    const frames: ActivityFrame[] = framePaths.map((filepath, index) => ({
       offset: index,
       frame: {
         filepath,
@@ -116,7 +116,7 @@ describeIntegration('v2 semantic service integration', () => {
     const videoPath = path.join(RUN_OUTPUT_DIR, 'activity.mp4')
     const stitcher = new FfmpegVideoStitcher()
     await stitcher.stitch({
-      activityId: 'integration-v2-semantic-1',
+      activityId: 'integration-semantic-1',
       frames: frames.map((entry) => ({
         filepath: entry.frame.filepath,
         timestamp: entry.frame.timestamp,
@@ -126,11 +126,11 @@ describeIntegration('v2 semantic service integration', () => {
 
     const activity = makeActivity(frames)
     const llmDumpRootDir = path.join(RUN_OUTPUT_DIR, 'llm-round-trips')
-    const debugDumper = new V2SemanticFileDebugDumper({
+    const debugDumper = new SemanticFileDebugDumper({
       rootDir: llmDumpRootDir,
       copyMediaAssets: true,
     })
-    const service = new V2ActivitySemanticService(process.env.OPENROUTER_API_KEY, {
+    const service = new ActivitySemanticService(process.env.OPENROUTER_API_KEY, {
       usageTracker: { recordUsage: () => undefined },
       debugDumper,
     })

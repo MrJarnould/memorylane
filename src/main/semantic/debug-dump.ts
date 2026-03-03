@@ -2,20 +2,20 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { createHash } from 'crypto'
 import log from '../logger'
-import type { V2SemanticDebugDumper, V2SemanticRoundTripDump } from './types'
+import type { SemanticDebugDumper, SemanticRoundTripDump } from './types'
 
-export interface V2SemanticFileDebugDumperConfig {
+export interface SemanticFileDebugDumperConfig {
   rootDir: string
   cleanRootDir?: boolean
   copyMediaAssets?: boolean
 }
 
-export class V2SemanticFileDebugDumper implements V2SemanticDebugDumper {
+export class SemanticFileDebugDumper implements SemanticDebugDumper {
   private readonly runDir: string
   private readonly copyMediaAssets: boolean
   private dumpCounter = 0
 
-  constructor(config: V2SemanticFileDebugDumperConfig) {
+  constructor(config: SemanticFileDebugDumperConfig) {
     if (config.cleanRootDir && fs.existsSync(config.rootDir)) {
       fs.rmSync(config.rootDir, { recursive: true, force: true })
     }
@@ -26,14 +26,14 @@ export class V2SemanticFileDebugDumper implements V2SemanticDebugDumper {
     fs.mkdirSync(this.runDir, { recursive: true })
     this.copyMediaAssets = Boolean(config.copyMediaAssets)
 
-    log.info(`[V2SemanticFileDebugDumper] Writing semantic dumps to ${this.runDir}`)
+    log.info(`[SemanticFileDebugDumper] Writing semantic dumps to ${this.runDir}`)
   }
 
   getRunDir(): string {
     return this.runDir
   }
 
-  dumpRoundTrip(input: V2SemanticRoundTripDump): void {
+  dumpRoundTrip(input: SemanticRoundTripDump): void {
     try {
       this.dumpCounter += 1
       const modelSlug = this.slug(input.model)
@@ -78,7 +78,7 @@ export class V2SemanticFileDebugDumper implements V2SemanticDebugDumper {
       }
     } catch (error) {
       log.warn(
-        '[V2SemanticFileDebugDumper] Failed to dump semantic round-trip',
+        '[SemanticFileDebugDumper] Failed to dump semantic round-trip',
         JSON.stringify({ error: this.describeError(error) }),
       )
     }
@@ -96,7 +96,7 @@ export class V2SemanticFileDebugDumper implements V2SemanticDebugDumper {
     fs.renameSync(tempPath, filepath)
   }
 
-  private dumpMediaAssets(attemptDir: string, input: V2SemanticRoundTripDump): string[] {
+  private dumpMediaAssets(attemptDir: string, input: SemanticRoundTripDump): string[] {
     const copiedFiles: string[] = []
     let videoIndex = 0
     let imageIndex = 0

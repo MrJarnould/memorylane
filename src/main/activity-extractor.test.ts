@@ -3,10 +3,10 @@ import { ActivityExtractor } from './activity-extractor'
 import type {
   ActivitySink,
   ActivityTransformer,
-  V2ActivityExtractorConfig,
-  V2ExtractedActivity,
+  ActivityExtractorConfig,
+  ExtractedActivity,
 } from './activity-extraction-types'
-import type { V2Activity } from './activity-types'
+import type { Activity } from './activity-types'
 import { InMemoryStream } from './streams/in-memory-stream'
 
 vi.mock('./logger', () => ({
@@ -35,7 +35,7 @@ async function waitFor(
   throw new Error(message)
 }
 
-function makeActivity(id: string, timestamp: number): V2Activity {
+function makeActivity(id: string, timestamp: number): Activity {
   return {
     id,
     startTimestamp: timestamp,
@@ -57,7 +57,7 @@ function makeActivity(id: string, timestamp: number): V2Activity {
   }
 }
 
-function makeExtracted(activity: V2Activity): V2ExtractedActivity {
+function makeExtracted(activity: Activity): ExtractedActivity {
   return {
     activityId: activity.id,
     startTimestamp: activity.startTimestamp,
@@ -83,13 +83,13 @@ describe('ActivityExtractor', () => {
   function createExtractor(params?: {
     transformer?: ActivityTransformer
     sink?: ActivitySink
-    config?: Partial<V2ActivityExtractorConfig>
+    config?: Partial<ActivityExtractorConfig>
   }): {
     extractor: ActivityExtractor
-    activityStream: InMemoryStream<V2Activity>
+    activityStream: InMemoryStream<Activity>
     consumerId: string
   } {
-    const activityStream = new InMemoryStream<V2Activity>()
+    const activityStream = new InMemoryStream<Activity>()
     const consumerId = params?.config?.consumerId ?? 'test:activity-extractor'
     const transformer: ActivityTransformer = params?.transformer ?? {
       transform: async (activity) => makeExtracted(activity),
@@ -284,7 +284,7 @@ describe('ActivityExtractor', () => {
   })
 
   it('replays from ack on restart without reprocessing acked offsets', async () => {
-    const activityStream = new InMemoryStream<V2Activity>()
+    const activityStream = new InMemoryStream<Activity>()
     const consumerId = 'test:activity-extractor:restart'
     const processed: string[] = []
 

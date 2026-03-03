@@ -2,21 +2,21 @@ import type { InteractionContext, EventWindow } from '../shared/types'
 import { SCREENSHOT_CLEANUP_CONFIG } from '../shared/constants'
 import { EventCapturer } from './event-capturer'
 import { ActivityProducer } from './activity-producer'
-import type { V2Activity, V2ActivityProducerConfig } from './activity-types'
+import type { Activity, ActivityProducerConfig } from './activity-types'
 import { ActivityExtractor } from './activity-extractor'
 import type {
   ActivitySink,
   ActivityTransformer,
-  V2ActivityExtractorConfig,
+  ActivityExtractorConfig,
 } from './activity-extraction-types'
 import { InMemoryStream } from './streams/in-memory-stream'
 import { ScreenCapturer, type Frame } from './recorder/screen-capturer'
 import { cleanupActivityFiles, sweepStaleFiles } from './activity-cleanup'
 
-export interface V2PipelineHarness {
+export interface PipelineHarness {
   frameStream: InMemoryStream<Frame>
   eventStream: InMemoryStream<EventWindow>
-  activityStream: InMemoryStream<V2Activity>
+  activityStream: InMemoryStream<Activity>
   screenCapturer: ScreenCapturer
   eventCapturer: EventCapturer
   activityProducer: ActivityProducer
@@ -30,17 +30,17 @@ export interface V2PipelineHarness {
   }): void
 }
 
-export function createV2PipelineHarness(params: {
+export function createPipelineHarness(params: {
   outputDir: string
   frameIntervalMs?: number
-  activityProducerConfig?: Partial<V2ActivityProducerConfig>
-  activityExtractorConfig?: Partial<V2ActivityExtractorConfig>
+  activityProducerConfig?: Partial<ActivityProducerConfig>
+  activityExtractorConfig?: Partial<ActivityExtractorConfig>
   extractorTransformer?: ActivityTransformer
   extractorSink?: ActivitySink
-}): V2PipelineHarness {
+}): PipelineHarness {
   const frameStream = new InMemoryStream<Frame>()
   const eventStream = new InMemoryStream<EventWindow>()
-  const activityStream = new InMemoryStream<V2Activity>()
+  const activityStream = new InMemoryStream<Activity>()
 
   const screenCapturer = new ScreenCapturer({
     intervalMs: params.frameIntervalMs,

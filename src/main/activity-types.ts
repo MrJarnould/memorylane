@@ -3,12 +3,12 @@ import type { Frame } from './recorder/screen-capturer'
 import type { Offset } from './streams/stream'
 import { ACTIVITY_CONFIG } from '../shared/constants'
 
-export interface V2ActivityFrame {
+export interface ActivityFrame {
   offset: Offset
   frame: Frame
 }
 
-export interface V2ActivityContext {
+export interface ActivityContext {
   appName: string
   bundleId?: string
   windowTitle?: string
@@ -17,24 +17,24 @@ export interface V2ActivityContext {
   displayId?: number
 }
 
-export interface V2ActivityProvenance {
+export interface ActivityProvenance {
   eventWindowOffsets: Offset[]
   frameOffsets: Offset[]
   sourceWindowIds: string[]
   sourceClosedBy: EventWindow['closedBy'][]
 }
 
-export interface V2Activity {
+export interface Activity {
   id: string
   startTimestamp: number
   endTimestamp: number
-  context: V2ActivityContext
+  context: ActivityContext
   interactions: InteractionContext[]
-  frames: V2ActivityFrame[]
-  provenance: V2ActivityProvenance
+  frames: ActivityFrame[]
+  provenance: ActivityProvenance
 }
 
-export interface V2ActivityProducerConfig {
+export interface ActivityProducerConfig {
   frameJoinGraceMs: number
   maxFrameWaitMs: number
   minActivityDurationMs: number
@@ -44,14 +44,14 @@ export interface V2ActivityProducerConfig {
   frameConsumerId: string
 }
 
-export function createDefaultV2ActivityProducerConfig(): V2ActivityProducerConfig {
+export function createDefaultActivityProducerConfig(): ActivityProducerConfig {
   return {
     frameJoinGraceMs: 750,
     maxFrameWaitMs: 5_000,
     minActivityDurationMs: ACTIVITY_CONFIG.MIN_ACTIVITY_DURATION_MS,
     maxActivityDurationMs: ACTIVITY_CONFIG.MAX_ACTIVITY_DURATION_MS,
     frameBufferRetentionMs: ACTIVITY_CONFIG.MAX_ACTIVITY_DURATION_MS * 2,
-    eventConsumerId: 'v2-activity-producer:event-stream',
-    frameConsumerId: 'v2-activity-producer:frame-stream',
+    eventConsumerId: 'activity-producer:event-stream',
+    frameConsumerId: 'activity-producer:frame-stream',
   }
 }

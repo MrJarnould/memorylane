@@ -2,8 +2,8 @@ import { OpenRouter } from '@openrouter/sdk'
 import { ACTIVITY_CONFIG, VISUAL_DETECTOR_CONFIG } from '@constants'
 import log from '../logger'
 import { UsageTracker } from '../services/usage-tracker'
-import type { V2Activity } from '../activity-types'
-import type { ActivitySemanticService } from '../activity-transformer-types'
+import type { Activity } from '../activity-types'
+import type { ActivitySemanticService as SemanticServiceContract } from '../activity-transformer-types'
 import { DEFAULT_SNAPSHOT_MODELS, DEFAULT_VIDEO_MODELS } from './constants'
 import {
   customEndpointVideoUnsupportedCacheKey,
@@ -23,20 +23,20 @@ import type {
   SemanticMode,
   SemanticPipelinePreference,
   SemanticChatClient,
-  V2ActivitySemanticServiceConfig,
-  V2SemanticEndpointConfig,
-  V2SemanticRunDiagnostics,
+  ActivitySemanticServiceConfig,
+  SemanticEndpointConfig,
+  SemanticRunDiagnostics,
 } from './types'
 
-export class V2ActivitySemanticService implements ActivitySemanticService {
+export class ActivitySemanticService implements SemanticServiceContract {
   private client: SemanticChatClient | null = null
   private readonly videoModels: string[]
   private readonly snapshotModels: string[]
   private readonly maxVideoBytes: number
   private readonly requestTimeoutMs: number
   private pipelinePreference: SemanticPipelinePreference
-  private readonly usageTracker: V2ActivitySemanticServiceConfig['usageTracker']
-  private readonly debugDumper: V2ActivitySemanticServiceConfig['debugDumper']
+  private readonly usageTracker: ActivitySemanticServiceConfig['usageTracker']
+  private readonly debugDumper: ActivitySemanticServiceConfig['debugDumper']
   private readonly usesInjectedClient: boolean
   private openRouterApiKey: string | null
   private isCustomEndpoint = false
@@ -44,9 +44,9 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
   private customEndpointModel: string | null = null
   private readonly videoUnsupportedCustomModels = new Set<string>()
 
-  private lastRunDiagnostics: V2SemanticRunDiagnostics | null = null
+  private lastRunDiagnostics: SemanticRunDiagnostics | null = null
 
-  constructor(apiKey?: string, config?: V2ActivitySemanticServiceConfig) {
+  constructor(apiKey?: string, config?: ActivitySemanticServiceConfig) {
     this.videoModels = config?.videoModels?.length
       ? [...config.videoModels]
       : [...DEFAULT_VIDEO_MODELS]
@@ -87,11 +87,11 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
 
   updateApiKey(apiKey: string | null): void {
     if (this.usesInjectedClient) {
-      log.info('[V2ActivitySemanticService] Ignoring API key update: injected client active')
+      log.info('[ActivitySemanticService] Ignoring API key update: injected client active')
       return
     }
     if (this.isCustomEndpoint) {
-      log.info('[V2ActivitySemanticService] Ignoring API key update: custom endpoint active')
+      log.info('[ActivitySemanticService] Ignoring API key update: custom endpoint active')
       return
     }
 
@@ -107,9 +107,9 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
     this.client = null
   }
 
-  updateEndpoint(config: V2SemanticEndpointConfig | null, openRouterKey?: string | null): void {
+  updateEndpoint(config: SemanticEndpointConfig | null, openRouterKey?: string | null): void {
     if (this.usesInjectedClient) {
-      log.info('[V2ActivitySemanticService] Ignoring endpoint update: injected client active')
+      log.info('[ActivitySemanticService] Ignoring endpoint update: injected client active')
       return
     }
 
@@ -157,14 +157,14 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
   }
 
   async summarizeFromVideo(input: {
-    activity: V2Activity
+    activity: Activity
     videoPath?: string
     ocrText: string
   }): Promise<string> {
     this.assertInput(input)
     void input.ocrText
 
-    const diagnostics: V2SemanticRunDiagnostics = {
+    const diagnostics: SemanticRunDiagnostics = {
       activityId: input.activity.id,
       pipelinePreference: this.pipelinePreference,
       promptChars: 0,
@@ -193,7 +193,7 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
       if (this.shouldSkipCustomEndpointVideo()) {
         diagnostics.fallbackReason = 'custom endpoint model marked video-unsupported (session)'
         log.info(
-          '[V2ActivitySemanticService] Skipping video summarization for custom endpoint model',
+          '[ActivitySemanticService] Skipping video summarization for custom endpoint model',
           JSON.stringify({
             activityId: input.activity.id,
             serverURL: this.customEndpointServerURL,
@@ -278,7 +278,7 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
       frames: selectedSnapshots,
       onEncodeError: ({ filepath, error }) => {
         log.warn(
-          '[V2ActivitySemanticService] Failed to encode snapshot frame',
+          '[ActivitySemanticService] Failed to encode snapshot frame',
           JSON.stringify({ filepath, error: describeSemanticError(error) }),
         )
       },
@@ -329,7 +329,7 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
     return ''
   }
 
-  getLastRunDiagnostics(): V2SemanticRunDiagnostics | null {
+  getLastRunDiagnostics(): SemanticRunDiagnostics | null {
     if (!this.lastRunDiagnostics) return null
     return {
       ...this.lastRunDiagnostics,
@@ -338,7 +338,7 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
     }
   }
 
-  private assertInput(input: { activity: V2Activity; videoPath?: string; ocrText: string }): void {
+  private assertInput(input: { activity: Activity; videoPath?: string; ocrText: string }): void {
     if (!input.activity || typeof input.activity !== 'object') {
       throw new Error('summarizeFromVideo requires a valid activity object')
     }
@@ -385,7 +385,7 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
 
     this.videoUnsupportedCustomModels.add(key)
     log.info(
-      '[V2ActivitySemanticService] Marked custom endpoint model as video-unsupported for session',
+      '[ActivitySemanticService] Marked custom endpoint model as video-unsupported for session',
       JSON.stringify({
         serverURL: this.customEndpointServerURL,
         model,
@@ -433,7 +433,7 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
       this.debugDumper?.dumpRoundTrip(input)
     } catch (error) {
       log.warn(
-        '[V2ActivitySemanticService] Debug dump failed',
+        '[ActivitySemanticService] Debug dump failed',
         JSON.stringify({
           activityId: input.activityId,
           mode: input.mode,
@@ -444,7 +444,7 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
     }
   }
 
-  private configureClient(endpointConfig: V2SemanticEndpointConfig | null): void {
+  private configureClient(endpointConfig: SemanticEndpointConfig | null): void {
     if (endpointConfig) {
       const effectiveKey = endpointConfig.apiKey ?? this.openRouterApiKey ?? ''
       this.isCustomEndpoint = true
@@ -469,7 +469,7 @@ export class V2ActivitySemanticService implements ActivitySemanticService {
 
     this.client = null
     log.warn(
-      '[V2ActivitySemanticService] No API key/client configured - semantic summarization disabled',
+      '[ActivitySemanticService] No API key/client configured - semantic summarization disabled',
     )
   }
 }

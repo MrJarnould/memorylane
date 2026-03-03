@@ -3,8 +3,8 @@ import * as os from 'os'
 import * as path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ACTIVITY_CONFIG, VISUAL_DETECTOR_CONFIG } from '@constants'
-import type { V2Activity, V2ActivityFrame } from './activity-types'
-import { V2ActivitySemanticService, V2SemanticFileDebugDumper } from './activity-semantic-service'
+import type { Activity, ActivityFrame } from './activity-types'
+import { ActivitySemanticService, SemanticFileDebugDumper } from './activity-semantic-service'
 
 vi.mock('./logger', () => ({
   default: {
@@ -67,7 +67,7 @@ const DEFAULT_SNAPSHOT_MODELS = [
 ]
 
 function createTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'v2-semantic-test-'))
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'semantic-test-'))
 }
 
 function createVideoFile(dir: string, name = 'activity.mp4'): string {
@@ -82,7 +82,7 @@ function createImageFile(dir: string, name: string): string {
   return filepath
 }
 
-function makeFrame(filepath: string, timestamp: number, sequenceNumber: number): V2ActivityFrame {
+function makeFrame(filepath: string, timestamp: number, sequenceNumber: number): ActivityFrame {
   return {
     offset: sequenceNumber,
     frame: {
@@ -100,9 +100,9 @@ function makeActivity(params?: {
   id?: string
   startTimestamp?: number
   endTimestamp?: number
-  frames?: V2ActivityFrame[]
-  interactions?: V2Activity['interactions']
-}): V2Activity {
+  frames?: ActivityFrame[]
+  interactions?: Activity['interactions']
+}): Activity {
   const startTimestamp = params?.startTimestamp ?? 1_000
   return {
     id: params?.id ?? 'activity-1',
@@ -135,7 +135,7 @@ function response(summary: string, promptTokens = 10, completionTokens = 5): unk
   }
 }
 
-describe('V2ActivitySemanticService', () => {
+describe('ActivitySemanticService', () => {
   const tempDirs: string[] = []
   const originalSnapshotCap = ACTIVITY_CONFIG.MAX_SCREENSHOTS_FOR_LLM
   const originalVisualThreshold = VISUAL_DETECTOR_CONFIG.DHASH_THRESHOLD_PERCENT
@@ -158,7 +158,7 @@ describe('V2ActivitySemanticService', () => {
   })
 
   it('creates OpenRouter client without serverURL by default', () => {
-    new V2ActivitySemanticService('test-key', {
+    new ActivitySemanticService('test-key', {
       usageTracker: { recordUsage: vi.fn() },
     })
 
@@ -166,7 +166,7 @@ describe('V2ActivitySemanticService', () => {
   })
 
   it('passes serverURL to OpenRouter when custom endpoint is provided', () => {
-    new V2ActivitySemanticService('test-key', {
+    new ActivitySemanticService('test-key', {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
         model: 'custom-model',
@@ -181,7 +181,7 @@ describe('V2ActivitySemanticService', () => {
   })
 
   it('uses empty string as apiKey when custom endpoint has no key and no default key', () => {
-    new V2ActivitySemanticService(undefined, {
+    new ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
         model: 'custom-model',
@@ -196,7 +196,7 @@ describe('V2ActivitySemanticService', () => {
   })
 
   it('uses custom endpoint apiKey over OpenRouter key', () => {
-    new V2ActivitySemanticService('openrouter-key', {
+    new ActivitySemanticService('openrouter-key', {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
         model: 'custom-model',
@@ -217,7 +217,7 @@ describe('V2ActivitySemanticService', () => {
     const videoPath = createVideoFile(tempDir)
     mockSend.mockResolvedValue(response('custom model summary'))
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
         model: 'my-custom-model',
@@ -235,7 +235,7 @@ describe('V2ActivitySemanticService', () => {
   })
 
   it('switches to custom endpoint via updateEndpoint()', () => {
-    const service = new V2ActivitySemanticService('test-key', {
+    const service = new ActivitySemanticService('test-key', {
       usageTracker: { recordUsage: vi.fn() },
     })
     expect(service.isUsingCustomEndpoint()).toBe(false)
@@ -255,7 +255,7 @@ describe('V2ActivitySemanticService', () => {
   })
 
   it('reverts from custom endpoint via updateEndpoint(null, openRouterKey)', () => {
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
         model: 'custom-model',
@@ -274,7 +274,7 @@ describe('V2ActivitySemanticService', () => {
   })
 
   it('reverts to unconfigured when removing custom endpoint without OpenRouter key', () => {
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
         model: 'custom-model',
@@ -289,7 +289,7 @@ describe('V2ActivitySemanticService', () => {
   })
 
   it('reports isConfigured() true when custom endpoint is set without OpenRouter key', () => {
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
         model: 'custom-model',
@@ -302,7 +302,7 @@ describe('V2ActivitySemanticService', () => {
   })
 
   it('ignores updateApiKey when custom endpoint is active', () => {
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
         model: 'custom-model',
@@ -323,7 +323,7 @@ describe('V2ActivitySemanticService', () => {
     const send = vi.fn().mockResolvedValue(response('video summary'))
     const usageTracker = { recordUsage: vi.fn() }
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       usageTracker,
     })
@@ -350,7 +350,7 @@ describe('V2ActivitySemanticService', () => {
       return response('third model summary')
     })
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       usageTracker: { recordUsage: vi.fn() },
     })
@@ -383,7 +383,7 @@ describe('V2ActivitySemanticService', () => {
       return response('snapshot summary')
     })
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       usageTracker: { recordUsage: vi.fn() },
     })
@@ -414,7 +414,7 @@ describe('V2ActivitySemanticService', () => {
     ]
 
     const send = vi.fn().mockResolvedValue(response('image summary only'))
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       pipelinePreference: 'image',
       usageTracker: { recordUsage: vi.fn() },
@@ -449,7 +449,7 @@ describe('V2ActivitySemanticService', () => {
     ]
 
     const send = vi.fn().mockRejectedValue(new Error('video failed'))
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       pipelinePreference: 'video',
       usageTracker: { recordUsage: vi.fn() },
@@ -473,7 +473,7 @@ describe('V2ActivitySemanticService', () => {
     expect(diagnostics?.chosenMode).toBeNull()
   })
 
-  it('uses custom endpoint model for both video and snapshot attempts in v2', async () => {
+  it('uses custom endpoint model for both video and snapshot attempts', async () => {
     const tempDir = createTempDir()
     tempDirs.push(tempDir)
     const videoPath = createVideoFile(tempDir)
@@ -492,7 +492,7 @@ describe('V2ActivitySemanticService', () => {
       },
     )
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
         model: 'moondream:latest',
@@ -537,7 +537,7 @@ describe('V2ActivitySemanticService', () => {
       },
     )
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
         model: 'moondream:latest',
@@ -598,7 +598,7 @@ describe('V2ActivitySemanticService', () => {
       },
     )
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
         model: 'moondream:latest',
@@ -640,7 +640,7 @@ describe('V2ActivitySemanticService', () => {
     ]
 
     const send = vi.fn().mockResolvedValue(response('snapshot summary'))
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       videoModels: ['video/fail'],
       snapshotModels: ['snapshot/success'],
@@ -677,7 +677,7 @@ describe('V2ActivitySemanticService', () => {
     ACTIVITY_CONFIG.MAX_SCREENSHOTS_PER_ACTIVITY = 6
     VISUAL_DETECTOR_CONFIG.DHASH_THRESHOLD_PERCENT = 0
 
-    const frames: V2ActivityFrame[] = []
+    const frames: ActivityFrame[] = []
     for (let i = 0; i < 12; i++) {
       frames.push(makeFrame(createImageFile(tempDir, `frame-${i}.png`), 1_000 + i * 25_000, i))
     }
@@ -689,7 +689,7 @@ describe('V2ActivitySemanticService', () => {
       return response('snapshot summary')
     })
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       usageTracker: { recordUsage: vi.fn() },
     })
@@ -725,7 +725,7 @@ describe('V2ActivitySemanticService', () => {
     ]
 
     const send = vi.fn().mockResolvedValue(response('snapshot summary'))
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       videoModels: ['video/fail'],
       snapshotModels: ['snapshot/success'],
@@ -766,7 +766,7 @@ describe('V2ActivitySemanticService', () => {
 
     const send = vi.fn().mockResolvedValue(response('snapshot summary'))
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       videoModels: ['video/fail'],
       snapshotModels: ['snapshot/success'],
@@ -808,7 +808,7 @@ describe('V2ActivitySemanticService', () => {
     ]
 
     const send = vi.fn().mockResolvedValue(response('snapshot summary'))
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       videoModels: ['video/fail'],
       snapshotModels: ['snapshot/success'],
@@ -852,7 +852,7 @@ describe('V2ActivitySemanticService', () => {
 
     const send = vi.fn().mockResolvedValue(response('snapshot summary'))
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       videoModels: ['video/fail'],
       snapshotModels: ['snapshot/success'],
@@ -881,7 +881,7 @@ describe('V2ActivitySemanticService', () => {
 
     const send = vi.fn().mockResolvedValue(response('summary'))
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       usageTracker: { recordUsage: vi.fn() },
     })
@@ -902,7 +902,7 @@ describe('V2ActivitySemanticService', () => {
 
     const send = vi.fn().mockResolvedValue(response('  trimmed summary  '))
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       usageTracker: { recordUsage: vi.fn() },
     })
@@ -924,7 +924,7 @@ describe('V2ActivitySemanticService', () => {
     const send = vi.fn().mockResolvedValue(response('summary', 123, 45))
     const usageTracker = { recordUsage: vi.fn() }
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       videoModels: ['mistralai/mistral-small-3.2-24b-instruct'],
       usageTracker,
@@ -953,7 +953,7 @@ describe('V2ActivitySemanticService', () => {
     const send = vi.fn().mockResolvedValue(response('summary', 200, 100))
     const usageTracker = { recordUsage: vi.fn() }
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       videoModels: ['unknown/video-model'],
       usageTracker,
@@ -983,7 +983,7 @@ describe('V2ActivitySemanticService', () => {
 
     const send = vi.fn().mockRejectedValue(new Error('all failed'))
 
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       usageTracker: { recordUsage: vi.fn() },
     })
@@ -1006,13 +1006,13 @@ describe('V2ActivitySemanticService', () => {
     tempDirs.push(tempDir)
     const videoPath = createVideoFile(tempDir)
     const dumpRootDir = path.join(tempDir, 'dumps')
-    const dumper = new V2SemanticFileDebugDumper({
+    const dumper = new SemanticFileDebugDumper({
       rootDir: dumpRootDir,
       copyMediaAssets: true,
     })
 
     const send = vi.fn().mockResolvedValue(response('dumped summary'))
-    const service = new V2ActivitySemanticService(undefined, {
+    const service = new ActivitySemanticService(undefined, {
       client: { chat: { send } },
       debugDumper: dumper,
       usageTracker: { recordUsage: vi.fn() },

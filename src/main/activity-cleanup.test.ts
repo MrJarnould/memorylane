@@ -3,7 +3,7 @@ import * as path from 'path'
 import * as os from 'os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupActivityFiles } from './activity-cleanup'
-import type { V2Activity } from './activity-types'
+import type { Activity } from './activity-types'
 
 vi.mock('./logger', () => ({
   default: {
@@ -14,7 +14,7 @@ vi.mock('./logger', () => ({
   },
 }))
 
-function makeActivity(id: string, framePaths: string[]): V2Activity {
+function makeActivity(id: string, framePaths: string[]): Activity {
   return {
     id,
     startTimestamp: 1000,

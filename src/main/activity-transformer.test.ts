@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DefaultActivityTransformer } from './activity-transformer'
-import type { V2Activity, V2ActivityFrame } from './activity-types'
+import type { Activity, ActivityFrame } from './activity-types'
 import type {
   ActivityVideoStitcher,
   ActivityOcrService,
@@ -20,7 +20,7 @@ vi.mock('./logger', () => ({
   },
 }))
 
-function makeFrame(index: number): V2ActivityFrame {
+function makeFrame(index: number): ActivityFrame {
   return {
     offset: index,
     frame: {
@@ -34,7 +34,7 @@ function makeFrame(index: number): V2ActivityFrame {
   }
 }
 
-function makeActivity(frameCount: number): V2Activity {
+function makeActivity(frameCount: number): Activity {
   return {
     id: 'activity-1',
     startTimestamp: 1000,

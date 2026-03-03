@@ -1,4 +1,4 @@
-import type { V2ActivityFrame } from '../activity-types'
+import type { ActivityFrame } from '../activity-types'
 
 export type SemanticMode = 'video' | 'snapshot'
 export type SemanticPipelinePreference = 'auto' | 'video' | 'image'
@@ -41,7 +41,7 @@ export interface UsageTrackerLike {
 }
 
 export interface EncodedImage {
-  frame: V2ActivityFrame
+  frame: ActivityFrame
   dataUrl: string
 }
 
@@ -56,13 +56,13 @@ export interface VideoAssetData {
   mimeType: string
 }
 
-export interface V2SemanticEndpointConfig {
+export interface SemanticEndpointConfig {
   serverURL: string
   model: string
   apiKey?: string
 }
 
-export interface V2ActivitySemanticServiceConfig {
+export interface ActivitySemanticServiceConfig {
   videoModels?: string[]
   snapshotModels?: string[]
   pipelinePreference?: SemanticPipelinePreference
@@ -70,11 +70,11 @@ export interface V2ActivitySemanticServiceConfig {
   requestTimeoutMs?: number
   usageTracker?: UsageTrackerLike
   client?: SemanticChatClient
-  endpointConfig?: V2SemanticEndpointConfig
-  debugDumper?: V2SemanticDebugDumper
+  endpointConfig?: SemanticEndpointConfig
+  debugDumper?: SemanticDebugDumper
 }
 
-export interface V2SemanticAttempt {
+export interface SemanticAttempt {
   mode: SemanticMode
   model: string
   durationMs: number
@@ -84,20 +84,20 @@ export interface V2SemanticAttempt {
   completionTokens?: number
 }
 
-export interface V2SemanticRunDiagnostics {
+export interface SemanticRunDiagnostics {
   activityId: string
   pipelinePreference: SemanticPipelinePreference
   promptChars: number
   chosenMode: SemanticMode | null
   chosenModel: string | null
   fallbackReason: string | null
-  attempts: V2SemanticAttempt[]
+  attempts: SemanticAttempt[]
   selectedSnapshotPaths: string[]
   videoSizeBytes: number | null
   videoMimeType: string | null
 }
 
-export interface V2SemanticRoundTripDump {
+export interface SemanticRoundTripDump {
   activityId: string
   mode: SemanticMode
   model: string
@@ -111,6 +111,6 @@ export interface V2SemanticRoundTripDump {
   error?: string
 }
 
-export interface V2SemanticDebugDumper {
-  dumpRoundTrip(input: V2SemanticRoundTripDump): void
+export interface SemanticDebugDumper {
+  dumpRoundTrip(input: SemanticRoundTripDump): void
 }

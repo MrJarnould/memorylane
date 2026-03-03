@@ -6,11 +6,11 @@ import type { Frame } from './recorder/screen-capturer'
 import type { DurableStream, Offset, StreamRecord, StreamSubscription } from './streams/stream'
 import { v5 as uuidv5 } from 'uuid'
 import {
-  createDefaultV2ActivityProducerConfig,
-  type V2Activity,
-  type V2ActivityContext,
-  type V2ActivityFrame,
-  type V2ActivityProducerConfig,
+  createDefaultActivityProducerConfig,
+  type Activity,
+  type ActivityContext,
+  type ActivityFrame,
+  type ActivityProducerConfig,
 } from './activity-types'
 
 const ACTIVITY_ID_NAMESPACE = uuidv5('memorylane:v2-activity', uuidv5.DNS)
@@ -27,9 +27,9 @@ interface ChunkContext {
   closedBy: EventWindow['closedBy']
   startTimestamp: number
   endTimestamp: number
-  frames: V2ActivityFrame[]
+  frames: ActivityFrame[]
   interactions: InteractionContext[]
-  context: V2ActivityContext
+  context: ActivityContext
 }
 
 function sleep(ms: number): Promise<void> {
@@ -47,8 +47,8 @@ function uniqueSortedStrings(values: string[]): string[] {
 export class ActivityProducer {
   private readonly frameStream: DurableStream<Frame>
   private readonly eventStream: DurableStream<EventWindow>
-  private readonly activityStream: DurableStream<V2Activity>
-  private config: V2ActivityProducerConfig
+  private readonly activityStream: DurableStream<Activity>
+  private config: ActivityProducerConfig
 
   private frameSubscription: StreamSubscription | null = null
   private eventSubscription: StreamSubscription | null = null
@@ -58,8 +58,8 @@ export class ActivityProducer {
   private started = false
   private processingError: Error | null = null
   private lastAckedFrameOffset: Offset | null = null
-  private lastKnownContext: V2ActivityContext | null = null
-  private pendingActivity: V2Activity | null = null
+  private lastKnownContext: ActivityContext | null = null
+  private pendingActivity: Activity | null = null
   private deferredEventAckOffset: Offset | null = null
   private readonly stats: ActivityProducerStats = {
     emittedActivities: 0,
@@ -70,14 +70,14 @@ export class ActivityProducer {
   constructor(params: {
     frameStream: DurableStream<Frame>
     eventStream: DurableStream<EventWindow>
-    activityStream: DurableStream<V2Activity>
-    config?: Partial<V2ActivityProducerConfig>
+    activityStream: DurableStream<Activity>
+    config?: Partial<ActivityProducerConfig>
   }) {
     this.frameStream = params.frameStream
     this.eventStream = params.eventStream
     this.activityStream = params.activityStream
     this.config = {
-      ...createDefaultV2ActivityProducerConfig(),
+      ...createDefaultActivityProducerConfig(),
       ...(params.config ?? {}),
     }
 
@@ -89,7 +89,7 @@ export class ActivityProducer {
     maxActivityDurationMs: number
     frameBufferRetentionMs?: number
   }): void {
-    const nextConfig: V2ActivityProducerConfig = {
+    const nextConfig: ActivityProducerConfig = {
       ...this.config,
       minActivityDurationMs: input.minActivityDurationMs,
       maxActivityDurationMs: input.maxActivityDurationMs,
@@ -234,7 +234,7 @@ export class ActivityProducer {
   private buildWindowChunks(params: {
     eventWindowRecord: StreamRecord<EventWindow>
     frames: StreamRecord<Frame>[]
-    context: V2ActivityContext
+    context: ActivityContext
   }): ChunkContext[] {
     const { eventWindowRecord, frames, context } = params
     const window = eventWindowRecord.payload
@@ -295,7 +295,7 @@ export class ActivityProducer {
     this.mergeChunkIntoPending(chunk)
   }
 
-  private createPendingActivity(chunk: ChunkContext): V2Activity {
+  private createPendingActivity(chunk: ChunkContext): Activity {
     const activityKey = `${chunk.windowId}:${chunk.eventOffset}:${chunk.startTimestamp}:${chunk.endTimestamp}`
     return {
       id: uuidv5(activityKey, ACTIVITY_ID_NAMESPACE),
@@ -408,7 +408,7 @@ export class ActivityProducer {
     await this.eventStream.trimBefore(offset + 1)
   }
 
-  private canMergeContexts(left: V2ActivityContext, right: V2ActivityContext): boolean {
+  private canMergeContexts(left: ActivityContext, right: ActivityContext): boolean {
     if (
       left.displayId !== undefined &&
       right.displayId !== undefined &&
@@ -432,14 +432,14 @@ export class ActivityProducer {
     return left.tld === right.tld
   }
 
-  private deriveWindowContext(events: InteractionContext[]): V2ActivityContext | null {
+  private deriveWindowContext(events: InteractionContext[]): ActivityContext | null {
     const recentEvents = [...events].reverse()
     const activeWindowEvent = recentEvents.find((event) => event.activeWindow)
     const latestDisplayId = recentEvents.find((event) => event.displayId !== undefined)?.displayId
     const latestWindowTitle = recentEvents.find((event) => event.windowTitle)?.windowTitle
 
     if (activeWindowEvent?.activeWindow) {
-      const context: V2ActivityContext = {
+      const context: ActivityContext = {
         appName: activeWindowEvent.activeWindow.processName,
         bundleId: activeWindowEvent.activeWindow.bundleId,
         windowTitle: activeWindowEvent.activeWindow.title ?? latestWindowTitle,
@@ -522,7 +522,7 @@ export class ActivityProducer {
     return Math.max(lowest, ack + 1)
   }
 
-  private validateConfig(config: V2ActivityProducerConfig): void {
+  private validateConfig(config: ActivityProducerConfig): void {
     if (config.maxActivityDurationMs <= 0) {
       throw new Error('maxActivityDurationMs must be > 0')
     }

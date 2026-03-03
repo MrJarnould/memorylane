@@ -18,7 +18,7 @@ import { startPowerMonitoring, shouldPause } from './power-monitor'
 import { CaptureStateManager } from './settings/capture-state-manager'
 import { CaptureSettingsManager } from './settings/capture-settings-manager'
 import { PatternDetector } from './services/pattern-detector'
-import { createV2MainRuntime, type V2MainRuntime } from './runtime'
+import { createMainRuntime, type MainRuntime } from './runtime'
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -40,7 +40,7 @@ app.on('window-all-closed', () => {
   // Don't quit - this is a tray app
 })
 
-let runtime: V2MainRuntime | null = null
+let runtime: MainRuntime | null = null
 let patternDetector: PatternDetector | null = null
 
 app.on('before-quit', () => {
@@ -88,7 +88,7 @@ app.on('ready', async () => {
   const { initMainWindowIPC, openMainWindow, sendStatusToRenderer } =
     await import('./ui/main-window')
 
-  runtime = await createV2MainRuntime({
+  runtime = await createMainRuntime({
     onCaptureStateChanged: () => {
       void updateTrayMenu()
       void sendStatusToRenderer()

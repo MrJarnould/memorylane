@@ -4,7 +4,7 @@ import type { EventWindow, InteractionContext } from '../shared/types'
 import { InMemoryStream } from './streams/in-memory-stream'
 import type { StreamSubscription } from './streams/stream'
 import type { Frame } from './recorder/screen-capturer'
-import type { V2Activity } from './activity-types'
+import type { Activity } from './activity-types'
 import { ActivityProducer } from './activity-producer'
 
 vi.mock('./logger', () => ({
@@ -92,7 +92,7 @@ describe('ActivityProducer', () => {
   ) {
     const frameStream = new InMemoryStream<Frame>()
     const eventStream = new InMemoryStream<EventWindow>()
-    const activityStream = new InMemoryStream<V2Activity>()
+    const activityStream = new InMemoryStream<Activity>()
     const producer = new ActivityProducer({
       frameStream,
       eventStream,
@@ -115,7 +115,7 @@ describe('ActivityProducer', () => {
   it('emits on flush and includes joined frames', async () => {
     const { producer, frameStream, eventStream, activityStream } = createProducer()
 
-    const activities: V2Activity[] = []
+    const activities: Activity[] = []
     subscriptions.push(
       activityStream.subscribe({
         startAt: { type: 'now' },
@@ -159,7 +159,7 @@ describe('ActivityProducer', () => {
   it('emits deterministic UUIDv5 ids for the same source window chunk', async () => {
     const runOnce = async (): Promise<string> => {
       const { producer, frameStream, eventStream, activityStream } = createProducer()
-      const activities: V2Activity[] = []
+      const activities: Activity[] = []
       subscriptions.push(
         activityStream.subscribe({
           startAt: { type: 'now' },
@@ -244,7 +244,7 @@ describe('ActivityProducer', () => {
 
   it('merges adjacent windows with same app + same tld and finalizes on context change', async () => {
     const { producer, frameStream, eventStream, activityStream } = createProducer()
-    const activities: V2Activity[] = []
+    const activities: Activity[] = []
     subscriptions.push(
       activityStream.subscribe({
         startAt: { type: 'now' },
@@ -323,7 +323,7 @@ describe('ActivityProducer', () => {
 
   it('splits browser windows when tld changes', async () => {
     const { producer, frameStream, eventStream, activityStream } = createProducer()
-    const activities: V2Activity[] = []
+    const activities: Activity[] = []
     subscriptions.push(
       activityStream.subscribe({
         startAt: { type: 'now' },
@@ -380,7 +380,7 @@ describe('ActivityProducer', () => {
 
   it('splits activities when display changes even with same app and tld', async () => {
     const { producer, frameStream, eventStream, activityStream } = createProducer()
-    const activities: V2Activity[] = []
+    const activities: Activity[] = []
     subscriptions.push(
       activityStream.subscribe({
         startAt: { type: 'now' },
@@ -441,7 +441,7 @@ describe('ActivityProducer', () => {
 
   it('falls back to unknown context for first window and still drops no-frame windows', async () => {
     const { producer, frameStream, eventStream, activityStream } = createProducer()
-    const activities: V2Activity[] = []
+    const activities: Activity[] = []
     subscriptions.push(
       activityStream.subscribe({
         startAt: { type: 'now' },
@@ -496,7 +496,7 @@ describe('ActivityProducer', () => {
     const { producer, frameStream, eventStream, activityStream } = createProducer({
       maxActivityDurationMs: 60_000,
     })
-    const activities: V2Activity[] = []
+    const activities: Activity[] = []
     subscriptions.push(
       activityStream.subscribe({
         startAt: { type: 'now' },
@@ -539,7 +539,7 @@ describe('ActivityProducer', () => {
   it('replays from ack on restart without duplicating prior windows', async () => {
     const frameStream = new InMemoryStream<Frame>()
     const eventStream = new InMemoryStream<EventWindow>()
-    const activityStream = new InMemoryStream<V2Activity>()
+    const activityStream = new InMemoryStream<Activity>()
     const config = {
       frameJoinGraceMs: 0,
       maxFrameWaitMs: 0,
@@ -550,7 +550,7 @@ describe('ActivityProducer', () => {
       frameConsumerId: 'test:frame:restart',
     }
 
-    const activities: V2Activity[] = []
+    const activities: Activity[] = []
     subscriptions.push(
       activityStream.subscribe({
         startAt: { type: 'offset', offset: 0 },
@@ -633,7 +633,7 @@ describe('ActivityProducer', () => {
 
     const frameStream = new InMemoryStream<Frame>()
     const eventStream = new InMemoryStream<EventWindow>()
-    const activityStream = new InMemoryStream<V2Activity>()
+    const activityStream = new InMemoryStream<Activity>()
     const producer = new ActivityProducer({
       frameStream,
       eventStream,
@@ -648,7 +648,7 @@ describe('ActivityProducer', () => {
     })
     producers.push(producer)
 
-    const activities: V2Activity[] = []
+    const activities: Activity[] = []
     subscriptions.push(
       activityStream.subscribe({
         startAt: { type: 'now' },
@@ -688,7 +688,7 @@ describe('ActivityProducer', () => {
       minActivityDurationMs: 0,
       maxActivityDurationMs: 300_000,
     })
-    const activities: V2Activity[] = []
+    const activities: Activity[] = []
     subscriptions.push(
       activityStream.subscribe({
         startAt: { type: 'now' },

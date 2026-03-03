@@ -12,8 +12,8 @@ import type {
   ChatResponseLike,
   SemanticChatClient,
   SemanticMode,
-  V2SemanticRoundTripDump,
-  V2SemanticRunDiagnostics,
+  SemanticRoundTripDump,
+  SemanticRunDiagnostics,
 } from './types'
 
 export interface TrySemanticModelChainParams {
@@ -22,10 +22,10 @@ export interface TrySemanticModelChainParams {
   mode: SemanticMode
   models: string[]
   prompt: string
-  diagnostics: V2SemanticRunDiagnostics
+  diagnostics: SemanticRunDiagnostics
   buildContent: (model: string) => ChatContentItem[]
   onRecordUsage(input: { model: string; promptTokens: number; completionTokens: number }): void
-  onDumpRoundTrip(input: V2SemanticRoundTripDump): void
+  onDumpRoundTrip(input: SemanticRoundTripDump): void
   onAttemptFailed?(input: { mode: SemanticMode; model: string; error: string }): void
 }
 
@@ -117,7 +117,7 @@ export async function trySemanticModelChain(
       })
 
       log.info(
-        '[V2ActivitySemanticService] Semantic summary succeeded',
+        '[ActivitySemanticService] Semantic summary succeeded',
         JSON.stringify({
           activityId: params.diagnostics.activityId,
           mode: params.mode,
@@ -154,7 +154,7 @@ export async function trySemanticModelChain(
       })
 
       log.warn(
-        '[V2ActivitySemanticService] Semantic attempt failed',
+        '[ActivitySemanticService] Semantic attempt failed',
         JSON.stringify({
           activityId: params.diagnostics.activityId,
           mode: params.mode,
