@@ -1,15 +1,14 @@
-# MemoryLane v0.13.4
+# MemoryLane v0.13.5
 
 MemoryLane is a desktop tray app that captures your screen activity, processes it with OCR and AI summarization, and makes it searchable through an MCP server - giving AI assistants like Claude and Cursor memory of what you've been working on. Releases are published from version tags: normal semver tags create standard releases, and suffixed versions such as `-beta.1` create prereleases.
 
 ## What's Changed
 
-- **Tray-only auto-start now works end to end (main update)** - packaged macOS and Windows builds can register a login item, relaunch hidden in the tray, and stay out of the way at sign-in
-- **Fresh packaged installs now opt into launch at login automatically** - new users start with auto-start enabled by default, and the first packaged run syncs that preference into the OS login item
-- **Capture state survives relaunches and wake-ups** - the app now persists whether capture was enabled, then restores that preference on startup and after power-state resume
-- **Single-instance startup is more reliable** - a second launch now focuses the existing app window instead of creating conflicting tray behavior
-- **Advanced settings now expose startup controls** - added a Launch at login toggle with clearer success/error handling when saving settings
-- **Signed macOS + Windows releases now ship from the same tag-driven workflow** - pushing a version tag builds both platforms, uploads updater metadata, and publishes the correct GitHub release channel automatically
+- **Windows is now fully supported** - the release pipeline now ships signed Windows installers and updater metadata alongside macOS from the same version tag
+- **Native Windows screenshot capture is in the main app path** - the recorder now uses the dedicated Windows screenshot sidecar with packaging and integration coverage
+- **Windows OCR and capture flows are more resilient** - native OCR handling, recorder integration, and sidecar management were tightened for packaged builds
+- **Timeline and semantic extraction got minor fixes** - activity formatting, transformer behavior, and storage shape were cleaned up for more reliable results
+- **Release automation is simpler** - pushing `vX.Y.Z` now publishes a standard release, while suffixed versions such as `vX.Y.Z-beta.1` publish prereleases automatically
 
 ## Features
 
@@ -35,14 +34,13 @@ MemoryLane is a desktop tray app that captures your screen activity, processes i
 - **Secure API key storage** - uses Electron's safeStorage for encrypted key persistence
 - **Usage tracking** - monitors API requests, token usage, and costs
 - **Richer activity summaries** - improved summary quality for timeline and search context questions
-- **Windows OCR (preview)** - native OCR path available for Windows preview setups
-- **Windows app watcher integration (preview)** - recorder support for the native watcher backend with unit/e2e coverage and build packaging
+- **Windows OCR** - native OCR path for the Windows release build
+- **Windows native capture stack** - recorder support for the native watcher and screenshot backends with packaging and integration coverage
 - **Database export from settings** - export local data from the app UI for backup and portability
 
 ## Known Issues & Limitations
 
 - **macOS builds are Apple Silicon only** - official macOS release assets currently target ARM64 (`.zip` and `.dmg`)
-- **Windows support is still preview quality** - signed installers now ship through the main release workflow, but some OS-specific UX still needs tuning
 - **Linux and Intel macOS not yet officially supported**
 
 ## Installation
@@ -53,7 +51,7 @@ curl -fsSL https://raw.githubusercontent.com/deusXmachina-dev/memorylane/main/in
 
 This downloads the latest macOS stable release and installs it to `/Applications`. No Gatekeeper warnings.
 
-For Windows, download the latest `MemoryLane Setup *.exe` from GitHub Releases. If you are testing a beta or RC build, use the newest prerelease for that version line.
+For Windows, download the latest `MemoryLane Setup *.exe` from GitHub Releases.
 
 After launching:
 
@@ -67,4 +65,4 @@ After launching:
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.13.2...v0.13.4
+https://github.com/deusXmachina-dev/memorylane/compare/v0.13.4...v0.13.5

@@ -12,7 +12,7 @@ curl -fsSL https://raw.githubusercontent.com/deusXmachina-dev/memorylane/main/in
 
 This downloads the latest release and installs it to `/Applications`.
 
-### Windows (Preview)
+### Windows
 
 1. Download the latest `MemoryLane Setup *.exe` from [GitHub Releases](https://github.com/deusXmachina-dev/memorylane/releases).
 2. Run the installer and finish setup.
@@ -80,7 +80,7 @@ MemoryLane captures your screen to give AI assistants context about what you're 
 
 ### Requirements
 
-- macOS (Apple Silicon / ARM64)
+- macOS (Apple Silicon / ARM64) or Windows (x64)
 - A configured model endpoint:
   - Managed MemoryLane key ($10/month), **or**
   - your own [OpenRouter](https://openrouter.ai/) API key, **or**
@@ -138,9 +138,8 @@ If you prefer local or self-hosted inference, you can now configure custom OpenA
 
 ## Limitations
 
-1. **Windows is preview support** — some OS-specific UX (permissions and tray behavior) may still require tuning.
-2. **Windows OCR depends on native OCR availability** — if OCR language components are unavailable on a given Windows setup, OCR can fail while capture continues.
-3. **Platform support is still evolving** — Linux and Intel macOS are not yet officially supported.
+1. **Windows OCR depends on native OCR availability** — if OCR language components are unavailable on a given Windows setup, OCR can fail while capture continues.
+2. **Platform support is still evolving** — Linux and Intel macOS are not yet officially supported.
 
 ## Coming Soon
 
