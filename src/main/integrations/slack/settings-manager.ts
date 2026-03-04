@@ -18,7 +18,7 @@ const DEFAULTS: StoredConfig = {
   enabled: false,
   ownerUserId: '',
   watchedChannelIds: [],
-  pollIntervalMs: 30_000,
+  pollIntervalMs: 60_000,
   allwaysApprove: true,
 }
 

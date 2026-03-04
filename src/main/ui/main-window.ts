@@ -291,7 +291,7 @@ export function initMainWindowIPC(dependencies: MainWindowDependencies): void {
         maskedBotToken: null,
         ownerUserId: '',
         watchedChannelIds: '',
-        pollIntervalMs: 30000,
+        pollIntervalMs: 60000,
         allwaysApprove: true,
         lastError: null,
       }

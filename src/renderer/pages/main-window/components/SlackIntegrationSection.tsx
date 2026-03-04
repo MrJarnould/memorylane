@@ -206,7 +206,7 @@ export function SlackIntegrationSection({
           type="number"
           min={10}
           step={1}
-          placeholder="30"
+          placeholder="60"
           value={String(Math.round(form.pollIntervalMs / 1000))}
           onChange={(event) =>
             update('pollIntervalMs', (Number.parseInt(event.target.value, 10) || 0) * 1000)

@@ -112,6 +112,10 @@ When using MCP tools:
 - Use **OCR text** only for exact recall (specific strings, file names, errors, or quotes).
 - Avoid drawing activity conclusions from OCR alone, because OCR may include unrelated on-screen text.
 
+### Slack integration
+
+To set up the Slack reply flow, follow [docs/slack-app-setup.md](docs/slack-app-setup.md). A ready-to-paste Slack manifest lives in [docs/slack-app-manifest.template.json](docs/slack-app-manifest.template.json).
+
 ## How It Works
 
 AI conversations are full of friction because LLMs have no context about you. MemoryLane fixes that by watching what you do and making it searchable.
