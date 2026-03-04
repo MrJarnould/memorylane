@@ -1,13 +1,14 @@
-# MemoryLane v0.13.7
+# MemoryLane v0.13.8
 
-Patch release focused on the packaged MCP server database path.
+Patch release centered on the first beta of Slack integration.
 
 ## What's Changed
 
-- **Fixed packaged MCP database resolution** - the installed Windows app now opens `MemoryLane\memorylane.db` instead of falling back to the stale dev database path
-- **Preserved dev MCP behavior** - local Electron dev runs still resolve to `memorylane\memorylane-dev.db`
-- **Added regression coverage** - path resolution now has targeted tests for packaged vs dev Electron executables
+- **Slack integration beta** - added app settings for Slack polling, approvals, channel selection, and runtime controls
+- **Semantic Slack replies** - MemoryLane can now research recent activity, decide whether context is relevant, and draft short Slack replies before the normal approval flow
+- **Better Slack guardrails** - reply drafting now requires an OpenRouter key and skips low-confidence cases instead of posting weak output
+- **Minor fixes** - cleaned up missing activity video handling and tightened related tests and logging
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.13.6...v0.13.7
+https://github.com/deusXmachina-dev/memorylane/compare/v0.13.7...v0.13.8
