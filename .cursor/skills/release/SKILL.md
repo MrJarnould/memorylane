@@ -11,14 +11,14 @@ Use this skill for both normal releases and prereleases. The GitHub Actions rele
 
 - Working tree is clean (`git status` shows nothing to commit)
 - On the `main` branch, up to date with origin
-- Dependencies installed with `bun install`
+- Dependencies installed with `npm install`
 
 ## Steps
 
 ### 1. Install dependencies
 
 ```bash
-bun install
+npm install
 ```
 
 Always run this first so all workspace packages are present before any release edits, checks, or git operations.
@@ -63,8 +63,8 @@ Check the "Coming Soon" and "Limitations" sections. If a released feature is lis
 ### 7. Format and lint
 
 ```bash
-bun run format
-bun run lint
+npm run format
+npm run lint
 ```
 
 ### 8. Commit and tag
@@ -130,7 +130,7 @@ Before finishing, verify:
 - [ ] `RELEASE_NOTES.md` title and changelog link reference the new version
 - [ ] Resolved known issues are removed from release notes
 - [ ] `README.md` "Coming Soon" doesn't list shipped features
-- [ ] `bun install` has been run before release steps
-- [ ] `bun run format` and `bun run lint` pass
+- [ ] `npm install` has been run before release steps
+- [ ] `npm run format` and `npm run lint` pass
 - [ ] Commit message matches the version tag
 - [ ] The correct `v<version>` tag is pushed to origin
