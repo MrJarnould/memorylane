@@ -1,17 +1,19 @@
-# MemoryLane v0.13.12
+# MemoryLane v0.14.0
 
-Patch release focused on packaging reliability and settings UX cleanup.
+Minor release focused on stronger privacy controls and capture reliability improvements.
 
 ## What's Changed
 
-- **Bundled embedding model** - Added model bundling in app builds so semantic capabilities are available without extra manual setup (`#71`)
-- **Advanced settings refactor** - Split the advanced settings page into focused section components for easier navigation and future maintenance
-- **Release workflow updates** - Refined release/package lock handling and release helper skill instructions
+- **Expanded privacy exclusions** - Added app, wildcard URL, and window-title exclusions in Privacy settings to suppress screenshots for sensitive contexts
+- **Anonymous browsing protection** - Capture now pauses for browser private/incognito contexts, with hardened Windows matching to avoid leaks
+- **Windows app watcher hardening** - Refactored watcher internals and improved URL/event handling for better stability and filtering consistency
+- **Runtime and MCP reliability** - Hardened MCP stdio behavior, improved path detection, and added diagnostics/logging for startup and embedding loading
 
 ## Features
 
-- Local embedding model assets are now shipped with the app package
-- Advanced settings UI is organized into clearer sections
+- Privacy settings now support broader exclusion rules for apps, URLs, and window titles
+- Browser anonymous-mode and private-window capture suppression is now integrated into the capture pipeline
+- Windows watcher pipeline emits stronger app/window metadata for downstream filtering
 
 ## Known Issues & Limitations
 
@@ -25,4 +27,4 @@ Patch release focused on packaging reliability and settings UX cleanup.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.13.11...v0.13.12
+https://github.com/deusXmachina-dev/memorylane/compare/v0.13.12...v0.14.0
