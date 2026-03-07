@@ -75,7 +75,7 @@ describe('app-watcher-win backend', () => {
 
     child.stdout.write('{"type":"ready","timestamp":1}\n')
     child.stdout.write(
-      '{"type":"app_change","timestamp":2,"app":"Code","pid":101,"title":"index.ts"}\n',
+      '{"type":"app_change","timestamp":2,"app":"chrome","pid":101,"title":"Google","url":"https://example.com"}\n',
     )
     await flushReadline()
 
@@ -83,9 +83,10 @@ describe('app-watcher-win backend', () => {
     expect(callback).toHaveBeenNthCalledWith(2, {
       type: 'app_change',
       timestamp: 2,
-      app: 'Code',
+      app: 'chrome',
       pid: 101,
-      title: 'index.ts',
+      title: 'Google',
+      url: 'https://example.com',
     })
   })
 
