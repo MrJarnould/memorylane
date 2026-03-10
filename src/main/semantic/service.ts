@@ -5,6 +5,7 @@ import { UsageTracker } from '../services/usage-tracker'
 import type { Activity } from '../activity-types'
 import type { ActivitySemanticService as SemanticServiceContract } from '../activity-transformer-types'
 import { DEFAULT_SNAPSHOT_MODELS, DEFAULT_VIDEO_MODELS } from './constants'
+import { createCustomEndpointClient } from './custom-endpoint-client'
 import {
   customEndpointVideoUnsupportedCacheKey,
   getEffectiveSemanticModels,
@@ -116,10 +117,11 @@ export class ActivitySemanticService implements SemanticServiceContract {
       this.customEndpointServerURL = config.serverURL
       this.customEndpointModel = normalizeCustomEndpointModel(config.model)
       const effectiveKey = config.apiKey ?? ''
-      this.client = new OpenRouter({
+      this.client = createCustomEndpointClient({
         apiKey: effectiveKey,
         serverURL: config.serverURL,
-      }) as unknown as SemanticChatClient
+        getTimeoutMs: () => this.requestTimeoutMs,
+      })
       return
     }
 
@@ -459,10 +461,11 @@ export class ActivitySemanticService implements SemanticServiceContract {
       this.isCustomEndpoint = true
       this.customEndpointServerURL = endpointConfig.serverURL
       this.customEndpointModel = normalizeCustomEndpointModel(endpointConfig.model)
-      this.client = new OpenRouter({
+      this.client = createCustomEndpointClient({
         apiKey: effectiveKey,
         serverURL: endpointConfig.serverURL,
-      }) as unknown as SemanticChatClient
+        getTimeoutMs: () => this.requestTimeoutMs,
+      })
       return
     }
 

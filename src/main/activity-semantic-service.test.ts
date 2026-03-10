@@ -47,13 +47,26 @@ vi.mock('sharp', () => ({
 }))
 
 const mockSend = vi.fn()
+const mockOpenAICreate = vi.fn()
 vi.mock('@openrouter/sdk', () => ({
   OpenRouter: vi.fn().mockImplementation(function () {
     return { chat: { send: mockSend } }
   }),
 }))
+vi.mock('openai', () => ({
+  default: vi.fn().mockImplementation(function () {
+    return {
+      chat: {
+        completions: {
+          create: mockOpenAICreate,
+        },
+      },
+    }
+  }),
+}))
 
 import { OpenRouter } from '@openrouter/sdk'
+import OpenAI from 'openai'
 
 const DEFAULT_VIDEO_MODELS = [
   'google/gemini-2.5-flash-lite-preview-09-2025',
@@ -217,7 +230,7 @@ describe('ActivitySemanticService', () => {
     expect(diagnostics?.attempts[0]?.error).toContain('semantic model request timed out after 7ms')
   })
 
-  it('passes serverURL to OpenRouter when custom endpoint is provided', () => {
+  it('passes baseURL to OpenAI when custom endpoint is provided', () => {
     new ActivitySemanticService('test-key', {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
@@ -226,13 +239,14 @@ describe('ActivitySemanticService', () => {
       usageTracker: { recordUsage: vi.fn() },
     })
 
-    expect(OpenRouter).toHaveBeenCalledWith({
+    expect(OpenAI).toHaveBeenCalledWith({
       apiKey: 'test-key',
-      serverURL: 'http://localhost:11434/v1',
+      baseURL: 'http://localhost:11434/v1',
+      maxRetries: 0,
     })
   })
 
-  it('uses empty string as apiKey when custom endpoint has no key and no default key', () => {
+  it('uses empty string as apiKey for OpenAI when custom endpoint has no key and no default key', () => {
     new ActivitySemanticService(undefined, {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
@@ -241,13 +255,14 @@ describe('ActivitySemanticService', () => {
       usageTracker: { recordUsage: vi.fn() },
     })
 
-    expect(OpenRouter).toHaveBeenCalledWith({
+    expect(OpenAI).toHaveBeenCalledWith({
       apiKey: '',
-      serverURL: 'http://localhost:11434/v1',
+      baseURL: 'http://localhost:11434/v1',
+      maxRetries: 0,
     })
   })
 
-  it('uses custom endpoint apiKey over OpenRouter key', () => {
+  it('uses custom endpoint apiKey over OpenRouter key for the OpenAI client', () => {
     new ActivitySemanticService('openrouter-key', {
       endpointConfig: {
         serverURL: 'http://localhost:11434/v1',
@@ -257,9 +272,10 @@ describe('ActivitySemanticService', () => {
       usageTracker: { recordUsage: vi.fn() },
     })
 
-    expect(OpenRouter).toHaveBeenCalledWith({
+    expect(OpenAI).toHaveBeenCalledWith({
       apiKey: 'custom-key',
-      serverURL: 'http://localhost:11434/v1',
+      baseURL: 'http://localhost:11434/v1',
+      maxRetries: 0,
     })
   })
 
@@ -267,7 +283,7 @@ describe('ActivitySemanticService', () => {
     const tempDir = createTempDir()
     tempDirs.push(tempDir)
     const videoPath = createVideoFile(tempDir)
-    mockSend.mockResolvedValue(response('custom model summary'))
+    mockOpenAICreate.mockResolvedValue(response('custom model summary'))
 
     const service = new ActivitySemanticService(undefined, {
       endpointConfig: {
@@ -283,7 +299,13 @@ describe('ActivitySemanticService', () => {
       ocrText: 'ignored',
     })
 
-    expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ model: 'my-custom-model' }))
+    expect(mockOpenAICreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'my-custom-model' }),
+      expect.objectContaining({
+        timeout: ACTIVITY_CONFIG.SEMANTIC_REQUEST_TIMEOUT_MS,
+        maxRetries: 0,
+      }),
+    )
   })
 
   it('switches to custom endpoint via updateEndpoint()', () => {
@@ -300,9 +322,10 @@ describe('ActivitySemanticService', () => {
 
     expect(service.isUsingCustomEndpoint()).toBe(true)
     expect(service.isConfigured()).toBe(true)
-    expect(OpenRouter).toHaveBeenLastCalledWith({
+    expect(OpenAI).toHaveBeenLastCalledWith({
       apiKey: 'custom-key',
-      serverURL: 'http://localhost:11434/v1',
+      baseURL: 'http://localhost:11434/v1',
+      maxRetries: 0,
     })
   })
 
@@ -534,7 +557,7 @@ describe('ActivitySemanticService', () => {
       makeFrame(createImageFile(tempDir, 'f1.png'), 25_000, 1),
     ]
 
-    mockSend.mockImplementation(
+    mockOpenAICreate.mockImplementation(
       async (request: { model: string; messages: Array<{ content: Array<{ type: string }> }> }) => {
         const hasVideo = request.messages[0]?.content.some((item) => item.type === 'input_video')
         if (hasVideo) {
@@ -559,7 +582,7 @@ describe('ActivitySemanticService', () => {
     })
 
     expect(result).toBe('snapshot summary from custom model')
-    expect(mockSend.mock.calls.map((call) => call[0].model)).toEqual([
+    expect(mockOpenAICreate.mock.calls.map((call) => call[0].model)).toEqual([
       'moondream:latest',
       'moondream:latest',
     ])
@@ -567,6 +590,52 @@ describe('ActivitySemanticService', () => {
     expect(diagnostics?.attempts.map((attempt) => attempt.mode)).toEqual(['video', 'snapshot'])
     expect(diagnostics?.chosenMode).toBe('snapshot')
     expect(diagnostics?.chosenModel).toBe('moondream:latest')
+  })
+
+  it('accepts custom endpoint responses with null tool_calls', async () => {
+    const tempDir = createTempDir()
+    tempDirs.push(tempDir)
+    const frames = [makeFrame(createImageFile(tempDir, 'f0.png'), 1_000, 0)]
+
+    mockOpenAICreate.mockResolvedValue({
+      id: 'chatcmpl-test',
+      object: 'chat.completion',
+      created: 1_763_163_976,
+      model: 'mistral-small-2503',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: {
+            role: 'assistant',
+            content: 'snapshot summary from azure-style response',
+            tool_calls: null,
+          },
+        },
+      ],
+      usage: {
+        prompt_tokens: 8,
+        completion_tokens: 7,
+        total_tokens: 15,
+      },
+    })
+
+    const service = new ActivitySemanticService(undefined, {
+      endpointConfig: {
+        serverURL: 'https://example.test/openai/v1',
+        model: 'mistral-small-2503',
+      },
+      pipelinePreference: 'image',
+      usageTracker: { recordUsage: vi.fn() },
+    })
+
+    const result = await service.summarizeFromVideo({
+      activity: makeActivity({ frames }),
+      ocrText: 'ignored',
+    })
+
+    expect(result).toBe('snapshot summary from azure-style response')
+    expect(mockOpenAICreate).toHaveBeenCalledTimes(1)
   })
 
   it('skips video on subsequent calls after custom model reports video unsupported', async () => {
@@ -579,7 +648,7 @@ describe('ActivitySemanticService', () => {
       makeFrame(createImageFile(tempDir, 'f2.png'), 45_000, 2),
     ]
 
-    mockSend.mockImplementation(
+    mockOpenAICreate.mockImplementation(
       async (request: { messages: Array<{ content: Array<{ type: string }> }> }) => {
         const hasVideo = request.messages[0]?.content.some((item) => item.type === 'input_video')
         if (hasVideo) {
@@ -607,7 +676,7 @@ describe('ActivitySemanticService', () => {
     expect(firstDiagnostics?.attempts.some((attempt) => attempt.mode === 'video')).toBe(true)
     expect(firstDiagnostics?.chosenMode).toBe('snapshot')
 
-    mockSend.mockClear()
+    mockOpenAICreate.mockClear()
 
     const secondResult = await service.summarizeFromVideo({
       activity: makeActivity({ id: 'activity-2', frames }),
@@ -616,9 +685,9 @@ describe('ActivitySemanticService', () => {
     })
 
     expect(secondResult).toBe('snapshot summary')
-    expect(mockSend).toHaveBeenCalledTimes(1)
+    expect(mockOpenAICreate).toHaveBeenCalledTimes(1)
     expect(
-      mockSend.mock.calls[0][0].messages[0].content.some(
+      mockOpenAICreate.mock.calls[0][0].messages[0].content.some(
         (item: { type: string }) => item.type === 'input_video',
       ),
     ).toBe(false)
@@ -640,7 +709,7 @@ describe('ActivitySemanticService', () => {
       makeFrame(createImageFile(tempDir, 'f1.png'), 25_000, 1),
     ]
 
-    mockSend.mockImplementation(
+    mockOpenAICreate.mockImplementation(
       async (request: { messages: Array<{ content: Array<{ type: string }> }> }) => {
         const hasVideo = request.messages[0]?.content.some((item) => item.type === 'input_video')
         if (hasVideo) {
@@ -666,7 +735,7 @@ describe('ActivitySemanticService', () => {
     const firstDiagnostics = service.getLastRunDiagnostics()
     expect(firstDiagnostics?.attempts.map((attempt) => attempt.mode)).toEqual(['video', 'snapshot'])
 
-    mockSend.mockClear()
+    mockOpenAICreate.mockClear()
     await service.summarizeFromVideo({
       activity: makeActivity({ id: 'activity-3', frames }),
       videoPath,
