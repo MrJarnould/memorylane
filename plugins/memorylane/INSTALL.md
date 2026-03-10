@@ -2,7 +2,7 @@
 
 ## 1. Install the plugin
 
-Watch the [installation walkthrough](https://www.loom.com/share/3ea0319a862f482a8b53849ba5c14418).
+Watch the [installation walkthrough](https://www.loom.com/share/f8bcc7db424746b99c0a93748dec3da6).
 
 Install from the GitHub Marketplace:
 
