@@ -1,16 +1,17 @@
-# MemoryLane v0.14.2
+# MemoryLane v0.14.3-rc.2
 
-Patch release focused on tray privacy-state reliability and repository maintenance.
+Release candidate update focused on finalizing Windows MSI packaging defaults and release artifact publishing.
 
 ## What's Changed
 
-- **Tray privacy-state reliability** - Extracted tray privacy latch logic into a dedicated state module so the "recently paused" state now clears reliably after expiry
-- **Tray coverage improvements** - Added focused tests for tray privacy state transitions and latch expiration behavior
-- **Repository cleanup and docs** - Added a CONTRIBUTING guide, linked it from project docs, and removed obsolete notebook tooling
+- **Release workflow artifact coverage** - GitHub release pipeline now uploads, verifies, and publishes `MemoryLane-Setup.msi` alongside existing Windows installer assets
+- **MSI packaging defaults** - Added explicit MSI settings for machine-wide, one-click installs
+- **Static MSI naming** - MSI artifact now uses a fixed filename (`MemoryLane-Setup.msi`) to keep build outputs and release checks predictable
 
 ## Features
 
-- Tray privacy status now transitions cleanly from paused to recently paused and back to normal without waiting for extra UI events
+- Windows release assets now include both `MemoryLane-Setup.exe` and `MemoryLane-Setup.msi` with stable naming
+- MSI output is explicitly configured for managed rollout behavior (`perMachine: true`, `oneClick: true`)
 
 ## Known Issues & Limitations
 
@@ -20,8 +21,8 @@ Patch release focused on tray privacy-state reliability and repository maintenan
 ## Installation
 
 - macOS (Apple Silicon): install from the latest GitHub release or via the project install script
-- Windows: download `MemoryLane-Setup.exe` from the latest GitHub release
+- Windows: download release assets from GitHub (`MemoryLane-Setup.exe` or `MemoryLane-Setup.msi`)
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.14.1...v0.14.2
+https://github.com/deusXmachina-dev/memorylane/compare/v0.14.3-rc.1...v0.14.3-rc.2
