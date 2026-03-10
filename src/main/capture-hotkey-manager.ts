@@ -45,14 +45,17 @@ export function createCaptureHotkeyManager({
         registered = globalShortcut.register(previousAccelerator, handleHotkeyTrigger)
       }
       const message = error instanceof Error ? error.message : 'Invalid shortcut'
-      return { success: false, error: `Failed to register capture hotkey: ${message}` }
+      return { success: false, error: `Failed to register start/stop shortcut: ${message}` }
     }
 
     if (!registered) {
       if (previousRegistered) {
         registered = globalShortcut.register(previousAccelerator, handleHotkeyTrigger)
       }
-      return { success: false, error: 'Failed to register capture hotkey. Shortcut may be in use.' }
+      return {
+        success: false,
+        error: 'Failed to register start/stop shortcut. Shortcut may be in use.',
+      }
     }
 
     accelerator = normalizedAccelerator

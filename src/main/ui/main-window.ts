@@ -406,7 +406,7 @@ export function initMainWindowIPC(dependencies: MainWindowDependencies): void {
           if (!hotkeyResult.success) {
             return {
               success: false,
-              error: hotkeyResult.error ?? 'Failed to update capture hotkey',
+              error: hotkeyResult.error ?? 'Failed to update start/stop shortcut',
             }
           }
         }
@@ -454,7 +454,10 @@ export function initMainWindowIPC(dependencies: MainWindowDependencies): void {
       if (!hotkeyResult.success) {
         deps.captureSettingsManager.save(previous)
         deps.captureSettingsManager.applyToConstants()
-        return { success: false, error: hotkeyResult.error ?? 'Failed to reset capture hotkey' }
+        return {
+          success: false,
+          error: hotkeyResult.error ?? 'Failed to reset start/stop shortcut',
+        }
       }
       syncAutoStartSetting(updated.autoStartEnabled)
       deps.capture.updateActivityWindowConfig({

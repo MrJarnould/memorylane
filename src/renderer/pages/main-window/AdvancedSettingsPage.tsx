@@ -184,7 +184,7 @@ export function AdvancedSettingsPage({ onBack }: { onBack: () => void }): React.
             return
           }
 
-          toast.success('Capture hotkey saved', { id: 'auto-save', duration: 1500 })
+          toast.success('Start/stop shortcut saved', { id: 'auto-save', duration: 1500 })
           await load()
         })
         .catch(async () => {

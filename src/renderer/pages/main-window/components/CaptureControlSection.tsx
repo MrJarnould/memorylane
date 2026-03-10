@@ -43,7 +43,7 @@ export function CaptureControlSection({
         </Button>
         {captureHotkeyLabel ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            Capture hotkey (start/stop): {captureHotkeyLabel}
+            Start/Stop Shortcut: {captureHotkeyLabel}
           </p>
         ) : null}
       </CardContent>

@@ -74,7 +74,7 @@ describe('createCaptureHotkeyManager', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Failed to register capture hotkey: bad accelerator',
+      error: 'Failed to register start/stop shortcut: bad accelerator',
     })
     expect(electronMocks.unregister).toHaveBeenCalledWith('CommandOrControl+Alt+P')
     expect(electronMocks.register).toHaveBeenNthCalledWith(
@@ -101,7 +101,7 @@ describe('createCaptureHotkeyManager', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Failed to register capture hotkey. Shortcut may be in use.',
+      error: 'Failed to register start/stop shortcut. Shortcut may be in use.',
     })
     expect(electronMocks.unregister).toHaveBeenCalledWith('CommandOrControl+Alt+P')
     expect(electronMocks.register).toHaveBeenNthCalledWith(

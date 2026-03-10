@@ -88,7 +88,7 @@ export function CaptureSettingsSection({
           <div className="space-y-2">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Label className="text-xs font-medium text-muted-foreground sm:w-24 sm:shrink-0">
-                Capture Hotkey
+                Start/Stop Shortcut
               </Label>
               <div className="flex flex-1 items-center gap-2">
                 <Input
