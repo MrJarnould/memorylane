@@ -89,6 +89,18 @@ describe('capture exclusions', () => {
     ).toBe('*incognito*')
   })
 
+  it('treats plain window title patterns as substring matches', () => {
+    const patterns = normalizeWildcardPatterns(['bank statement', 'lab results'])
+    expect(
+      getExcludedWindowTitleMatch(
+        {
+          title: 'Checking - Bank Statement - March',
+        },
+        patterns,
+      ),
+    ).toBe('bank statement')
+  })
+
   it('matches url wildcard patterns', () => {
     const patterns = normalizeWildcardPatterns(['*://*.github.com/*'])
     expect(
@@ -99,5 +111,17 @@ describe('capture exclusions', () => {
         patterns,
       ),
     ).toBe('*://*.github.com/*')
+  })
+
+  it('treats plain url patterns as substring matches', () => {
+    const patterns = normalizeWildcardPatterns(['mychart', 'bank.com'])
+    expect(
+      getExcludedUrlMatch(
+        {
+          url: 'https://portal.example.com/mychart/visits',
+        },
+        patterns,
+      ),
+    ).toBe('mychart')
   })
 })

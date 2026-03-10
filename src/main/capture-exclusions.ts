@@ -91,7 +91,9 @@ function wildcardPatternToRegex(pattern: string): RegExp {
   const cached = wildcardRegexCache.get(pattern)
   if (cached) return cached
 
-  const escapedPattern = escapeRegex(pattern)
+  const startWrapped = pattern.startsWith('*') ? pattern : `*${pattern}`
+  const fullyWrapped = startWrapped.endsWith('*') ? startWrapped : `${startWrapped}*`
+  const escapedPattern = escapeRegex(fullyWrapped)
   const regex = new RegExp(`^${escapedPattern.replace(/\\\*/g, '.*').replace(/\\\?/g, '.')}$`)
   wildcardRegexCache.set(pattern, regex)
   return regex

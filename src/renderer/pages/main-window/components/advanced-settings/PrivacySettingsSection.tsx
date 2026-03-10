@@ -137,13 +137,13 @@ export function PrivacySettingsSection({
 
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground">
-              Excluded Window Titles (wildcards, one per line)
+              Excluded Window Titles (one per line)
             </Label>
             <textarea
               value={excludedWindowTitlePatternsDraft}
               rows={3}
               className="dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 h-auto rounded-none border bg-transparent px-2.5 py-2 text-xs transition-colors placeholder:text-muted-foreground w-full min-w-0 outline-none resize-y"
-              placeholder={`*bank statement*\n*lab results*`}
+              placeholder={`bank statement\nlab results\npayroll`}
               onChange={(event) => {
                 setExcludedWindowTitlePatternsDraft(event.target.value)
                 setHasPendingChanges(true)
@@ -152,14 +152,12 @@ export function PrivacySettingsSection({
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">
-              Excluded URLs (wildcards, one per line)
-            </Label>
+            <Label className="text-xs text-muted-foreground">Excluded URLs (one per line)</Label>
             <textarea
               value={excludedUrlPatternsDraft}
               rows={3}
               className="dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 h-auto rounded-none border bg-transparent px-2.5 py-2 text-xs transition-colors placeholder:text-muted-foreground w-full min-w-0 outline-none resize-y"
-              placeholder={`*://*.bank.com/*\n*://mychart.*/*`}
+              placeholder={`bank.com\nmychart\nmail.google.com`}
               onChange={(event) => {
                 setExcludedUrlPatternsDraft(event.target.value)
                 setHasPendingChanges(true)
@@ -169,7 +167,7 @@ export function PrivacySettingsSection({
 
           <div className="-mt-2 ml-2 space-y-1">
             <p className="text-[11px] text-muted-foreground">
-              Patterns are case-insensitive. Use <code>*</code> for any text and <code>?</code> for
+              Examples above match anywhere. <code>*</code> matches any text. <code>?</code> matches
               one character.
             </p>
           </div>
