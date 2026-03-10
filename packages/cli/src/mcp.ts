@@ -38,14 +38,12 @@ async function main(): Promise<void> {
   server.getServer().registerTool(
     'set_db_path',
     {
+      title: 'Set Database Path',
       description:
         'Set the database path for the MCP server. Persists the path to config and reinitializes the connection.',
-      annotations: {
-        title: 'Set Database Path',
+      inputSchema: {
+        dbPath: z.string().describe('Absolute path to the MemoryLane .db file'),
       },
-    },
-    {
-      dbPath: z.string().describe('Absolute path to the MemoryLane .db file'),
     },
     async ({ dbPath: newDbPath }) => {
       if (!fs.existsSync(newDbPath)) {
