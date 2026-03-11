@@ -15,19 +15,19 @@ export interface PlanConfig {
 
 export const PLANS: PlanConfig[] = [
   {
-    id: 'standard',
-    name: 'Standard',
-    price: '$10/mo',
-    features: ['Screen capture', 'AI summaries', 'Local search'],
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: '$100/mo',
+    id: 'power_user',
+    name: 'Power User',
+    price: '$30/mo',
     highlighted: true,
-    features: ['Everything in Standard', 'Task mining', 'Pattern detection'],
+    features: ['Automation recommendations', 'No API keys needed', 'Data stored on your device'],
   },
 ]
+
+const ENTERPRISE = {
+  name: 'Enterprise',
+  price: 'Custom',
+  features: ['Custom integrations', 'Done-for-you setup', 'Dedicated support'],
+}
 
 interface PlanCardProps {
   plan: PlanConfig
@@ -89,6 +89,36 @@ function PlanCard({ plan, api, status }: PlanCardProps): React.JSX.Element {
   )
 }
 
+function EnterpriseCard(): React.JSX.Element {
+  const handleBookCall = useCallback(() => {
+    window.open('https://calendar.app.google/2rJgu2Ah3kWaMApG8', '_blank')
+  }, [])
+
+  return (
+    <Card className="flex-1">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base">{ENTERPRISE.name}</CardTitle>
+        </div>
+        <p className="text-lg font-semibold">{ENTERPRISE.price}</p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <ul className="space-y-1.5">
+          {ENTERPRISE.features.map((f) => (
+            <li key={f} className="text-xs text-muted-foreground flex items-start gap-1.5">
+              <span className="text-foreground mt-px">&#10003;</span>
+              <span>{f}</span>
+            </li>
+          ))}
+        </ul>
+        <Button className="w-full" variant="outline" onClick={handleBookCall}>
+          Book a call
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
 interface PlanPickerProps {
   api: MainWindowAPI
   onKeySet: () => void
@@ -122,15 +152,11 @@ export function PlanPicker({ api, onKeySet }: PlanPickerProps): React.JSX.Elemen
 
   return (
     <div className="space-y-3">
-      <div className="text-center">
-        <p className="text-sm text-muted-foreground">
-          Choose a plan to get started. You&apos;ll be redirected to Stripe.
-        </p>
-      </div>
       <div className="grid grid-cols-2 gap-4">
         {PLANS.map((plan) => (
           <PlanCard key={plan.id} plan={plan} api={api} status={status} />
         ))}
+        <EnterpriseCard />
       </div>
     </div>
   )
