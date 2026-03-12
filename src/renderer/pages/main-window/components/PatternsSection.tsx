@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { Badge } from '@components/ui/badge'
 import { Button } from '@components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@components/ui/card'
+import { ThumbsUp, ThumbsDown } from 'lucide-react'
 import type { MainWindowAPI, PatternInfo } from '@types'
 
 const SIGHTING_FILTERS = [
@@ -32,10 +33,23 @@ export function PatternsSection({ api }: PatternsSectionProps): React.JSX.Elemen
     [allPatterns, minSightings],
   )
 
+  const handleApprove = useCallback(
+    (id: string) => {
+      setAllPatterns((prev) =>
+        prev ? prev.map((p) => (p.id === id ? { ...p, approvedAt: Date.now() } : p)) : prev,
+      )
+      toast.success('Thanks for the feedback!')
+      api.approvePattern(id).catch(() => {
+        // approval persisted best-effort
+      })
+    },
+    [api],
+  )
+
   const handleDismiss = useCallback(
     (id: string, name: string) => {
       setAllPatterns((prev) => (prev ? prev.filter((p) => p.id !== id) : prev))
-      toast.success(`Dismissed "${name}"`)
+      toast.success(`Not useful — "${name}" hidden`)
       api.rejectPattern(id).catch(() => {
         // rejection persisted best-effort
       })
@@ -124,21 +138,23 @@ export function PatternsSection({ api }: PatternsSectionProps): React.JSX.Elemen
               </div>
             </CardTitle>
             <CardAction>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => handleDismiss(pattern.id, pattern.name)}
-              >
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => handleApprove(pattern.id)}
+                  className={pattern.approvedAt ? 'text-green-500' : ''}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </Button>
+                  <ThumbsUp className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => handleDismiss(pattern.id, pattern.name)}
+                >
+                  <ThumbsDown className="w-3.5 h-3.5 scale-x-[-1]" />
+                </Button>
+              </div>
             </CardAction>
           </CardHeader>
           <CardContent className="space-y-3">

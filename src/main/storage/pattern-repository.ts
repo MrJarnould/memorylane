@@ -13,6 +13,7 @@ export interface Pattern {
   createdAt: number
   rejectedAt: number | null
   promptCopiedAt: number | null
+  approvedAt: number | null
 }
 
 export interface PatternSighting {
@@ -124,6 +125,10 @@ export class PatternRepository {
 
   // -- Status updates --
 
+  approvePattern(id: string): void {
+    this.db.prepare(`UPDATE patterns SET approved_at = ? WHERE id = ?`).run(Date.now(), id)
+  }
+
   rejectPattern(id: string): void {
     this.db.prepare(`UPDATE patterns SET rejected_at = ? WHERE id = ?`).run(Date.now(), id)
   }
@@ -178,6 +183,7 @@ export class PatternRepository {
       createdAt: row.created_at as number,
       rejectedAt: (row.rejected_at as number) ?? null,
       promptCopiedAt: (row.prompt_copied_at as number) ?? null,
+      approvedAt: (row.approved_at as number) ?? null,
       sightingCount: (row.sighting_count as number) || 0,
       lastSeenAt: (row.last_seen_at as number) ?? null,
       lastConfidence: (row.last_confidence as number) ?? null,

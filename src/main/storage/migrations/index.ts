@@ -4,6 +4,7 @@ import { migration as migration0002 } from './0002_migrate_context_events'
 import { migration as migration0003 } from './0003_fts_sync_triggers'
 import { migration as migration0004 } from './0004_patterns_tables'
 import { migration as migration0005 } from './0005_pattern_status_columns'
+import { migration as migration0006 } from './0006_pattern_approved_at_column'
 
 export const migrations: Migration[] = [
   migration0001,
@@ -11,4 +12,5 @@ export const migrations: Migration[] = [
   migration0003,
   migration0004,
   migration0005,
+  migration0006,
 ]

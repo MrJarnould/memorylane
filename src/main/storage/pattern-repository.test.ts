@@ -18,6 +18,7 @@ const createPattern = (overrides: Partial<Pattern> & { id: string }): Pattern =>
   createdAt: overrides.createdAt ?? 1000,
   rejectedAt: overrides.rejectedAt ?? null,
   promptCopiedAt: overrides.promptCopiedAt ?? null,
+  approvedAt: overrides.approvedAt ?? null,
 })
 
 const createSighting = (
@@ -263,6 +264,30 @@ describe('PatternRepository', () => {
   })
 
   // -----------------------------------------------------------------------
+  // approvePattern
+  // -----------------------------------------------------------------------
+
+  describe('approvePattern', () => {
+    it('should set approved_at timestamp', () => {
+      storage.patterns.addPattern(createPattern({ id: 'p-approve' }))
+
+      storage.patterns.approvePattern('p-approve')
+
+      const result = storage.patterns.getPatternById('p-approve')!
+      expect(result.approvedAt).toBeGreaterThan(0)
+    })
+
+    it('should keep pattern visible in getAllPatterns', () => {
+      storage.patterns.addPattern(createPattern({ id: 'p-approve-visible' }))
+
+      storage.patterns.approvePattern('p-approve-visible')
+
+      const all = storage.patterns.getAllPatterns()
+      expect(all.some((p) => p.id === 'p-approve-visible')).toBe(true)
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // markPromptCopied
   // -----------------------------------------------------------------------
 
@@ -282,12 +307,13 @@ describe('PatternRepository', () => {
   // -----------------------------------------------------------------------
 
   describe('new status columns', () => {
-    it('should default rejected_at and prompt_copied_at to null', () => {
+    it('should default rejected_at, prompt_copied_at, and approved_at to null', () => {
       storage.patterns.addPattern(createPattern({ id: 'p-defaults' }))
 
       const result = storage.patterns.getPatternById('p-defaults')!
       expect(result.rejectedAt).toBeNull()
       expect(result.promptCopiedAt).toBeNull()
+      expect(result.approvedAt).toBeNull()
     })
   })
 

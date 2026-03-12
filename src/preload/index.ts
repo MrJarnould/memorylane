@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('mainWindowAPI', {
   resetCaptureSettings: () => ipcRenderer.invoke('main-window:resetCaptureSettings'),
   // Patterns
   getPatterns: () => ipcRenderer.invoke('main-window:getPatterns'),
+  approvePattern: (id: string) => ipcRenderer.invoke('main-window:approvePattern', id),
   rejectPattern: (id: string) => ipcRenderer.invoke('main-window:rejectPattern', id),
   markPatternPromptCopied: (id: string) =>
     ipcRenderer.invoke('main-window:markPatternPromptCopied', id),

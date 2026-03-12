@@ -407,6 +407,17 @@ export function initMainWindowIPC(dependencies: MainWindowDependencies): void {
     return deps.storage.patterns.getAllPatterns()
   })
 
+  ipcMain.handle('main-window:approvePattern', (_event: IpcMainInvokeEvent, id: string) => {
+    if (!deps) return { success: false, error: 'Dependencies not initialized' }
+    try {
+      deps.storage.patterns.approvePattern(id)
+      return { success: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      return { success: false, error: message }
+    }
+  })
+
   ipcMain.handle('main-window:rejectPattern', (_event: IpcMainInvokeEvent, id: string) => {
     if (!deps) return { success: false, error: 'Dependencies not initialized' }
     try {
