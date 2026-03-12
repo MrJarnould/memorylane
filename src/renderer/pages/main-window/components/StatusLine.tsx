@@ -45,15 +45,12 @@ export function StatusLine({ llmHealth, activityCount }: StatusLineProps): React
   }
 
   return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+    <div className="flex items-center gap-1 text-xs text-muted-foreground">
       {health && (
-        <>
-          <span className={`h-2 w-2 shrink-0 rounded-full ${health.dotClassName}`} />
-          <span>{health.text}</span>
-        </>
+        <span className={`ml-2 mr-0.5 h-2 w-2 shrink-0 rounded-full ${health.dotClassName}`} />
       )}
-      {health && activityCount !== null && <span>·</span>}
-      {activityCount !== null && <span>{formatCount(activityCount)} activities captured</span>}
+
+      {activityCount !== null && <span>{formatCount(activityCount)} activities</span>}
     </div>
   )
 }
