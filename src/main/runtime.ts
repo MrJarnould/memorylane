@@ -90,6 +90,8 @@ export async function createMainRuntime(params?: {
       : undefined,
   })
 
+  semanticService.setUserContext(() => storage.userContext.get()?.shortSummary ?? null)
+
   const outputDir = path.join(userDataPath, 'screenshots')
   fs.mkdirSync(outputDir, { recursive: true })
   const activityCount = storage.activities.count()
