@@ -210,6 +210,7 @@ app.on('ready', async () => {
     captureSettingsManager,
     slackSettingsManager,
     slackIntegrationService,
+    patternDetector: patternDetector ?? undefined,
     getCaptureHotkeyLabel: hotkeyManager.getLabel,
     reconfigureCaptureHotkey,
     updateExclusions: (exclusions) => runtime?.updateExclusions(exclusions),
