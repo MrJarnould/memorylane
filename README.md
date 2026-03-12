@@ -70,7 +70,8 @@ MemoryLane captures your screen to give AI assistants context about what you're 
 - Regular screenshots while capture is running; summaries generated per activity (on app switch, idle gap, or max duration)
 - Launch at login
 - OCR via macOS Vision framework and native Windows OCR
-- AI-powered activity summarization (via OpenRouter ZDR endpoints only)
+- AI-powered activity summarization across managed, OpenRouter, and custom OpenAI-compatible endpoints
+- Pattern suggestions with persistent thumbs up/down feedback
 - Custom endpoint support for OpenAI-compatible providers (including local models like Ollama)
 - Semantic + full-text search over your activity history
 - MCP server with `search_context`, `browse_timeline`, and `get_event_details` tools
