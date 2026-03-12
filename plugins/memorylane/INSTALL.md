@@ -11,11 +11,20 @@ deusxmachina-dev/memorylane
 ```
 
 <details>
-<summary><h2>2. Set up the MCP server (skip if you have the MemoryLane desktop app installed)</h2></summary>
+<summary><h2>2a. Analyzing your own data (MemoryLane desktop app installed)</h2></summary>
 
-If you have the **MemoryLane desktop app** with desktop integration enabled, skip this section — the app handles MCP setup for you.
+1. Go to **Integrations** and click **Add to Claude**.
 
-If you don't have the desktop app, follow the steps below.
+![Integrations settings](../../assets/readme/integrations-add-to-claude.png)
+
+2. Restart Claude Desktop.
+
+</details>
+
+<details>
+<summary><h2>2b. Analyzing someone else's data (no desktop app)</h2></summary>
+
+This is for users who want to analyze data from MemoryLane without the desktop app installed — for example, browsing someone else's shared data.
 
 Watch the [MCP setup walkthrough](https://www.loom.com/share/b6330ba741654a87bc9875105c973daa).
 
