@@ -22,7 +22,7 @@ import log from '../../logger'
 import { EmbeddingService } from '../../processor/embedding'
 import type { PatternDetectorConfig, DetectionRunResult, ProgressCallback } from './types'
 import { DEFAULT_DETECTOR_CONFIG } from './types'
-import { isSameDay , formatApiError } from './helpers'
+import { isSameDay, formatApiError } from './helpers'
 import { runDetection } from './run-detection'
 
 export type { PatternDetectorConfig, DetectionRunResult, ProgressCallback }
