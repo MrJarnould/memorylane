@@ -139,7 +139,6 @@ describeIntegration('semantic service integration', () => {
     const summary = await service.summarizeFromVideo({
       activity,
       videoPath,
-      ocrText: 'integration-ocr-not-used',
     })
     const endedAt = Date.now()
 

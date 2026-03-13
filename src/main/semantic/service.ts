@@ -254,13 +254,8 @@ export class ActivitySemanticService implements SemanticServiceContract {
     return this.pipelinePreference
   }
 
-  async summarizeFromVideo(input: {
-    activity: Activity
-    videoPath?: string
-    ocrText: string
-  }): Promise<string> {
+  async summarizeFromVideo(input: { activity: Activity; videoPath?: string }): Promise<string> {
     this.assertInput(input)
-    void input.ocrText
 
     const diagnostics: SemanticRunDiagnostics = {
       activityId: input.activity.id,
@@ -451,7 +446,7 @@ export class ActivitySemanticService implements SemanticServiceContract {
     }
   }
 
-  private assertInput(input: { activity: Activity; videoPath?: string; ocrText: string }): void {
+  private assertInput(input: { activity: Activity; videoPath?: string }): void {
     if (!input.activity || typeof input.activity !== 'object') {
       throw new Error('summarizeFromVideo requires a valid activity object')
     }

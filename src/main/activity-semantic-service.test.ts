@@ -198,7 +198,6 @@ describe('ActivitySemanticService', () => {
     await service.summarizeFromVideo({
       activity: makeActivity(),
       videoPath,
-      ocrText: 'ignored',
     })
 
     const diagnostics = service.getLastRunDiagnostics()
@@ -223,7 +222,6 @@ describe('ActivitySemanticService', () => {
     await service.summarizeFromVideo({
       activity: makeActivity(),
       videoPath,
-      ocrText: 'ignored',
     })
 
     const diagnostics = service.getLastRunDiagnostics()
@@ -296,7 +294,6 @@ describe('ActivitySemanticService', () => {
     await service.summarizeFromVideo({
       activity: makeActivity(),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(mockOpenAICreate).toHaveBeenCalledWith(
@@ -406,7 +403,6 @@ describe('ActivitySemanticService', () => {
     const result = await service.summarizeFromVideo({
       activity: makeActivity(),
       videoPath,
-      ocrText: 'ignored-ocr',
     })
 
     expect(result).toBe('video summary')
@@ -440,7 +436,6 @@ describe('ActivitySemanticService', () => {
     const result = await service.summarizeFromVideo({
       activity: makeActivity(),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(result).toBe('third model summary')
@@ -512,13 +507,11 @@ describe('ActivitySemanticService', () => {
     await service.summarizeFromVideo({
       activity: makeActivity({ id: 'activity-1' }),
       videoPath,
-      ocrText: 'ignored',
     })
 
     await service.summarizeFromVideo({
       activity: makeActivity({ id: 'activity-2' }),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(service.getLlmHealthStatus()).toEqual({
@@ -556,7 +549,6 @@ describe('ActivitySemanticService', () => {
     const result = await service.summarizeFromVideo({
       activity: makeActivity({ frames }),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(result).toBe('snapshot summary')
@@ -587,7 +579,6 @@ describe('ActivitySemanticService', () => {
 
     const result = await service.summarizeFromVideo({
       activity: makeActivity({ frames }),
-      ocrText: 'ignored',
     })
 
     expect(result).toBe('image summary only')
@@ -623,7 +614,6 @@ describe('ActivitySemanticService', () => {
     const result = await service.summarizeFromVideo({
       activity: makeActivity({ frames }),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(result).toBe('')
@@ -668,7 +658,6 @@ describe('ActivitySemanticService', () => {
     const result = await service.summarizeFromVideo({
       activity: makeActivity({ frames }),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(result).toBe('snapshot summary from custom model')
@@ -721,7 +710,6 @@ describe('ActivitySemanticService', () => {
 
     const result = await service.summarizeFromVideo({
       activity: makeActivity({ frames }),
-      ocrText: 'ignored',
     })
 
     expect(result).toBe('snapshot summary from azure-style response')
@@ -776,7 +764,6 @@ describe('ActivitySemanticService', () => {
     const firstResult = await service.summarizeFromVideo({
       activity: makeActivity({ id: 'activity-1', frames }),
       videoPath,
-      ocrText: 'ignored',
     })
     expect(firstResult).toBe('snapshot summary after cached skip')
 
@@ -786,7 +773,6 @@ describe('ActivitySemanticService', () => {
     const secondResult = await service.summarizeFromVideo({
       activity: makeActivity({ id: 'activity-2', frames }),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(secondResult).toBe('snapshot summary after cached skip')
@@ -835,7 +821,6 @@ describe('ActivitySemanticService', () => {
     await service.summarizeFromVideo({
       activity: makeActivity({ frames }),
       videoPath,
-      ocrText: 'ignored',
     })
 
     const firstDiagnostics = service.getLastRunDiagnostics()
@@ -847,7 +832,6 @@ describe('ActivitySemanticService', () => {
     const secondResult = await service.summarizeFromVideo({
       activity: makeActivity({ id: 'activity-2', frames }),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(secondResult).toBe('snapshot summary')
@@ -896,7 +880,6 @@ describe('ActivitySemanticService', () => {
     await service.summarizeFromVideo({
       activity: makeActivity({ frames }),
       videoPath,
-      ocrText: 'ignored',
     })
     const firstDiagnostics = service.getLastRunDiagnostics()
     expect(firstDiagnostics?.attempts.map((attempt) => attempt.mode)).toEqual(['video', 'snapshot'])
@@ -905,7 +888,6 @@ describe('ActivitySemanticService', () => {
     await service.summarizeFromVideo({
       activity: makeActivity({ id: 'activity-3', frames }),
       videoPath,
-      ocrText: 'ignored',
     })
     const secondDiagnostics = service.getLastRunDiagnostics()
     expect(secondDiagnostics?.attempts.map((attempt) => attempt.mode)).toEqual([
@@ -946,7 +928,6 @@ describe('ActivitySemanticService', () => {
         ],
       }),
       videoPath: path.join(tempDir, 'missing.mp4'),
-      ocrText: 'ignored',
     })
 
     const diagnostics = service.getLastRunDiagnostics()
@@ -990,7 +971,6 @@ describe('ActivitySemanticService', () => {
         })),
       }),
       videoPath: path.join(tempDir, 'missing.mp4'),
-      ocrText: 'ignored',
     })
 
     const diagnostics = service.getLastRunDiagnostics()
@@ -1030,7 +1010,6 @@ describe('ActivitySemanticService', () => {
         })),
       }),
       videoPath: path.join(tempDir, 'missing.mp4'),
-      ocrText: 'ignored',
     })
 
     const diagnostics = service.getLastRunDiagnostics()
@@ -1068,7 +1047,6 @@ describe('ActivitySemanticService', () => {
         interactions: frames.map((frame) => ({ type: 'scroll', timestamp: frame.frame.timestamp })),
       }),
       videoPath: path.join(tempDir, 'missing.mp4'),
-      ocrText: 'ignored',
     })
 
     const diagnostics = service.getLastRunDiagnostics()
@@ -1114,7 +1092,6 @@ describe('ActivitySemanticService', () => {
         ],
       }),
       videoPath: path.join(tempDir, 'missing.mp4'),
-      ocrText: 'ignored',
     })
 
     const diagnostics = service.getLastRunDiagnostics()
@@ -1149,7 +1126,6 @@ describe('ActivitySemanticService', () => {
     await service.summarizeFromVideo({
       activity: makeActivity({ frames }),
       videoPath: path.join(tempDir, 'missing.mp4'),
-      ocrText: 'ignored',
     })
 
     const diagnostics = service.getLastRunDiagnostics()
@@ -1176,7 +1152,6 @@ describe('ActivitySemanticService', () => {
     await service.summarizeFromVideo({
       activity: makeActivity(),
       videoPath,
-      ocrText: 'VERY_SECRET_OCR_TEXT',
     })
 
     expect(JSON.stringify(send.mock.calls[0][0])).not.toContain('VERY_SECRET_OCR_TEXT')
@@ -1197,7 +1172,6 @@ describe('ActivitySemanticService', () => {
     const result = await service.summarizeFromVideo({
       activity: makeActivity(),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(result).toBe('trimmed summary')
@@ -1220,7 +1194,6 @@ describe('ActivitySemanticService', () => {
     await service.summarizeFromVideo({
       activity: makeActivity(),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(usageTracker.recordUsage).toHaveBeenCalledTimes(1)
@@ -1249,7 +1222,6 @@ describe('ActivitySemanticService', () => {
     await service.summarizeFromVideo({
       activity: makeActivity(),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(usageTracker.recordUsage).toHaveBeenCalledWith(
@@ -1278,7 +1250,6 @@ describe('ActivitySemanticService', () => {
     const result = await service.summarizeFromVideo({
       activity: makeActivity({ frames }),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(result).toBe('')
@@ -1310,7 +1281,6 @@ describe('ActivitySemanticService', () => {
     const result = await service.summarizeFromVideo({
       activity: makeActivity({ id: 'debug-activity' }),
       videoPath,
-      ocrText: 'ignored',
     })
 
     expect(result).toBe('dumped summary')

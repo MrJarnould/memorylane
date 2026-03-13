@@ -138,14 +138,12 @@ describeIntegration('semantic service ollama custom endpoint integration', () =>
     const firstSummary = await service.summarizeFromVideo({
       activity: makeActivity('ollama-custom-endpoint-1', frames),
       videoPath,
-      ocrText: 'integration-ocr-not-used',
     })
     const firstDiagnostics = service.getLastRunDiagnostics()
 
     const secondSummary = await service.summarizeFromVideo({
       activity: makeActivity('ollama-custom-endpoint-2', frames),
       videoPath,
-      ocrText: 'integration-ocr-not-used',
     })
     const secondDiagnostics = service.getLastRunDiagnostics()
 

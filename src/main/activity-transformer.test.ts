@@ -113,7 +113,6 @@ describe('DefaultActivityTransformer', () => {
     expect(semantic.summarizeFromVideo).toHaveBeenCalledWith({
       activity,
       videoPath: '/output/activity-1.mp4',
-      ocrText: 'ocr text',
     })
 
     // Embedder called with the summary
@@ -148,7 +147,6 @@ describe('DefaultActivityTransformer', () => {
     expect(semantic.summarizeFromVideo).toHaveBeenCalledWith({
       activity,
       videoPath: undefined,
-      ocrText: 'ocr text',
     })
   })
 
@@ -227,7 +225,6 @@ describe('DefaultActivityTransformer', () => {
       expect(semantic.summarizeFromVideo).toHaveBeenCalledWith({
         activity: makeActivity(1),
         videoPath: '/output/activity-1.mp4',
-        ocrText: '',
       })
       expect(embedder.embed).toHaveBeenCalledWith('A summary of the activity')
       expect(log.warn).toHaveBeenCalled()

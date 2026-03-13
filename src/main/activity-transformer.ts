@@ -45,7 +45,6 @@ export class DefaultActivityTransformer implements ActivityTransformer {
     const summary = await this.semantic.summarizeFromVideo({
       activity,
       videoPath: videoAsset?.videoPath,
-      ocrText,
     })
 
     const textToEmbed = summary || ocrText

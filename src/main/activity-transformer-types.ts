@@ -24,11 +24,7 @@ export interface ActivityOcrService {
 }
 
 export interface ActivitySemanticService {
-  summarizeFromVideo(input: {
-    activity: Activity
-    videoPath?: string
-    ocrText: string
-  }): Promise<string>
+  summarizeFromVideo(input: { activity: Activity; videoPath?: string }): Promise<string>
 }
 
 export interface ActivityEmbeddingService {
