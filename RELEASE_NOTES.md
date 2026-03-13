@@ -1,18 +1,16 @@
-# MemoryLane v0.15.3
+# MemoryLane v0.15.4
 
-Patch release focused on workflow pattern review UX and visibility.
+Patch release focused on approved automation visibility.
 
 ## What's Changed
 
-- **Stacked review cards for unreviewed patterns** - Pattern suggestions now use a clearer card stack to speed up triage
-- **Completed state support in pattern cards** - Reviewed workflows now show explicit completion status
-- **Cleaner reviewed-pattern views** - Sighting filters are hidden when there are no reviewed patterns to filter
+- **Approved patterns stay visible** - Approving a low-sighting automation no longer makes it disappear from the reviewed list
+- **Sightings filter stays accessible** - The filter bar now remains visible whenever approved automations exist
 
 ## Features
 
-- Stacked review UI for unreviewed pattern recommendations
-- Completed-state presentation for pattern cards
-- Less noisy filtering controls in empty reviewed-pattern states
+- Reviewed automation cards remain visible immediately after approval
+- Sightings filter stays available for all approved automation opportunities
 
 ## Known Issues & Limitations
 
@@ -26,4 +24,4 @@ Patch release focused on workflow pattern review UX and visibility.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.15.2...v0.15.3
+https://github.com/deusXmachina-dev/memorylane/compare/v0.15.3...v0.15.4
