@@ -138,8 +138,7 @@ function handleKeyboard(): void {
 
     isTyping = false
     const endTime = Date.now() - INTERACTION_MONITOR_CONFIG.TYPING_DEBOUNCE_MS
-    const durationMs =
-      endTime - typingSessionStartTime - INTERACTION_MONITOR_CONFIG.TYPING_DEBOUNCE_MS
+    const durationMs = Math.max(0, endTime - typingSessionStartTime)
 
     log.info(
       `[Interaction Monitor] Typing session ended: ${typingSessionKeyCount} keys over ${durationMs}ms`,
