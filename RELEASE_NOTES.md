@@ -1,20 +1,18 @@
-# MemoryLane v0.15.2
+# MemoryLane v0.15.3
 
-Patch release focused on capture reliability, activity timing correctness, and pattern consistency.
+Patch release focused on workflow pattern review UX and visibility.
 
 ## What's Changed
 
-- **More reliable macOS capture** - Screenshot sidecars now restart more safely and avoid unbounded memory growth when frame writing falls behind
-- **More accurate activity boundaries** - Manual capture start now schedules background analyzers correctly, typing duration calculation is fixed, and single-item sampling behaves correctly
-- **Pattern consistency fixes** - Pattern counts, search results, and stored pattern state stay aligned more reliably
-- **Release pipeline polish** - Release notifications are now sent to Discord with tighter workflow guards
+- **Stacked review cards for unreviewed patterns** - Pattern suggestions now use a clearer card stack to speed up triage
+- **Completed state support in pattern cards** - Reviewed workflows now show explicit completion status
+- **Cleaner reviewed-pattern views** - Sighting filters are hidden when there are no reviewed patterns to filter
 
 ## Features
 
-- Safer macOS screenshot capture under crash and backpressure conditions
-- Corrected activity timing and capture-start behavior in the background pipeline
-- Better pattern normalization so detection, counts, and search stay in sync
-- Release workflow notifications for shipped builds
+- Stacked review UI for unreviewed pattern recommendations
+- Completed-state presentation for pattern cards
+- Less noisy filtering controls in empty reviewed-pattern states
 
 ## Known Issues & Limitations
 
@@ -28,4 +26,4 @@ Patch release focused on capture reliability, activity timing correctness, and p
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.15.1...v0.15.2
+https://github.com/deusXmachina-dev/memorylane/compare/v0.15.2...v0.15.3
