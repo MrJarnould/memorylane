@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activityToTimelineEntry, formatTimelineEntry } from './formatting'
+import { activityToTimelineEntry, formatTimelineEntry, sampleEntries } from './formatting'
 
 describe('mcp formatting', () => {
   it('includes window title in timeline entries', () => {
@@ -26,5 +26,10 @@ describe('mcp formatting', () => {
     })
 
     expect(formatted).not.toContain('[window:')
+  })
+
+  it('returns one item for uniform sampling with limit=1', () => {
+    const sampled = sampleEntries(['a', 'b', 'c'], 1, 'uniform')
+    expect(sampled).toEqual(['a'])
   })
 })

@@ -59,6 +59,8 @@ export function sampleEntries<T>(
   limit: number,
   sampling: 'uniform' | 'recent_first',
 ): T[] {
+  if (limit <= 0) return []
+  if (limit === 1) return entries.length > 0 ? [entries[0] as T] : []
   if (entries.length <= limit) return entries
 
   if (sampling === 'recent_first') {
