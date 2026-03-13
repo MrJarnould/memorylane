@@ -129,7 +129,8 @@ export class PatternRepository {
                 (SELECT confidence FROM pattern_sightings WHERE pattern_id = p.id ORDER BY detected_at DESC LIMIT 1) AS last_confidence
          FROM patterns p
          LEFT JOIN pattern_sightings s ON s.pattern_id = p.id
-         WHERE p.name LIKE ? OR p.description LIKE ? OR p.apps LIKE ?
+         WHERE p.rejected_at IS NULL
+           AND (p.name LIKE ? OR p.description LIKE ? OR p.apps LIKE ?)
          GROUP BY p.id
          ORDER BY sighting_count DESC`,
       )
@@ -139,7 +140,9 @@ export class PatternRepository {
   }
 
   patternCount(): number {
-    const row = this.db.prepare('SELECT COUNT(*) as count FROM patterns').get() as CountRow
+    const row = this.db
+      .prepare('SELECT COUNT(*) as count FROM patterns WHERE rejected_at IS NULL')
+      .get() as CountRow
     return row.count
   }
 

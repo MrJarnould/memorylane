@@ -487,7 +487,6 @@ async function handleListPatterns(services: MCPServices | null) {
   try {
     const storage = services.storage
     const patterns = storage.patterns.getAllPatterns()
-    const count = storage.patterns.patternCount()
     const lastRun = storage.patterns.getLastRunTimestamp()
 
     if (patterns.length === 0) {
@@ -508,7 +507,7 @@ async function handleListPatterns(services: MCPServices | null) {
       content: [
         {
           type: 'text' as const,
-          text: `${count} pattern${count !== 1 ? 's' : ''} detected. ${lastRunStr}\n\n${formatted}`,
+          text: `${patterns.length} pattern${patterns.length !== 1 ? 's' : ''} detected. ${lastRunStr}\n\n${formatted}`,
         },
       ],
     }

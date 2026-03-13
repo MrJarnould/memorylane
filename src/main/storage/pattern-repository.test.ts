@@ -67,6 +67,14 @@ describe('PatternRepository', () => {
       storage.patterns.addPattern(createPattern({ id: 'p-dup', name: 'Different Name' }))
       expect(storage.patterns.patternCount()).toBe(1)
     })
+
+    it('excludes rejected patterns from the count', () => {
+      storage.patterns.addPattern(createPattern({ id: 'p-active' }))
+      storage.patterns.addPattern(createPattern({ id: 'p-rejected' }))
+      storage.patterns.rejectPattern('p-rejected')
+
+      expect(storage.patterns.patternCount()).toBe(1)
+    })
   })
 
   // -----------------------------------------------------------------------
@@ -180,6 +188,15 @@ describe('PatternRepository', () => {
       storage.patterns.addPattern(createPattern({ id: 'p-nm', name: 'Something' }))
 
       expect(storage.patterns.searchPatterns('zzz_nonexistent')).toEqual([])
+    })
+
+    it('should exclude rejected patterns from search results', () => {
+      storage.patterns.addPattern(createPattern({ id: 'p-search-active', name: 'Sync report' }))
+      storage.patterns.addPattern(createPattern({ id: 'p-search-rejected', name: 'Sync status' }))
+      storage.patterns.rejectPattern('p-search-rejected')
+
+      const results = storage.patterns.searchPatterns('Sync')
+      expect(results.map((p) => p.id)).toEqual(['p-search-active'])
     })
   })
 
