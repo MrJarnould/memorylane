@@ -1,22 +1,20 @@
-# MemoryLane v0.15.0
+# MemoryLane v0.15.1
 
-Minor release focused on the redesigned settings experience, auto-generated user context, live pattern feedback, and clearer model health/status signals.
+Patch release focused on pattern detection controls, a stronger detection pipeline, and integration/status polish.
 
 ## What's Changed
 
-- **Settings overhaul** - Advanced settings are consolidated into clearer sections for models, privacy, connections, and capture controls, with model edits autosaving correctly
-- **User context builder** - MemoryLane now builds a reusable user context profile from your activity history to improve semantic understanding
-- **Pattern feedback loop** - Pattern cards are wired to live database data with persistent thumbs up/down feedback and rejection tracking
-- **Model health and status clarity** - The app now surfaces LLM health checks, a simpler status line, and better custom endpoint prefills and validation
-- **MCP and plan polish** - Claude setup guidance is easier to collapse when not needed, plan defaults were streamlined, and the plugin integration docs were refreshed
+- **Pattern detection controls** - Pattern detection can now be turned on or off from settings, with a clearer main window call to action when it is disabled
+- **Stronger detection pipeline** - Pattern detection now uses a two-phase agentic flow with tool access, refreshes on window focus, and prunes stale patterns more reliably (#87)
+- **Integration and status polish** - MCP status checks are now real-time, browser-native alerts were replaced with app UI, and startup/settings behavior is cleaner
+- **Patterns and model UI cleanup** - Pattern cards surface duration estimates more clearly, while model selectors and integration controls stay out of the way unless needed
 
 ## Features
 
-- Reworked advanced settings UI with clearer grouped sections and better autosave behavior
-- Auto-generated user context can now be derived from activity data and reused by semantic features
-- Pattern suggestions now use live stored data and keep approve/reject feedback across sessions
-- LLM health checks and status indicators make provider/configuration issues easier to spot
-- Claude and plugin setup flows are cleaner for users who do not need every integration path
+- Toggle pattern detection without leaving the app flow
+- Improved agentic pattern detection with stale-pattern pruning and better refresh timing
+- Live MCP status checks and fewer disruptive dialogs in setup flows
+- Clearer pattern cards, integrations UI, and model controls in settings
 
 ## Known Issues & Limitations
 
@@ -30,4 +28,4 @@ Minor release focused on the redesigned settings experience, auto-generated user
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.14.3...v0.15.0
+https://github.com/deusXmachina-dev/memorylane/compare/v0.15.0...v0.15.1
