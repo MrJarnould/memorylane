@@ -1,16 +1,14 @@
-# MemoryLane v0.15.4
+# MemoryLane v0.15.5
 
-Patch release focused on approved automation visibility.
+Patch release focused on safer updater installs.
 
 ## What's Changed
 
-- **Approved patterns stay visible** - Approving a low-sighting automation no longer makes it disappear from the reviewed list
-- **Sightings filter stays accessible** - The filter bar now remains visible whenever approved automations exist
+- **Updater rechecks before install** - MemoryLane now verifies update state again before starting installation, reducing stale or duplicate install attempts
 
 ## Features
 
-- Reviewed automation cards remain visible immediately after approval
-- Sightings filter stays available for all approved automation opportunities
+- Auto-updates revalidate the pending release before installation begins
 
 ## Known Issues & Limitations
 
@@ -24,4 +22,4 @@ Patch release focused on approved automation visibility.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.15.3...v0.15.4
+https://github.com/deusXmachina-dev/memorylane/compare/v0.15.4...v0.15.5
