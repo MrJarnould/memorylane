@@ -114,7 +114,7 @@ export function registerTools(server: McpServer, getServices: () => MCPServices 
     'get_user_context',
     {
       description:
-        'Retrieve the auto-generated user profile (persona) built from observed screen activity. Returns a short summary, a detailed summary, and when the profile was last updated. Useful for grounding personalized responses.',
+        'Retrieve the auto-generated user profile built from observed screen activity. Returns a short summary, a detailed summary, and when the profile was last updated. Useful for grounding personalized responses.',
       inputSchema: {},
     },
     () => handleGetUserContext(getServices()),
@@ -467,7 +467,8 @@ function formatPatternLine(p: PatternWithStats): string {
 function formatSightingLine(s: PatternSighting): string {
   const time = new Date(s.detectedAt).toLocaleString()
   const confidence = `${(s.confidence * 100).toFixed(0)}%`
-  return `- ${s.id} | ${time} | confidence: ${confidence} | run: ${s.runId}\n  Evidence: ${s.evidence}\n  Activity IDs: ${s.activityIds.join(', ')}`
+  const duration = s.durationEstimateMin != null ? ` | ~${s.durationEstimateMin} min` : ''
+  return `- ${s.id} | ${time} | confidence: ${confidence}${duration} | run: ${s.runId}\n  Evidence: ${s.evidence}\n  Activity IDs: ${s.activityIds.join(', ')}`
 }
 
 async function handleListPatterns(services: MCPServices | null) {
@@ -617,17 +618,7 @@ async function handleGetPatternDetails(
         .getSightingsByRunId(runId)
         .filter((s) => s.patternId === patternId)
     } else {
-      // No runId filter — get all sightings by fetching all runs
-      // PatternRepository doesn't have getAllSightingsForPattern, so we
-      // use the sighting count from stats. For the detail view we show
-      // up to 20 recent sightings by using the last-run approach.
-      const lastRunTs = storage.patterns.getLastRunTimestamp()
-      if (lastRunTs) {
-        // Gather sightings from recent runs — get last 5 distinct runs worth
-        // We don't have a dedicated method, so use the SQL directly isn't possible.
-        // Instead, we just note the count and show what we can.
-        sightings = []
-      }
+      sightings = storage.patterns.getSightingsForPattern(patternId)
     }
 
     let sightingsSection = ''

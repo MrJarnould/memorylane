@@ -24,6 +24,7 @@ export interface PatternSighting {
   evidence: string
   activityIds: string[] // JSON array in DB
   confidence: number
+  durationEstimateMin: number | null
 }
 
 /** Pattern with derived sighting stats (computed via JOIN). */
@@ -99,6 +100,25 @@ export class PatternRepository {
     return rows.map((row) => this.rowToPatternWithStats(row))
   }
 
+  getRejectedPatterns(limit = 3): PatternWithStats[] {
+    const rows = this.db
+      .prepare(
+        `SELECT p.*,
+                COUNT(s.id) AS sighting_count,
+                MAX(s.detected_at) AS last_seen_at,
+                (SELECT confidence FROM pattern_sightings WHERE pattern_id = p.id ORDER BY detected_at DESC LIMIT 1) AS last_confidence
+         FROM patterns p
+         LEFT JOIN pattern_sightings s ON s.pattern_id = p.id
+         WHERE p.rejected_at IS NOT NULL
+         GROUP BY p.id
+         ORDER BY sighting_count DESC
+         LIMIT ?`,
+      )
+      .all(limit) as Record<string, unknown>[]
+
+    return rows.map((row) => this.rowToPatternWithStats(row))
+  }
+
   searchPatterns(query: string): PatternWithStats[] {
     const like = `%${query}%`
     const rows = this.db
@@ -133,6 +153,33 @@ export class PatternRepository {
     this.db.prepare(`UPDATE patterns SET rejected_at = ? WHERE id = ?`).run(Date.now(), id)
   }
 
+  updatePattern(
+    id: string,
+    fields: { name?: string; description?: string; apps?: string[]; automationIdea?: string },
+  ): void {
+    const sets: string[] = []
+    const values: unknown[] = []
+    if (fields.name) {
+      sets.push('name = ?')
+      values.push(fields.name)
+    }
+    if (fields.description) {
+      sets.push('description = ?')
+      values.push(fields.description)
+    }
+    if (fields.apps) {
+      sets.push('apps = ?')
+      values.push(JSON.stringify(fields.apps))
+    }
+    if (fields.automationIdea) {
+      sets.push('automation_idea = ?')
+      values.push(fields.automationIdea)
+    }
+    if (sets.length === 0) return
+    values.push(id)
+    this.db.prepare(`UPDATE patterns SET ${sets.join(', ')} WHERE id = ?`).run(...values)
+  }
+
   markPromptCopied(id: string): void {
     this.db.prepare(`UPDATE patterns SET prompt_copied_at = ? WHERE id = ?`).run(Date.now(), id)
   }
@@ -142,8 +189,8 @@ export class PatternRepository {
   addSighting(sighting: PatternSighting): void {
     this.db
       .prepare(
-        `INSERT INTO pattern_sightings (id, pattern_id, detected_at, run_id, evidence, activity_ids, confidence)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO pattern_sightings (id, pattern_id, detected_at, run_id, evidence, activity_ids, confidence, duration_estimate_min)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         sighting.id,
@@ -153,7 +200,18 @@ export class PatternRepository {
         sighting.evidence,
         JSON.stringify(sighting.activityIds),
         sighting.confidence,
+        sighting.durationEstimateMin,
       )
+  }
+
+  getSightingsForPattern(patternId: string, limit = 20): PatternSighting[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM pattern_sightings WHERE pattern_id = ? ORDER BY detected_at DESC LIMIT ?`,
+      )
+      .all(patternId, limit) as Record<string, unknown>[]
+
+    return rows.map((row) => this.rowToSighting(row))
   }
 
   getSightingsByRunId(runId: string): PatternSighting[] {
@@ -166,9 +224,39 @@ export class PatternRepository {
 
   getLastRunTimestamp(): number | null {
     const row = this.db
-      .prepare('SELECT MAX(detected_at) AS latest FROM pattern_sightings')
+      .prepare('SELECT MAX(ran_at) AS latest FROM pattern_detection_runs')
       .get() as LastRunRow
     return row.latest ?? null
+  }
+
+  recordRun(runId: string, findingsCount: number): void {
+    this.db
+      .prepare('INSERT INTO pattern_detection_runs (id, ran_at, findings_count) VALUES (?, ?, ?)')
+      .run(runId, Date.now(), findingsCount)
+  }
+
+  // -- Cleanup --
+
+  /**
+   * Delete sightings older than `maxAgeDays`. If a pattern has no remaining
+   * sightings after pruning, delete the pattern too. Returns counts.
+   */
+  pruneStale(maxAgeDays = 30): { sightings: number; patterns: number } {
+    const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000
+
+    const sightings = this.db
+      .prepare('DELETE FROM pattern_sightings WHERE detected_at < ?')
+      .run(cutoff).changes
+
+    const patterns = this.db
+      .prepare(
+        `DELETE FROM patterns WHERE id NOT IN (
+           SELECT DISTINCT pattern_id FROM pattern_sightings
+         )`,
+      )
+      .run().changes
+
+    return { sightings, patterns }
   }
 
   // -- Private helpers --
@@ -199,6 +287,7 @@ export class PatternRepository {
       evidence: row.evidence as string,
       activityIds: JSON.parse((row.activity_ids as string) || '[]') as string[],
       confidence: row.confidence as number,
+      durationEstimateMin: (row.duration_estimate_min as number) ?? null,
     }
   }
 }
