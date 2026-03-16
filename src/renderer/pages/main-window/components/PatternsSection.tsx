@@ -104,18 +104,34 @@ export function PatternsSection({ api }: PatternsSectionProps): React.JSX.Elemen
       const prompt = [
         `I want to automate this recurring workflow: "${pattern.name}".`,
         ``,
-        `Use the MemoryLane MCP tools to research it before proposing a solution:`,
+        `## Step 1 — Research`,
         ``,
-        `1. Run search_patterns with query "${pattern.name}" to find the pattern and get its ID.`,
-        `2. Run get_pattern_details with that pattern ID to see all sightings and the evidence for each.`,
-        `3. Pick 3-5 sightings with the highest confidence and collect their activity IDs.`,
-        `4. Run get_activity_details on those activity IDs to read the actual on-screen text (OCR) — this shows exactly what I was doing step by step.`,
-        `5. Based on the real evidence, propose a concrete automation plan: what triggers the workflow, what each step does, and which tools or integrations to use (apps involved: ${pattern.apps.join(', ')}).`,
+        `Use the MemoryLane MCP tools to understand what this pattern really involves:`,
         ``,
-        `Keep the plan actionable — specific tools, APIs, or scripts I can set up, not vague advice.`,
+        `1. Call get_pattern_details with pattern ID "${pattern.id}" to see all sightings.`,
+        `2. Pick 3-5 sightings with the highest confidence and call get_activity_details on their activity IDs to read the OCR evidence — this shows exactly what I was doing.`,
+        `3. For each of those sightings, call browse_timeline around the sighting timestamp (±15 minutes) to see what happened before and after. This gives you context about the full workflow — what triggers it and what follows.`,
+        ``,
+        `## Step 2 — Ask me questions`,
+        ``,
+        `Before building anything, ask me clarifying questions:`,
+        `- Which steps vary between occurrences?`,
+        `- What inputs or variables are needed?`,
+        `- What tools, APIs, or services do I have available?`,
+        `- Anything else you need to know to build a good automation.`,
+        ``,
+        `Wait for my answers before proceeding.`,
+        ``,
+        `## Step 3 — Create a Claude Code skill`,
+        ``,
+        `Based on your research and my answers, use /skill-creator to create a skill. Give it a brief that includes:`,
+        `- What triggers the workflow`,
+        `- Step-by-step actions the skill should perform`,
+        `- Apps involved: ${pattern.apps.join(', ')}`,
+        `- Variable inputs the skill needs to ask for`,
       ].join('\n')
       navigator.clipboard.writeText(prompt).then(() => {
-        toast.success('Copied! Paste it into your Claude desktop app')
+        toast.success('Copied! Paste it into Claude Cowork')
       })
       api.markPatternPromptCopied(pattern.id).catch(() => {
         // timestamp persisted best-effort

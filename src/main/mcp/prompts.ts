@@ -124,8 +124,10 @@ export function registerPrompts(server: McpServer): void {
                 'Call list_patterns to get all detected patterns with stats.\n' +
                 'For the top patterns (by sighting count), call get_pattern_details to ' +
                 'understand the evidence and the automation idea already stored with the pattern.\n' +
-                'If a pattern is unclear, use browse_timeline or search_context to examine ' +
-                'the underlying activity for more context.\n\n' +
+                'For the highest-confidence sightings, call get_activity_details on their activity IDs ' +
+                'to read the OCR evidence — this shows exactly what was on screen.\n' +
+                'If a pattern is still unclear, use browse_timeline around the sighting timestamps ' +
+                '(±15 minutes) to see what happened before and after for more context.\n\n' +
                 '## Step 2 — Check existing skills\n\n' +
                 'Before creating anything, check what skills already exist. ' +
                 'Look for existing skill files and compare them against the detected patterns. ' +
