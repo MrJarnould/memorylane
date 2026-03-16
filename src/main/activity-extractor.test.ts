@@ -248,6 +248,39 @@ describe('ActivityExtractor', () => {
     expect(stats.succeeded).toBe(1)
   })
 
+  it('notifies persisted listeners with extracted activity after sink persistence', async () => {
+    const callOrder: string[] = []
+    const listenerCalls: Array<{ activityId: string; summary: string }> = []
+    const { extractor, activityStream, consumerId } = createExtractor({
+      sink: {
+        persist: async ({ activity }) => {
+          callOrder.push(`persist:${activity.id}`)
+        },
+      },
+    })
+
+    extractor.addPersistedListener(async ({ activity, extracted }) => {
+      callOrder.push(`listener:${activity.id}`)
+      listenerCalls.push({
+        activityId: activity.id,
+        summary: extracted.summary,
+      })
+    })
+
+    await extractor.start()
+    await activityStream.append(makeActivity('listener-1', 4_000))
+
+    await waitFor(() => listenerCalls.length === 1, 'Expected persisted listener to be called')
+    expect(listenerCalls).toEqual([
+      {
+        activityId: 'listener-1',
+        summary: 'summary:listener-1',
+      },
+    ])
+    expect(callOrder).toEqual(['persist:listener-1', 'listener:listener-1'])
+    expect(await activityStream.getAck(consumerId)).toBe(0)
+  })
+
   it('dead-letters after retries are exhausted and unblocks later offsets', async () => {
     const persisted: string[] = []
     const { extractor, activityStream, consumerId } = createExtractor({

@@ -12,6 +12,15 @@ export interface ExtractedActivity {
   vector: number[]
 }
 
+export interface ActivityPersistedListenerInput {
+  activity: Activity
+  extracted: ExtractedActivity
+}
+
+export type ActivityPersistedListener = (
+  input: ActivityPersistedListenerInput,
+) => void | Promise<void>
+
 export interface ActivityTransformer {
   transform(activity: Activity): Promise<ExtractedActivity>
 }

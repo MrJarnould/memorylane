@@ -3,6 +3,8 @@ import type { Activity } from './activity-types'
 import {
   DEFAULT_ACTIVITY_EXTRACTOR_CONFIG,
   type ActivityExtractorStats,
+  type ActivityPersistedListener,
+  type ActivityPersistedListenerInput,
   type ActivitySink,
   type ActivityTransformer,
   type ActivityExtractorConfig,
@@ -23,6 +25,7 @@ export class ActivityExtractor {
   private readonly transformer: ActivityTransformer
   private readonly sink: ActivitySink
   private readonly config: ActivityExtractorConfig
+  private readonly persistedListeners = new Set<ActivityPersistedListener>()
 
   private subscription: StreamSubscription | null = null
   private started = false
@@ -107,6 +110,13 @@ export class ActivityExtractor {
     }
   }
 
+  addPersistedListener(listener: ActivityPersistedListener): () => void {
+    this.persistedListeners.add(listener)
+    return () => {
+      this.persistedListeners.delete(listener)
+    }
+  }
+
   private enqueue(record: StreamRecord<Activity>): void {
     if (!this.started) return
     this.pending.push({ record, attempt: 0 })
@@ -139,6 +149,10 @@ export class ActivityExtractor {
     try {
       const extracted = await this.transformer.transform(task.record.payload)
       await this.sink.persist({
+        activity: task.record.payload,
+        extracted,
+      })
+      await this.notifyPersistedListeners({
         activity: task.record.payload,
         extracted,
       })
@@ -177,6 +191,19 @@ export class ActivityExtractor {
         this.config.onTaskComplete?.(task.record.payload, 'dead-lettered')
       } catch (e) {
         log.warn('[ActivityExtractor] onTaskComplete callback error (dead-lettered):', e)
+      }
+    }
+  }
+
+  private async notifyPersistedListeners(input: ActivityPersistedListenerInput): Promise<void> {
+    for (const listener of this.persistedListeners) {
+      try {
+        await listener(input)
+      } catch (error) {
+        log.warn(
+          `[ActivityExtractor] Persisted listener failed for activity ${input.activity.id}:`,
+          error,
+        )
       }
     }
   }
