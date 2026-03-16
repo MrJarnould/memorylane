@@ -1,16 +1,17 @@
-# MemoryLane v0.16.0
+# MemoryLane v0.17.0
 
-Minor release that keeps the core feature set stable while rolling back recent UI and updater behavior changes.
+Minor release focused on pattern workflow UX and MCP prompt cleanup.
 
 ## What's Changed
 
-- Reverted the pattern review interface back to the flat list with thumbs up/down actions
-- Reverted updater recheck-before-install behavior to the previous install flow
-- Reverted release workflow Discord notification changes
+- Added an expandable pattern feedback nudge card for quicker review and response actions
+- Improved pattern list behavior and persisted activity updates for smoother in-app feedback loops
+- Removed MCP prompt payloads from server responses to keep context output cleaner
 
 ## Features
 
-- Same feature set as `v0.15.6`
+- Task recommendation cards now support a compact/expanded feedback flow with thumbs up/down handling
+- MCP context responses are leaner and better suited for downstream assistants
 
 ## Known Issues & Limitations
 
@@ -24,4 +25,4 @@ Minor release that keeps the core feature set stable while rolling back recent U
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.15.6...v0.16.0
+https://github.com/deusXmachina-dev/memorylane/compare/v0.16.0...v0.17.0
