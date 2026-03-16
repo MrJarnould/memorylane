@@ -1,14 +1,16 @@
-# MemoryLane v0.15.6
+# MemoryLane v0.16.0
 
-Patch release that rolls the published version forward.
+Minor release that keeps the core feature set stable while rolling back recent UI and updater behavior changes.
 
 ## What's Changed
 
-- No additional product changes since `v0.15.5`
+- Reverted the pattern review interface back to the flat list with thumbs up/down actions
+- Reverted updater recheck-before-install behavior to the previous install flow
+- Reverted release workflow Discord notification changes
 
 ## Features
 
-- Same feature set as `v0.15.5`
+- Same feature set as `v0.15.6`
 
 ## Known Issues & Limitations
 
@@ -22,4 +24,4 @@ Patch release that rolls the published version forward.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.15.5...v0.15.6
+https://github.com/deusXmachina-dev/memorylane/compare/v0.15.6...v0.16.0
