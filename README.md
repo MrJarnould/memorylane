@@ -2,7 +2,7 @@
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20our%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/AHmURhKXdP)
 
-## Installation
+## App Download
 
 [![macOS](https://img.shields.io/badge/macOS-Apple_Silicon-black?logo=apple)](https://github.com/deusXmachina-dev/memorylane/releases/latest/download/MemoryLane-arm64-mac.dmg)
 
