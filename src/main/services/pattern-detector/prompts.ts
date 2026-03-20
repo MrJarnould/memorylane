@@ -17,7 +17,7 @@ export function buildScanSystemPrompt(
   rejectedPatterns: PatternWithStats[],
   userContext?: string,
 ): string {
-  const userContextSection = userContext ? `\n## User context\n\n${userContext}\n` : ''
+  const userContextSection = userContext ? `\n## My context\n\n${userContext}\n` : ''
 
   let rejectedSection = ''
   if (rejectedPatterns.length > 0) {
@@ -28,12 +28,12 @@ export function buildScanSystemPrompt(
 
 ## Previously rejected patterns (DO NOT detect these again)
 
-The user has explicitly rejected these patterns as not useful. Do not output candidates that match or closely resemble them:
+I have explicitly rejected these patterns as not useful. Do not output candidates that match or closely resemble them:
 
 ${examples}`
   }
 
-  return `You are an automation analyst examining a user's computer activity from ${dateLabel}. Your job is to find work that is repetitive, manual, and could be automated away with a script, API call, or tool.
+  return `You are an automation analyst examining a my computer activity from ${dateLabel}. Your job is to find work that is repetitive, manual, and could be automated away with a script, API call, or tool.
 ${userContextSection}
 Below you will receive a complete list of activities for the day. Analyze them to find automatable patterns.
 
@@ -49,14 +49,14 @@ GOOD finds (automatable drudge work):
 - Routine maintenance tasks done the same way each time
 
 BAD finds (not useful, skip these):
-- "User programs a lot" — obviously, they're a developer
-- "User checks email every morning" — that's just life
-- "User uses Chrome and VS Code" — that's just app usage, not a workflow
-- Generic habits like "browses the web" or "writes code"
+- "You write a lot"
+- "You check email every morning" — that's just life
+- "You use Chrome and Notion" — that's just app usage, not a workflow
+- Generic habits like "browse the web" or "write code"
 - Any pattern that doesn't have a clear automation opportunity
 ${rejectedSection}
 
-The key question for each finding: "Could a script, cron job, API integration, or macro do this instead of the human?"
+The key question for each finding: "Could a script, cron job, API integration, or macro do this instead of me?"
 
 ## Output
 
@@ -66,7 +66,7 @@ Output your findings as a JSON array:
 [
   {
     "name": "Short name for the automatable task",
-    "description": "What the user does manually, step by step",
+    "description": "What I do manually, step by step",
     "apps": ["App1", "App2"],
     "automation_idea": "How this could be automated (specific: which API, what script, what tool)",
     "confidence": 0.0-1.0,
@@ -112,7 +112,7 @@ ${JSON.stringify(patternsJson, null, 2)}
 
   return `You are verifying whether a candidate pattern represents real, automatable, repetitive work.
 
-## Candidate information retrieved from a superficial scan of user activities
+## Candidate information retrieved from a superficial scan of my activities
 - Name: ${candidate.name}
 - Description: ${candidate.description}
 - Apps: ${appList}
@@ -132,7 +132,7 @@ Then decide one of three outcomes.
 
 Prefer reporting a re-sighting of an existing pattern over creating a new one. If the candidate is related to a known pattern (same workflow, same goal, overlapping apps), treat it as a sighting. Only create a new pattern when it is distinct from everything in the known list.
 
-For verified patterns (new or sighting), also estimate \`duration_estimate_min\`: how many minutes the user spent on this particular instance of the task. Base this on the activity durations and timestamps you observe in the evidence.
+For verified patterns (new or sighting), also estimate \`duration_estimate_min\`: how many minutes I spent on this particular instance of the task. Base this on the activity durations and timestamps you observe in the evidence.
 
 ### 1. Re-sighting of known pattern (preferred)
 If this candidate matches or overlaps with an existing known pattern, output:
@@ -161,7 +161,7 @@ Only if the candidate is clearly distinct from all known patterns:
 {
   "verdict": "new",
   "name": "Refined pattern name",
-  "description": "What the user does manually, step by step — informed by OCR and search results",
+  "description": "What I do manually, step by step — informed by OCR and search results",
   "apps": ["App1", "App2"],
   "automation_idea": "How this could be automated (specific: which API, what script, what tool)",
   "duration_estimate_min": 5,
