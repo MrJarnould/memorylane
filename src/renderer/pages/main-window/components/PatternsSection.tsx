@@ -259,7 +259,7 @@ export function PatternsSection({ api }: PatternsSectionProps): React.JSX.Elemen
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              {pattern.automationIdea || pattern.description}
+              {pattern.description || pattern.automationIdea}
             </p>
             <Button size="sm" className="w-full" onClick={() => handleCopyPrompt(pattern)}>
               Copy prompt for Claude
