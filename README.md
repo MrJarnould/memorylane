@@ -22,7 +22,7 @@ Desktop app that sees what you see, builds context about how you work, and surfa
 
 ## Privacy & Permissions
 
-See [docs/privacy-and-permissions.md]
+See [Privacy & Permissions](docs/privacy-and-permissions.md).
 
 ## Community
 
