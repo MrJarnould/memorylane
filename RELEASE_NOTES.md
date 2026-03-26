@@ -1,10 +1,10 @@
-# MemoryLane v0.17.3
+# MemoryLane v0.17.4
 
-Patch release: renamed the Power User plan to Explorer.
+Patch release: updated Explorer plan price to $50/mo.
 
 ## What's Changed
 
-- Renamed subscription plan from "Power User" to "Explorer"
+- Updated Explorer plan price from $30/mo to $50/mo
 
 ## Known Issues & Limitations
 
@@ -18,4 +18,4 @@ Patch release: renamed the Power User plan to Explorer.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.17.2...v0.17.3
+https://github.com/deusXmachina-dev/memorylane/compare/v0.17.3...v0.17.4
