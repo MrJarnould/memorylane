@@ -1,14 +1,10 @@
-# MemoryLane v0.17.2
+# MemoryLane v0.17.3
 
-Patch release: managed subscription keys refresh in the background so entitlement stays aligned with the backend.
+Patch release: renamed the Power User plan to Explorer.
 
 ## What's Changed
 
-- Added a daily background refresh for provisioned API keys so subscription changes apply without restarting the app
-
-## Features
-
-- Managed-key subscription state stays in sync via periodic re-fetch (24-hour interval)
+- Renamed subscription plan from "Power User" to "Explorer"
 
 ## Known Issues & Limitations
 
@@ -22,4 +18,4 @@ Patch release: managed subscription keys refresh in the background so entitlemen
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.17.1...v0.17.2
+https://github.com/deusXmachina-dev/memorylane/compare/v0.17.2...v0.17.3
