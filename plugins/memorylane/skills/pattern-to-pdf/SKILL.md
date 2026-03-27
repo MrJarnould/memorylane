@@ -1,11 +1,12 @@
 ---
 name: pattern-to-pdf
-description: Process Description Document generator. Takes a detected pattern or user-described process and produces a downloadable PDF briefing with a visual process map, step details, occurrence stats, and improvement opportunities. Requires MemoryLane MCP tools.
+allowed-tools: mcp__memorylane__browse_timeline, mcp__memorylane__search_context, mcp__memorylane__get_activity_details
+description: Generate a process description document as a downloadable PDF from a detected pattern
 ---
 
-# Process Description Document (PDD)
+# Pattern to PDF
 
-Turn a detected pattern into a shareable process briefing — the kind you'd hand to a new hire or paste into an ops wiki.
+Generate a shareable process briefing from a detected pattern or user-described workflow — a visual process map, step-by-step walkthrough, occurrence stats, and improvement opportunities. Output is a downloadable PDF.
 
 ## The Goal
 
@@ -28,55 +29,123 @@ Process Description Document:
   Opportunity — biggest time sink + concrete automation suggestion
 ```
 
-## Input
+## Instructions
 
-Expects one of:
+### Step 1 — Identify the Process
 
-- A **pattern name/description** from the pattern-detector output (e.g., "Client Onboarding")
-- A **user-described process** (e.g., "the thing I do every Monday with Stripe and Sheets")
-- A **search query** if the user is vague (you'll discover the process from data)
+Determine which process to document:
 
-## Data Gathering Strategy
+1. If the user names a specific pattern (e.g., from a previous `/discover-patterns` run), use that as the starting point.
+2. If the user describes a process vaguely ("the thing I do with invoices"), ask a clarifying question to get the key apps and actions involved.
+3. If nothing is specified, ask: "Which process would you like me to document? Name it or describe the key apps/steps and I'll find it in your activity."
 
-### 1. Find All Instances
+### Step 2 — Search for Instances
+
+Cast a wide net across 30 days:
 
 ```
-search_context(query="<pattern description>", startTime="30 days ago", endTime="now", limit=30)
+search_context(query="<process description + key apps>", startTime="30 days ago", endTime="now", limit=30)
 ```
 
-Cast a wide net. Use the pattern name, key apps, and distinguishing actions as search terms. If the pattern-detector already identified specific dates, use those as anchors.
+Use the pattern name, key apps, and distinguishing actions as search terms. Try 2–3 query variations if the first returns sparse results (e.g., search by app name, then by action description, then by output artifact).
 
-### 2. Cluster by Occurrence
+### Step 3 — Cluster into Occurrences
 
-Group returned activities by date proximity — activities within 60 minutes of each other likely belong to the same occurrence. Build a list of distinct occurrences with their date ranges.
+Group returned activities by date proximity — activities within 60 minutes of each other likely belong to the same occurrence. Count distinct occurrences and note their date ranges.
 
-### 3. Deep-Dive the Best Instances
+- If **5+ occurrences**: excellent — pick the 3–5 clearest for deep dive.
+- If **3–4 occurrences**: sufficient — deep dive all of them.
+- If **< 3 occurrences**: use the fallback in Step 5.
 
-Pick the **3–5 clearest instances** — the ones with the most steps and least noise (fewest unrelated app switches mixed in):
+### Step 4 — Deep Dive
+
+For the selected instances, fetch full details:
 
 ```
 get_activity_details(ids=["id1", "id2", "id3", ...])
 ```
 
-Use OCR text to understand exactly what's happening at each step — what fields are being filled, what data is being moved, what decisions are being made.
+Use OCR text to understand exactly what happens at each step — what fields are filled, what data moves between apps, what decisions are made.
 
-### 4. Cross-Reference for Canonical Sequence
+**Privacy**: never reproduce passwords, API keys, or personal messages from OCR in the output.
 
-Compare all deep-dived instances to build:
+### Step 5 — Fallback for Sparse Data
 
-- **Canonical steps** — the steps that appear in every (or nearly every) instance, in the same order
-- **Variations** — steps that differ between instances (different client names, different amounts, optional branches)
-- **Decision points** — places where the process forks (e.g., "if international client → add tax form step")
+If fewer than 3 instances were found in Step 2:
 
-### 5. Fallback: Sparse Data
-
-If `search_context` returns fewer than 3 instances:
+1. Use any known dates from the search results as anchors.
+2. `browse_timeline` around each known date with a ±2 hour window:
 
 ```
-browse_timeline(startTime="<known_date> - 2 hours", endTime="<known_date> + 2 hours", limit=200, sampling="uniform")
+browse_timeline(startTime="<known_date> - 2 hours", endTime="<known_date> + 2 hours", limit=50, sampling="uniform")
 ```
 
-Use `browse_timeline` around known occurrence dates to reconstruct the full sequence from surrounding context. Even 2 good instances can produce a useful PDD if the process is consistent.
+3. Reconstruct the process sequence from surrounding context.
+4. If still fewer than 2 clear instances after fallback, tell the user there isn't enough data to produce a reliable document. Suggest they try again after performing the process a few more times with MemoryLane running.
+
+### Step 6 — Synthesize
+
+Cross-reference all deep-dived instances to build:
+
+1. **Canonical step sequence** — steps that appear consistently across instances
+2. **Variations** — what changes between instances
+3. **Decision points** — where the process branches
+4. **Timing** — average duration overall and per step (from timestamps)
+5. **Opportunity** — biggest time sink and what's automatable
+
+### Step 7 — Render as PDF
+
+Use the HTML Template below to produce the final document. Include:
+
+1. **Header** with process name and scan metadata
+2. **Executive summary** — 3–4 sentences
+3. **At a Glance stats** — frequency, duration, apps, last seen, instances
+4. **Process map** — vertical flowchart using the node types below (solid for constant steps, dashed for variable, distinct color for decisions)
+5. **Steps table** — numbered walkthrough with app, action, and what varies
+6. **Opportunity section** — time sink, automatable parts, concrete suggestion
+7. **Footer** with methodology note
+
+**Convert to PDF:**
+
+1. Wrap the filled-in HTML template in a full HTML document:
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @page {
+        margin: 24px;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+      }
+      @media print {
+        body {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- filled-in template HTML here -->
+  </body>
+</html>
+```
+
+2. Write to `/tmp/pdd-temp.html` using the Write tool.
+3. Convert to PDF using Bash — use a slugified version of the process name (e.g., "Client Onboarding" → `client-onboarding-pdd.pdf`):
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --disable-gpu --no-pdf-header-footer --print-to-pdf="<slug>-pdd.pdf" /tmp/pdd-temp.html 2>/dev/null && rm /tmp/pdd-temp.html
+```
+
+If Chrome is not installed, fall back to saving as `<slug>-pdd.html` and tell the user.
+
+4. Tell the user the PDF has been saved and they can open it.
 
 ## Document Sections
 
@@ -113,7 +182,7 @@ A vertical CSS flowchart — the visual centerpiece of the document.
 - **Decision points** = distinct styled node (octagonal or highlighted border) with Yes/No branches
 - **Constant steps** = solid border — these happen every time
 - **Variable steps** = dashed border + annotation explaining what varies
-- Steps derived from cross-instance analysis (Section 4 of Data Gathering)
+- Steps derived from cross-instance analysis (Step 6)
 
 **Node anatomy:**
 
@@ -224,7 +293,7 @@ The process map uses pure inline CSS (no classes, no external styles). It follow
 
 ## HTML Template
 
-Replace all `{placeholders}` with actual data. The command file handles wrapping this in a full HTML document and converting to PDF — this template is just the body content.
+Replace all `{placeholders}` with actual data. Step 7 handles wrapping this in a full HTML document and converting to PDF — this template is just the body content.
 
 ```html
 <div
@@ -507,3 +576,9 @@ These show the expected level of detail. Each example: input pattern → what th
 - **Process map:** 4 nodes per report, wrapped in a "Repeat for each report" annotation — (1) Expense tool: Open next pending report → (2) Preview: Review PDF receipt/invoice [variable: vendor, amount, category] → (3) Browser: Check expense policy for category limits [variable: policy section checked] → (4) Expense tool: Approve or reject with notes [decision: "Within policy?" → Yes: approve → No: reject with reason]
 - **Decision branch:** After step 3 — "Within policy limits?" → Yes: approve → No: reject with policy citation.
 - **Opportunity:** Step 3 (policy lookup) is the bottleneck — different policy sections for different expense categories. A pre-check script that flags policy violations before human review would eliminate the manual lookup for ~80% of reports.
+
+## Notes
+
+- **Minimum data threshold** — need at least 2 clear instances to produce a document. Below that, tell the user.
+- **Privacy** — summaries are the primary data source. Only use `get_activity_details` for the deep-dive step. Never reproduce raw OCR in the output.
+- **Scope** — one document per process. If the user wants multiple processes documented, run this skill once per process.

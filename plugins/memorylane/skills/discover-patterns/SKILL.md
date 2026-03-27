@@ -1,4 +1,5 @@
 ---
+name: discover-patterns
 allowed-tools: mcp__memorylane__browse_timeline, mcp__memorylane__search_context, mcp__memorylane__get_activity_details
 description: Discover repeated workflow patterns from screen activity and suggest automations
 ---

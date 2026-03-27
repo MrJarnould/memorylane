@@ -1,4 +1,5 @@
 ---
+name: review-patterns
 allowed-tools: mcp__memorylane__list_patterns, mcp__memorylane__get_pattern_details, mcp__memorylane__search_context, mcp__memorylane__get_activity_details
 description: Review detected patterns and surface the best automation candidates
 ---
