@@ -37,8 +37,8 @@ describe('buildAppDataPath', () => {
     )
   })
 
-  it('returns the Linux app data directory', () => {
-    expect(buildAppDataPath('linux', '/home/example', undefined, false)).toBe(
+  it('returns the fallback Unix app data directory', () => {
+    expect(buildAppDataPath('freebsd', '/home/example', undefined, false)).toBe(
       '/home/example/.config/MemoryLane',
     )
   })

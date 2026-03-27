@@ -1,13 +1,12 @@
 const MODIFIER_KEYS = new Set(['Meta', 'Control', 'Shift', 'Alt'])
 
-export type HotkeyPlatform = 'mac' | 'windows' | 'linux' | 'other'
+export type HotkeyPlatform = 'mac' | 'windows' | 'other'
 
 export function detectHotkeyPlatform(): HotkeyPlatform {
   const platform = navigator.userAgentData?.platform ?? navigator.platform ?? ''
   const normalized = platform.toLowerCase()
   if (normalized.includes('mac')) return 'mac'
   if (normalized.includes('win')) return 'windows'
-  if (normalized.includes('linux')) return 'linux'
   return 'other'
 }
 

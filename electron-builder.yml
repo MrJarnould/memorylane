@@ -87,16 +87,6 @@ win:
       arch:
         - x64
 
-linux:
-  target:
-    - target: deb
-      arch:
-        - x64
-    - target: rpm
-      arch:
-        - x64
-  category: Utility
-
 nsis:
   # Keep the installer filename explicit so latest.yml and the published
   # GitHub release asset name stay in sync.

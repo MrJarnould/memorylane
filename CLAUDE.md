@@ -36,7 +36,6 @@ npm run make
 # Platform-specific builds
 npm run make:mac
 npm run make:win
-npm run make:linux
 
 # Lint TypeScript files
 npm run lint
@@ -114,7 +113,7 @@ The project uses electron-vite for development and electron-builder for packagin
   - Source maps enabled for debugging
 
 - **electron-builder.yml**: Packaging configuration
-  - Defines targets for macOS, Windows, and Linux
+  - Defines targets for macOS and Windows
   - Configures ASAR unpacking for native modules
   - Handles asset copying to resources
 

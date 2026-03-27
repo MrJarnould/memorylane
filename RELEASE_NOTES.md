@@ -9,7 +9,7 @@ Patch release: updated Explorer plan price to $50/mo.
 ## Known Issues & Limitations
 
 - Windows OCR still depends on native OCR component availability
-- Linux and Intel macOS are not yet officially supported
+- Intel macOS is not yet officially supported
 
 ## Installation
 

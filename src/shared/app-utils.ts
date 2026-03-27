@@ -25,7 +25,7 @@ const TRANSIENT_APP_BUNDLE_IDS = new Set([
   'com.apple.loginwindow',
 ])
 
-// Browser process names for platforms without bundle IDs (Windows, Linux)
+// Browser process names for platforms without bundle IDs
 const BROWSER_PROCESS_NAMES = new Set([
   'Google Chrome',
   'Chromium',
