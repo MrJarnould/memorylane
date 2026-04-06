@@ -13,6 +13,11 @@ import { getDefaultDbPath } from '@main/paths'
 import { parseTimeString } from '@main/mcp/parse-time'
 import { sampleEntries } from '@main/mcp/formatting'
 import { resolveDbPath, setDbPath, getConfigFilePath } from './config'
+import {
+  isNativeBindingError,
+  formatNativeBindingHint,
+  NATIVE_BINDING_ERROR_SHORT,
+} from './native-error'
 
 // ---------------------------------------------------------------------------
 // Error class for CLI validation failures
@@ -324,6 +329,11 @@ async function main(): Promise<void> {
 // Only run when executed directly (not when imported by tests)
 if (require.main === module) {
   main().catch((err) => {
+    if (isNativeBindingError(err)) {
+      process.stderr.write(formatNativeBindingHint(err))
+      process.stdout.write(JSON.stringify({ error: NATIVE_BINDING_ERROR_SHORT }) + '\n')
+      process.exit(1)
+    }
     process.stdout.write(
       JSON.stringify({ error: err instanceof Error ? err.message : String(err) }) + '\n',
     )

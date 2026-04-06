@@ -42,6 +42,7 @@ import { z } from 'zod'
 import { MemoryLaneMCPServer } from '@main/mcp/server'
 import { getDefaultDbPath } from '@main/paths'
 import { resolveDbPath, setDbPath } from './config'
+import { isNativeBindingError, formatNativeBindingHint } from './native-error'
 
 // ---------------------------------------------------------------------------
 // Stdio mode
@@ -93,6 +94,10 @@ async function mainStdio(): Promise<void> {
 // Entry point
 // ---------------------------------------------------------------------------
 mainStdio().catch((error) => {
+  if (isNativeBindingError(error)) {
+    process.stderr.write(formatNativeBindingHint(error))
+    process.exit(1)
+  }
   console.error('Fatal error:', error)
   process.exit(1)
 })

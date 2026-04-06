@@ -100,6 +100,11 @@ export class MemoryLaneMCPServer {
 
   /**
    * Initializes services if they haven't been injected.
+   *
+   * Throws if storage or embedding init fails. Callers (the standalone CLI MCP
+   * entry and `scripts/mcp-server.ts`) are expected to catch and present a
+   * useful error — silently starting a half-alive server where every tool call
+   * fails is more confusing than an outright startup failure.
    */
   private async initializeServices(dbPath?: string): Promise<void> {
     if (this.services) return
@@ -107,26 +112,21 @@ export class MemoryLaneMCPServer {
     // Use provided path or fall back to default
     const resolvedPath = dbPath || getDefaultDbPath()
 
-    try {
-      if (!fs.existsSync(resolvedPath)) {
-        // Just a warning, not an error - database might be created on first write
-        log.error(`Warning: Database path does not exist: ${resolvedPath}`)
-      }
-
-      log.error(`Initializing services with DB path: ${resolvedPath}`)
-
-      const storage = new StorageService(resolvedPath)
-
-      const { EmbeddingService } = await import('../processor/embedding')
-      const embeddingService = new EmbeddingService()
-      await embeddingService.init()
-
-      this.services = { storage, embeddingService }
-      log.error('Services initialized successfully')
-    } catch (error) {
-      log.error('Failed to initialize services:', error)
-      // We allow the server to start even if services fail, but tools will report errors
+    if (!fs.existsSync(resolvedPath)) {
+      // Just a warning, not an error - database might be created on first write
+      log.error(`Warning: Database path does not exist: ${resolvedPath}`)
     }
+
+    log.error(`Initializing services with DB path: ${resolvedPath}`)
+
+    const storage = new StorageService(resolvedPath)
+
+    const { EmbeddingService } = await import('../processor/embedding')
+    const embeddingService = new EmbeddingService()
+    await embeddingService.init()
+
+    this.services = { storage, embeddingService }
+    log.error('Services initialized successfully')
   }
 
   /**
