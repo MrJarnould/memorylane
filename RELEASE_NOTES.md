@@ -1,12 +1,10 @@
-# MemoryLane v0.20.0
+# MemoryLane v0.20.1
 
-Enterprise edition: automatic and manual database sync to remote.
+Fixes a startup crash on Windows caused by missing onnxruntime DLLs.
 
 ## What's Changed
 
-- Added periodic database upload sync for enterprise edition — activated devices upload a backup to the enterprise backend every 24 hours
-- Added a "Sync to Remote" button in Advanced Settings for enterprise users to trigger an upload manually
-- Renamed `ENTERPRISE_LICENSE_CONFIG` to `ENTERPRISE_BACKEND_CONFIG` to reflect its broader scope
+- Fixed Windows startup crash: onnxruntime DLL directory is now added to PATH before module load, so the Windows DLL loader can find `onnxruntime.dll` and `DirectML.dll` in the asar.unpacked path
 
 ## Known Issues & Limitations
 
@@ -20,4 +18,4 @@ Enterprise edition: automatic and manual database sync to remote.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.19.1...v0.20.0
+https://github.com/deusXmachina-dev/memorylane/compare/v0.20.0...v0.20.1
