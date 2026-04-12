@@ -34,6 +34,24 @@ import { getAppDirectoryName } from './paths'
 import { loadAppEditionConfig } from './edition'
 import { ENTERPRISE_BACKEND_CONFIG } from '../shared/constants'
 
+// On Windows, onnxruntime_binding.node depends on onnxruntime.dll and
+// DirectML.dll in the same directory. The Windows DLL loader doesn't always
+// find sibling DLLs inside the deeply nested asar.unpacked path, so we add
+// the directory to PATH before anything triggers a require('onnxruntime-node').
+if (process.platform === 'win32' && app.isPackaged) {
+  const onnxBinDir = path.join(
+    process.resourcesPath,
+    'app.asar.unpacked',
+    'node_modules',
+    'onnxruntime-node',
+    'bin',
+    'napi-v3',
+    'win32',
+    process.arch,
+  )
+  process.env.PATH = `${onnxBinDir};${process.env.PATH ?? ''}`
+}
+
 // Keep single-instance behavior in packaged app, but allow dev to run
 // alongside production for local debugging.
 if (app.isPackaged && !app.requestSingleInstanceLock()) {
