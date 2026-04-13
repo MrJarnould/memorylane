@@ -109,7 +109,7 @@ export class DatabaseUploadSync {
       formData.append('device_id', this.getDeviceId())
       formData.append('file', new Blob([fileBuffer]), 'memorylane.db')
 
-      const url = new URL('/api/device/upload', this.backendUrl)
+      const url = new URL('/device/upload', this.backendUrl)
       const response = await fetch(url, { method: 'POST', body: formData })
 
       if (!response.ok) {
