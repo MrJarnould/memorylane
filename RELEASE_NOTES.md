@@ -1,10 +1,11 @@
-# MemoryLane v0.20.2
+# MemoryLane v0.20.3
 
-Fixes a startup crash on Windows caused by onnxruntime DLLs not being found.
+Fixes enterprise database upload failing with a CSRF error.
 
 ## What's Changed
 
-- Moved the onnxruntime DLL PATH fix into a dedicated side-effect module (`onnxruntime-path-fix.ts`) imported before all other modules, so it runs before the static import chain (`runtime → embedding → @huggingface/transformers`) triggers `require('onnxruntime-node')`
+- Fixed the database upload endpoint path to match the server's routing convention, resolving CSRF errors on upload
+- Enterprise edition now skips the MCP connect step during onboarding
 
 ## Known Issues & Limitations
 
@@ -18,4 +19,4 @@ Fixes a startup crash on Windows caused by onnxruntime DLLs not being found.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.20.1...v0.20.2
+https://github.com/deusXmachina-dev/memorylane/compare/v0.20.2...v0.20.3

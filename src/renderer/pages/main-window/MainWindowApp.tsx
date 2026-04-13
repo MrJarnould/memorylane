@@ -132,7 +132,11 @@ export function MainWindowApp(): React.JSX.Element {
   const anyMcpConnected = mcpStatus !== null && Object.values(mcpStatus).some(Boolean)
   const hasPatterns = patterns !== null && patterns.length > 0
   const step =
-    !anyMcpConnected || !connectStepDone ? 'connect' : !hasPatterns ? 'capture' : 'dashboard'
+    !isEnterprise && (!anyMcpConnected || !connectStepDone)
+      ? 'connect'
+      : !hasPatterns
+        ? 'capture'
+        : 'dashboard'
 
   useEffect(() => {
     void api.getStatus().then((status) => {
