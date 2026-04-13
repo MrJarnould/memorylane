@@ -5,6 +5,11 @@
  * The MCP server is provided by the CLI package (@deusxmachina-dev/memorylane-cli).
  */
 
+// Side-effect import: sets process.env.PATH for onnxruntime DLLs on Windows.
+// Must be the first import — onnxruntime-node is loaded transitively via
+// runtime → embedding → @huggingface/transformers during static import resolution.
+import './onnxruntime-path-fix'
+
 import { app, globalShortcut } from 'electron'
 import path from 'node:path'
 import { config as loadEnv } from 'dotenv'
@@ -33,24 +38,6 @@ import { createMainRuntime, type MainRuntime } from './runtime'
 import { getAppDirectoryName } from './paths'
 import { loadAppEditionConfig } from './edition'
 import { ENTERPRISE_BACKEND_CONFIG } from '../shared/constants'
-
-// On Windows, onnxruntime_binding.node depends on onnxruntime.dll and
-// DirectML.dll in the same directory. The Windows DLL loader doesn't always
-// find sibling DLLs inside the deeply nested asar.unpacked path, so we add
-// the directory to PATH before anything triggers a require('onnxruntime-node').
-if (process.platform === 'win32' && app.isPackaged) {
-  const onnxBinDir = path.join(
-    process.resourcesPath,
-    'app.asar.unpacked',
-    'node_modules',
-    'onnxruntime-node',
-    'bin',
-    'napi-v3',
-    'win32',
-    process.arch,
-  )
-  process.env.PATH = `${onnxBinDir};${process.env.PATH ?? ''}`
-}
 
 // Keep single-instance behavior in packaged app, but allow dev to run
 // alongside production for local debugging.

@@ -1,10 +1,10 @@
-# MemoryLane v0.20.1
+# MemoryLane v0.20.2
 
-Fixes a startup crash on Windows caused by missing onnxruntime DLLs.
+Fixes a startup crash on Windows caused by onnxruntime DLLs not being found.
 
 ## What's Changed
 
-- Fixed Windows startup crash: onnxruntime DLL directory is now added to PATH before module load, so the Windows DLL loader can find `onnxruntime.dll` and `DirectML.dll` in the asar.unpacked path
+- Moved the onnxruntime DLL PATH fix into a dedicated side-effect module (`onnxruntime-path-fix.ts`) imported before all other modules, so it runs before the static import chain (`runtime → embedding → @huggingface/transformers`) triggers `require('onnxruntime-node')`
 
 ## Known Issues & Limitations
 
@@ -18,4 +18,4 @@ Fixes a startup crash on Windows caused by missing onnxruntime DLLs.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.20.0...v0.20.1
+https://github.com/deusXmachina-dev/memorylane/compare/v0.20.1...v0.20.2
