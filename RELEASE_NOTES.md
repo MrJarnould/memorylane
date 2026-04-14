@@ -1,11 +1,11 @@
-# MemoryLane v0.20.3
+# MemoryLane v0.21.0
 
-Fixes enterprise database upload failing with a CSRF error.
+Enterprise privacy hardening and backend URL improvements.
 
 ## What's Changed
 
-- Fixed the database upload endpoint path to match the server's routing convention, resolving CSRF errors on upload
-- Enterprise edition now skips the MCP connect step during onboarding
+- Database uploads now strip sensitive data (OCR text, FTS indexes) before sending to the enterprise backend, keeping only activities, patterns, sightings, and vector embeddings
+- Enterprise backend URL uses `/api` prefix and is configurable via `MEMORYLANE_BACKEND_URL` environment variable
 
 ## Known Issues & Limitations
 
@@ -19,4 +19,4 @@ Fixes enterprise database upload failing with a CSRF error.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.20.2...v0.20.3
+https://github.com/deusXmachina-dev/memorylane/compare/v0.20.3...v0.21.0
