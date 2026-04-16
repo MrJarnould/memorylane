@@ -1,11 +1,11 @@
-# MemoryLane v0.22.0
+# MemoryLane v0.22.1
 
-Upload privacy controls and Slack removal.
+Remote sync is now opt-in.
 
 ## What's Changed
 
-- Enterprise uploads now support a Summary/Detailed toggle — Summary (default) strips OCR text and FTS index; Detailed preserves them. Both modes strip personal context and pattern detection runs
-- Removed Slack integration
+- Enterprise remote sync defaults to **Off** on fresh installs. The Summary/Detailed toggle becomes a three-state switch: **Off / Summary / Detailed**. When Off, both the 24h periodic upload and the manual "Sync to Remote" button are suppressed. Existing users keep their prior selection
+- Strict gating: the sync gate is re-evaluated on every tick and before every manual upload
 
 ## Known Issues & Limitations
 
@@ -19,4 +19,4 @@ Upload privacy controls and Slack removal.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.21.0...v0.22.0
+https://github.com/deusXmachina-dev/memorylane/compare/v0.22.0...v0.22.1
