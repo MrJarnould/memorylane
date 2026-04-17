@@ -22,6 +22,7 @@ import log from '../logger'
 import { updateTrayMenu } from './tray'
 import { exportDatabaseZip } from './database-export'
 import { integrations } from '../integrations'
+import { listInstalledApps } from '../apps/installed-apps'
 import type { ApiKeyManager } from '../settings/api-key-manager'
 import type { CustomEndpointManager } from '../settings/custom-endpoint-manager'
 import type { AccessProvider } from '../access'
@@ -561,6 +562,14 @@ export function initMainWindowIPC(dependencies: MainWindowDependencies): void {
       return { success: false, error: 'Not available' }
     }
     return deps.databaseUploadSync.triggerUpload()
+  })
+
+  // Installed apps + seen domains (for privacy UI)
+  ipcMain.handle('main-window:listInstalledApps', () => listInstalledApps())
+
+  ipcMain.handle('main-window:listSeenDomains', () => {
+    if (!deps) return []
+    return deps.storage.activities.getDistinctTlds()
   })
 
   // Capture settings

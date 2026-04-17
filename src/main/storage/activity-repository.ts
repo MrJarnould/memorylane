@@ -194,6 +194,25 @@ export class ActivityRepository {
     return this.getRowCount()
   }
 
+  getDistinctTlds(limit = 200): { tld: string; count: number; lastSeenAt: number }[] {
+    const rows = this.db
+      .prepare(
+        `SELECT tld, COUNT(*) AS count, MAX(end_timestamp) AS last_seen_at
+       FROM activities
+       WHERE tld IS NOT NULL AND tld != ''
+       GROUP BY tld
+       ORDER BY count DESC, last_seen_at DESC
+       LIMIT ?`,
+      )
+      .all(limit) as Record<string, unknown>[]
+
+    return rows.map((row) => ({
+      tld: row.tld as string,
+      count: row.count as number,
+      lastSeenAt: row.last_seen_at as number,
+    }))
+  }
+
   getDateRange(): { oldest: number | null; newest: number | null } {
     const result = this.db
       .prepare(

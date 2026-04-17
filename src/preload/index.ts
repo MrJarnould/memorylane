@@ -44,6 +44,9 @@ contextBridge.exposeInMainWorld('mainWindowAPI', {
   onSubscriptionUpdate: (callback: (update: unknown) => void) => {
     ipcRenderer.on('main-window:subscriptionUpdate', (_event, update) => callback(update))
   },
+  // Privacy metadata
+  listInstalledApps: () => ipcRenderer.invoke('main-window:listInstalledApps'),
+  listSeenDomains: () => ipcRenderer.invoke('main-window:listSeenDomains'),
   // Capture settings
   getCaptureSettings: () => ipcRenderer.invoke('main-window:getCaptureSettings'),
   saveCaptureSettings: (settings: Record<string, unknown>) =>

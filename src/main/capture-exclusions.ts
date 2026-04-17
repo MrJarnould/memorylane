@@ -5,7 +5,7 @@ export interface ExclusionWindowContext {
   url?: string
 }
 
-function normalizeToken(value: string): string {
+export function normalizeToken(value: string): string {
   const trimmed = value.trim().toLowerCase()
   if (trimmed.length === 0) return ''
 

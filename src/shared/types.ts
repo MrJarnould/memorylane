@@ -181,6 +181,19 @@ export interface CaptureSettings {
   uploadDetailLevel: 'off' | 'summary' | 'detailed'
 }
 
+export interface InstalledApp {
+  bundleId: string
+  displayName: string
+  matchToken: string
+  iconDataUrl: string | null
+}
+
+export interface SeenDomain {
+  tld: string
+  count: number
+  lastSeenAt: number
+}
+
 export type McpRegistrationStatus = Record<string, boolean>
 
 export type SemanticPipelineMode = 'auto' | 'video' | 'image'
@@ -232,6 +245,9 @@ export interface MainWindowAPI {
   openSubscriptionPortal: () => Promise<void>
   getSubscriptionStatus: () => Promise<SubscriptionStatus>
   onSubscriptionUpdate: (callback: (update: SubscriptionUpdate) => void) => void
+  // Privacy metadata
+  listInstalledApps: () => Promise<InstalledApp[]>
+  listSeenDomains: () => Promise<SeenDomain[]>
   // Capture settings
   getCaptureSettings: () => Promise<CaptureSettings>
   saveCaptureSettings: (settings: Partial<CaptureSettings>) => Promise<SaveResult>
