@@ -1,7 +1,7 @@
 import { addAppWatcherListener, AppWatcherEvent } from './recorder/app-watcher'
 import { normalizeToken, tokenFromBundleId } from './capture-exclusions'
 import { extractTld } from './recorder/tld-utils'
-import { NON_WEBSITE_HOSTS } from '../shared/app-utils'
+import { NON_WEBSITE_HOSTS, isBrowserApp } from '../shared/app-utils'
 import type { ObservationState } from '../shared/types'
 import log from './logger'
 
@@ -77,10 +77,14 @@ export function createObservationController(params: ControllerParams): Observati
 
     let changed = false
 
-    const appToken = tokenForApp(event)
-    if (appToken && !apps.has(appToken)) {
-      apps.add(appToken)
-      changed = true
+    const browser = isBrowserApp({ bundleId: event.bundleId, processName: event.app ?? '' })
+
+    if (!browser) {
+      const appToken = tokenForApp(event)
+      if (appToken && !apps.has(appToken)) {
+        apps.add(appToken)
+        changed = true
+      }
     }
 
     const host = extractTld(event.url)
@@ -98,16 +102,30 @@ export function createObservationController(params: ControllerParams): Observati
   const stop = (reason: 'user' | 'timer'): ObservationState => {
     if (phase !== 'running') return getState()
 
+    // Flip phase + unsuppress capture first, so a throw below cannot leave the
+    // controller stuck in 'running' or capture permanently disabled.
+    phase = 'idle'
+    endsAt = null
+
     if (endTimer) {
       clearTimeout(endTimer)
       endTimer = null
     }
-    if (unsubscribe) {
-      unsubscribe()
-      unsubscribe = null
+
+    try {
+      void params.captureControl.setFrameCaptureSuppressed(false)
+    } catch (error) {
+      log.error('[Observation] setFrameCaptureSuppressed(false) threw:', error)
     }
 
-    void params.captureControl.setFrameCaptureSuppressed(false)
+    if (unsubscribe) {
+      try {
+        unsubscribe()
+      } catch (error) {
+        log.error('[Observation] app-watcher unsubscribe threw:', error)
+      }
+      unsubscribe = null
+    }
 
     const collectedApps = [...apps]
     const collectedUrls = [...urls]
@@ -120,8 +138,6 @@ export function createObservationController(params: ControllerParams): Observati
       log.error('[Observation] onSettingsPatch threw:', error)
     }
 
-    phase = 'idle'
-    endsAt = null
     lastRun = {
       appsAdded,
       urlsAdded,

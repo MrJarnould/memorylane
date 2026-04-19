@@ -11,14 +11,17 @@ const execFileAsync = promisify(execFile)
 
 let cachedApps: InstalledApp[] | null = null
 let cacheLoadPromise: Promise<InstalledApp[]> | null = null
+let cachedAt = 0
+const CACHE_TTL_MS = 5 * 60_000
 
 export async function listInstalledApps(): Promise<InstalledApp[]> {
-  if (cachedApps) return cachedApps
+  if (cachedApps && Date.now() - cachedAt < CACHE_TTL_MS) return cachedApps
   if (cacheLoadPromise) return cacheLoadPromise
 
   cacheLoadPromise = loadForPlatform()
   try {
     cachedApps = await cacheLoadPromise
+    cachedAt = Date.now()
     return cachedApps
   } finally {
     cacheLoadPromise = null

@@ -100,6 +100,28 @@ describe('observation-controller', () => {
     expect(state.lastRun?.urls).not.toContain('newtab')
   })
 
+  it('skips browser apps but still collects their URLs', async () => {
+    const { createObservationController } = await import('./observation-controller')
+
+    const onSettingsPatch = vi.fn()
+
+    const ctrl = createObservationController({
+      captureControl: { setFrameCaptureSuppressed: vi.fn() },
+      onUpdate: vi.fn(),
+      onSettingsPatch,
+    })
+
+    ctrl.start(60_000)
+    emit(makeEvent({ bundleId: 'com.google.Chrome', url: 'https://docs.google.com/spreadsheets' }))
+    emit(makeEvent({ bundleId: 'com.tinyspeck.slackmacgap' }))
+    ctrl.stop('user')
+
+    const patch = onSettingsPatch.mock.calls[0][0]
+    expect(patch.apps).not.toContain('chrome')
+    expect(patch.apps).toContain('slackmacgap')
+    expect(patch.urls).toEqual(['docs.google.com'])
+  })
+
   it('auto-stops when the timer fires', async () => {
     const { createObservationController } = await import('./observation-controller')
 
