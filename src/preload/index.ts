@@ -44,6 +44,9 @@ contextBridge.exposeInMainWorld('mainWindowAPI', {
   onSubscriptionUpdate: (callback: (update: unknown) => void) => {
     ipcRenderer.on('main-window:subscriptionUpdate', (_event, update) => callback(update))
   },
+  // Privacy metadata
+  listInstalledApps: () => ipcRenderer.invoke('main-window:listInstalledApps'),
+  listSeenDomains: () => ipcRenderer.invoke('main-window:listSeenDomains'),
   // Capture settings
   getCaptureSettings: () => ipcRenderer.invoke('main-window:getCaptureSettings'),
   saveCaptureSettings: (settings: Record<string, unknown>) =>
@@ -71,6 +74,18 @@ contextBridge.exposeInMainWorld('mainWindowAPI', {
   syncDatabaseToRemote: () => ipcRenderer.invoke('main-window:syncDatabaseToRemote'),
   // Shell
   openExternal: (url: string) => ipcRenderer.invoke('main-window:openExternal', url),
+  // Observation (build exclusion list from live activity)
+  startObservation: (durationMs: number) =>
+    ipcRenderer.invoke('main-window:startObservation', durationMs),
+  stopObservation: () => ipcRenderer.invoke('main-window:stopObservation'),
+  getObservationState: () => ipcRenderer.invoke('main-window:getObservationState'),
+  onObservationUpdate: (callback: (state: unknown) => void) => {
+    const handler = (_event: unknown, state: unknown): void => callback(state)
+    ipcRenderer.on('main-window:observationUpdate', handler)
+    return () => {
+      ipcRenderer.off('main-window:observationUpdate', handler)
+    }
+  },
 })
 
 console.log('[Preload] mainWindowAPI exposed to renderer')

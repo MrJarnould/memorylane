@@ -257,6 +257,7 @@ export function AdvancedSettingsPage({ onBack }: { onBack: () => void }): React.
             onSettingCommit={commitNumericSetting}
             onExcludePrivateBrowsingChange={commitExcludePrivateBrowsing}
             onExcludedRulesCommit={commitExcludedRules}
+            onObserved={() => void load()}
             onReset={() => void handleReset()}
           />
 

@@ -32,6 +32,7 @@ import { UserContextBuilder } from './services/user-context-builder'
 import { RawDatabaseExportSync } from './services/raw-database-export-sync'
 import { DatabaseUploadSync } from './services/database-upload-sync'
 import { createMainRuntime, type MainRuntime } from './runtime'
+import { createObservationController } from './observation-controller'
 import { getAppDirectoryName } from './paths'
 import { loadAppEditionConfig } from './edition'
 import { ENTERPRISE_BACKEND_CONFIG } from '../shared/constants'
@@ -216,6 +217,52 @@ app.on('ready', async () => {
     log.info('[Updater] Skipping auto-updater for enterprise edition')
   }
 
+  const { sendObservationUpdate } = await import('./ui/main-window')
+
+  const observation = createObservationController({
+    captureControl: runtime.capture,
+    onUpdate: (state) => sendObservationUpdate(state),
+    onSettingsPatch: ({ apps, urls }) => {
+      if (apps.length === 0 && urls.length === 0) return
+      const current = captureSettingsManager.get()
+      const seenApps = new Set(current.excludedApps.map((v) => v.toLowerCase()))
+      const mergedApps = [...current.excludedApps]
+      for (const token of apps) {
+        if (!seenApps.has(token)) {
+          mergedApps.push(token)
+          seenApps.add(token)
+        }
+      }
+      const seenUrls = new Set(current.excludedUrlPatterns.map((v) => v.toLowerCase()))
+      const mergedUrls = [...current.excludedUrlPatterns]
+      for (const url of urls) {
+        if (!seenUrls.has(url)) {
+          mergedUrls.push(url)
+          seenUrls.add(url)
+        }
+      }
+
+      const changed =
+        mergedApps.length !== current.excludedApps.length ||
+        mergedUrls.length !== current.excludedUrlPatterns.length
+      if (!changed) return
+
+      captureSettingsManager.save({
+        excludedApps: mergedApps,
+        excludedUrlPatterns: mergedUrls,
+      })
+      captureSettingsManager.applyToConstants()
+      const updated = captureSettingsManager.get()
+      runtime?.updateExclusions({
+        apps: updated.excludedApps,
+        windowTitlePatterns: updated.excludedWindowTitlePatterns,
+        urlPatterns: updated.excludedUrlPatterns,
+        excludePrivateBrowsing: updated.excludePrivateBrowsing,
+      })
+      void rawDatabaseExportSync?.onSettingsChanged()
+    },
+  })
+
   initMainWindowIPC({
     editionConfig,
     capture: captureCoordinator.controls,
@@ -232,6 +279,7 @@ app.on('ready', async () => {
     updateExclusions: (exclusions) => runtime?.updateExclusions(exclusions),
     databaseExportSync: rawDatabaseExportSync,
     databaseUploadSync: databaseUploadSync ?? undefined,
+    observation,
   })
 
   runtime.accessProvider.startPeriodicRefresh()

@@ -2,7 +2,7 @@ import { screen } from 'electron'
 import { uIOhook, UiohookMouseEvent, UiohookWheelEvent } from 'uiohook-napi'
 import { INTERACTION_MONITOR_CONFIG } from '@constants'
 import { InteractionContext } from '../../shared/types'
-import { startAppWatcher, stopAppWatcher, AppWatcherEvent } from './app-watcher'
+import { addAppWatcherListener, AppWatcherEvent } from './app-watcher'
 import { resolveAppWatcherDisplay } from './app-watcher-display'
 import log from '../logger'
 
@@ -36,6 +36,9 @@ let cachedDisplayId: number | null = null
 
 // Cached window title from latest app-watcher event (for keyboard context enrichment)
 let cachedWindowTitle: string | null = null
+
+// Unsubscribe handle for our app-watcher listener
+let appWatcherUnsubscribe: (() => void) | null = null
 
 /**
  * Resolve which Electron Display contains the given global coordinate.
@@ -348,7 +351,7 @@ export function startInteractionMonitoring(): void {
 
     // Start native app-watcher process for app/window change events
     if (INTERACTION_MONITOR_CONFIG.TRACK_APP_CHANGE) {
-      startAppWatcher(handleAppWatcherEvent)
+      appWatcherUnsubscribe = addAppWatcherListener(handleAppWatcherEvent)
       log.info('[Interaction Monitor] App watcher started')
     }
   } catch (error) {
@@ -404,8 +407,11 @@ export function stopInteractionMonitoring(): void {
       clickSessionTimeoutId = null
     }
 
-    // Stop the native app-watcher process
-    stopAppWatcher()
+    // Stop the native app-watcher process (only our listener; others may still be attached)
+    if (appWatcherUnsubscribe) {
+      appWatcherUnsubscribe()
+      appWatcherUnsubscribe = null
+    }
 
     // Stop the hook
     uIOhook.stop()

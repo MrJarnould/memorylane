@@ -21,8 +21,10 @@ export interface AppWatcherEvent {
   error?: string
 }
 
+type Listener = (event: AppWatcherEvent) => void
+
 interface AppWatcherBackend {
-  start(callback: (event: AppWatcherEvent) => void): void
+  start(callback: Listener): void
   stop(): void
   isRunning(): boolean
 }
@@ -40,18 +42,45 @@ const PLATFORM_APP_WATCHER_BACKENDS: Partial<Record<NodeJS.Platform, AppWatcherB
   },
 }
 
-export function startAppWatcher(callback: (event: AppWatcherEvent) => void): void {
+const listeners = new Set<Listener>()
+let backendStarted = false
+
+function dispatch(event: AppWatcherEvent): void {
+  for (const listener of listeners) {
+    try {
+      listener(event)
+    } catch (error) {
+      log.warn(`[AppWatcher] Listener threw:`, error)
+    }
+  }
+}
+
+function ensureBackendStarted(): void {
+  if (backendStarted) return
   const backend = PLATFORM_APP_WATCHER_BACKENDS[process.platform]
   if (!backend) {
     log.warn(`[AppWatcher] No backend available for platform "${process.platform}"`)
     return
   }
-  backend.start(callback)
+  backend.start(dispatch)
+  backendStarted = true
 }
 
-export function stopAppWatcher(): void {
+function maybeStopBackend(): void {
+  if (!backendStarted) return
+  if (listeners.size > 0) return
   const backend = PLATFORM_APP_WATCHER_BACKENDS[process.platform]
   backend?.stop()
+  backendStarted = false
+}
+
+export function addAppWatcherListener(listener: Listener): () => void {
+  listeners.add(listener)
+  ensureBackendStarted()
+  return () => {
+    if (!listeners.delete(listener)) return
+    maybeStopBackend()
+  }
 }
 
 export function isAppWatcherRunning(): boolean {

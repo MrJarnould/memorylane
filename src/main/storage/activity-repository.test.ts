@@ -619,4 +619,18 @@ describe('ActivityRepository', () => {
       expect(results.length).toBe(0)
     })
   })
+
+  describe('getDistinctTlds', () => {
+    it('excludes browser-internal hosts like newtab', () => {
+      storage.activities.add(createStoredActivity({ id: 'tld-1', tld: 'bank.example.com' }))
+      storage.activities.add(createStoredActivity({ id: 'tld-2', tld: 'newtab' }))
+      storage.activities.add(createStoredActivity({ id: 'tld-3', tld: 'newtab' }))
+      storage.activities.add(createStoredActivity({ id: 'tld-4', tld: 'github.com' }))
+
+      const tlds = storage.activities.getDistinctTlds().map((d) => d.tld)
+      expect(tlds).toContain('bank.example.com')
+      expect(tlds).toContain('github.com')
+      expect(tlds).not.toContain('newtab')
+    })
+  })
 })

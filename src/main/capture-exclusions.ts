@@ -5,7 +5,7 @@ export interface ExclusionWindowContext {
   url?: string
 }
 
-function normalizeToken(value: string): string {
+export function normalizeToken(value: string): string {
   const trimmed = value.trim().toLowerCase()
   if (trimmed.length === 0) return ''
 
@@ -26,6 +26,11 @@ function normalizeToken(value: string): string {
   const aliasLookup = token.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
   const alias = APP_TOKEN_ALIASES[aliasLookup]
   return alias ?? token
+}
+
+export function tokenFromBundleId(bundleId: string): string {
+  const last = bundleId.split('.').pop() ?? bundleId
+  return normalizeToken(last)
 }
 
 const APP_TOKEN_ALIASES: Record<string, string> = {

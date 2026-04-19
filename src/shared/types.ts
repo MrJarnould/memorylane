@@ -149,6 +149,20 @@ export interface MainWindowStatus {
   captureHotkeyLabel: string
 }
 
+export interface ObservationState {
+  phase: 'idle' | 'running'
+  endsAt: number | null
+  appsCount: number
+  urlsCount: number
+  lastRun?: {
+    appsAdded: number
+    urlsAdded: number
+    apps: string[]
+    urls: string[]
+    at: number
+  }
+}
+
 export interface MainWindowStats {
   activityCount: number
   dbSize: number
@@ -179,6 +193,17 @@ export interface CaptureSettings {
   patternDetectionModel: string
   patternDetectionEnabled: boolean
   uploadDetailLevel: 'off' | 'summary' | 'detailed'
+}
+
+export interface InstalledApp {
+  displayName: string
+  matchToken: string
+}
+
+export interface SeenDomain {
+  tld: string
+  count: number
+  lastSeenAt: number
 }
 
 export type McpRegistrationStatus = Record<string, boolean>
@@ -232,6 +257,9 @@ export interface MainWindowAPI {
   openSubscriptionPortal: () => Promise<void>
   getSubscriptionStatus: () => Promise<SubscriptionStatus>
   onSubscriptionUpdate: (callback: (update: SubscriptionUpdate) => void) => void
+  // Privacy metadata
+  listInstalledApps: () => Promise<InstalledApp[]>
+  listSeenDomains: () => Promise<SeenDomain[]>
   // Capture settings
   getCaptureSettings: () => Promise<CaptureSettings>
   saveCaptureSettings: (settings: Partial<CaptureSettings>) => Promise<SaveResult>
@@ -257,4 +285,9 @@ export interface MainWindowAPI {
   onUpdateStateChanged: (callback: (state: UpdateState) => void) => void
   installUpdate: () => Promise<void>
   openExternal: (url: string) => Promise<void>
+  // Observation (build exclusion list from live activity)
+  startObservation: (durationMs: number) => Promise<ObservationState>
+  stopObservation: () => Promise<ObservationState>
+  getObservationState: () => Promise<ObservationState>
+  onObservationUpdate: (callback: (state: ObservationState) => void) => () => void
 }

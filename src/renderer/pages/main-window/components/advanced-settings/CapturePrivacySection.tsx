@@ -10,6 +10,7 @@ import { SubSectionToggle } from './SubSectionToggle'
 import { SliderRow } from './SliderRow'
 import type { NumericCaptureSetting } from './types'
 import { formatMs } from './utils'
+import { ExclusionsManager } from './exclusions/ExclusionsManager'
 
 interface CapturePrivacySectionProps {
   open: boolean
@@ -27,6 +28,7 @@ interface CapturePrivacySectionProps {
     excludedWindowTitlePatterns: string[]
     excludedUrlPatterns: string[]
   }) => void
+  onObserved: () => void
   onReset: () => void
 }
 
@@ -58,47 +60,46 @@ export function CapturePrivacySection({
   onSettingCommit,
   onExcludePrivateBrowsingChange,
   onExcludedRulesCommit,
+  onObserved,
   onReset,
 }: CapturePrivacySectionProps): React.JSX.Element {
   const [moreOpen, setMoreOpen] = useState(false)
 
-  const excludedAppsText = form.excludedApps.join('\n')
   const excludedWindowTitlePatternsText = form.excludedWindowTitlePatterns.join('\n')
-  const excludedUrlPatternsText = form.excludedUrlPatterns.join('\n')
-  const [excludedAppsDraft, setExcludedAppsDraft] = useState(excludedAppsText)
-  const [excludedWindowTitlePatternsDraft, setExcludedWindowTitlePatternsDraft] = useState(
+  const [excludedWindowTitleDraft, setExcludedWindowTitleDraft] = useState(
     excludedWindowTitlePatternsText,
   )
-  const [excludedUrlPatternsDraft, setExcludedUrlPatternsDraft] = useState(excludedUrlPatternsText)
-  const [hasPendingChanges, setHasPendingChanges] = useState(false)
+  const [windowTitleDirty, setWindowTitleDirty] = useState(false)
 
   useEffect(() => {
-    if (hasPendingChanges) return
-    setExcludedAppsDraft(excludedAppsText)
-  }, [excludedAppsText, hasPendingChanges])
-  useEffect(() => {
-    if (hasPendingChanges) return
-    setExcludedWindowTitlePatternsDraft(excludedWindowTitlePatternsText)
-  }, [excludedWindowTitlePatternsText, hasPendingChanges])
-  useEffect(() => {
-    if (hasPendingChanges) return
-    setExcludedUrlPatternsDraft(excludedUrlPatternsText)
-  }, [excludedUrlPatternsText, hasPendingChanges])
+    if (windowTitleDirty) return
+    setExcludedWindowTitleDraft(excludedWindowTitlePatternsText)
+  }, [excludedWindowTitlePatternsText, windowTitleDirty])
 
-  const commitDrafts = (): void => {
-    const nextExcludedApps = parseInputList(excludedAppsDraft)
-    const nextExcludedWindowTitlePatterns = parseInputList(excludedWindowTitlePatternsDraft)
-    const nextExcludedUrlPatterns = parseInputList(excludedUrlPatternsDraft)
-
-    setExcludedAppsDraft(nextExcludedApps.join('\n'))
-    setExcludedWindowTitlePatternsDraft(nextExcludedWindowTitlePatterns.join('\n'))
-    setExcludedUrlPatternsDraft(nextExcludedUrlPatterns.join('\n'))
-    setHasPendingChanges(false)
-
+  const commitAppsChange = (nextApps: string[]): void => {
     onExcludedRulesCommit({
-      excludedApps: nextExcludedApps,
-      excludedWindowTitlePatterns: nextExcludedWindowTitlePatterns,
-      excludedUrlPatterns: nextExcludedUrlPatterns,
+      excludedApps: nextApps,
+      excludedWindowTitlePatterns: form.excludedWindowTitlePatterns,
+      excludedUrlPatterns: form.excludedUrlPatterns,
+    })
+  }
+
+  const commitUrlsChange = (nextUrls: string[]): void => {
+    onExcludedRulesCommit({
+      excludedApps: form.excludedApps,
+      excludedWindowTitlePatterns: form.excludedWindowTitlePatterns,
+      excludedUrlPatterns: nextUrls,
+    })
+  }
+
+  const commitWindowTitlePatterns = (): void => {
+    const parsed = parseInputList(excludedWindowTitleDraft)
+    setExcludedWindowTitleDraft(parsed.join('\n'))
+    setWindowTitleDirty(false)
+    onExcludedRulesCommit({
+      excludedApps: form.excludedApps,
+      excludedWindowTitlePatterns: parsed,
+      excludedUrlPatterns: form.excludedUrlPatterns,
     })
   }
 
@@ -155,73 +156,14 @@ export function CapturePrivacySection({
             </div>
           </div>
 
-          {/* Excluded rules */}
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Excluded Apps (one per line)</Label>
-            <Textarea
-              value={excludedAppsDraft}
-              rows={4}
-              className="text-xs resize-y"
-              placeholder={`keychain access\nsignal\nwhatsapp`}
-              onChange={(event) => {
-                setExcludedAppsDraft(event.target.value)
-                setHasPendingChanges(true)
-              }}
-            />
-            <p className="ml-2 -mt-1 text-[11px] text-muted-foreground">
-              Matching is case-insensitive. Use app names like <code>signal</code> or{' '}
-              <code>whatsapp</code>.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">
-              Excluded Window Titles (one per line)
-            </Label>
-            <Textarea
-              value={excludedWindowTitlePatternsDraft}
-              rows={3}
-              className="text-xs resize-y"
-              placeholder={`bank statement\nlab results\npayroll`}
-              onChange={(event) => {
-                setExcludedWindowTitlePatternsDraft(event.target.value)
-                setHasPendingChanges(true)
-              }}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Excluded URLs (one per line)</Label>
-            <Textarea
-              value={excludedUrlPatternsDraft}
-              rows={3}
-              className="text-xs resize-y"
-              placeholder={`bank.com\nmychart\nmail.google.com`}
-              onChange={(event) => {
-                setExcludedUrlPatternsDraft(event.target.value)
-                setHasPendingChanges(true)
-              }}
-            />
-          </div>
-
-          <div className="-mt-2 ml-2 space-y-1">
-            <p className="text-[11px] text-muted-foreground">
-              Examples above match anywhere. <code>*</code> matches any text. <code>?</code> matches
-              one character.
-            </p>
-          </div>
-
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={commitDrafts}
-              disabled={!hasPendingChanges}
-            >
-              Save privacy rules
-            </Button>
-          </div>
+          {/* Exclusions manager */}
+          <ExclusionsManager
+            excludedApps={form.excludedApps}
+            excludedUrlPatterns={form.excludedUrlPatterns}
+            onAppsChange={commitAppsChange}
+            onUrlsChange={commitUrlsChange}
+            onObserved={onObserved}
+          />
 
           {/* More sub-section */}
           <div className="pl-2">
@@ -237,6 +179,38 @@ export function CapturePrivacySection({
             />
             {moreOpen && (
               <div className="mt-3 space-y-5">
+                {/* Excluded window titles (power-user textarea) */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">
+                    Excluded Window Titles (one per line)
+                  </Label>
+                  <Textarea
+                    value={excludedWindowTitleDraft}
+                    rows={3}
+                    className="text-xs resize-y"
+                    placeholder={`bank statement\nlab results\npayroll`}
+                    onChange={(event) => {
+                      setExcludedWindowTitleDraft(event.target.value)
+                      setWindowTitleDirty(true)
+                    }}
+                  />
+                  <p className="ml-2 -mt-1 text-[11px] text-muted-foreground">
+                    Matching is case-insensitive. <code>*</code> matches any text. <code>?</code>{' '}
+                    matches one character.
+                  </p>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={commitWindowTitlePatterns}
+                      disabled={!windowTitleDirty}
+                    >
+                      Save window titles
+                    </Button>
+                  </div>
+                </div>
+
                 {/* Visual change sensitivity */}
                 <SliderRow
                   label="Visual change sensitivity"

@@ -22,6 +22,7 @@ import log from '../logger'
 import { updateTrayMenu } from './tray'
 import { exportDatabaseZip } from './database-export'
 import { integrations } from '../integrations'
+import { listInstalledApps } from '../apps/installed-apps'
 import type { ApiKeyManager } from '../settings/api-key-manager'
 import type { CustomEndpointManager } from '../settings/custom-endpoint-manager'
 import type { AccessProvider } from '../access'
@@ -32,6 +33,7 @@ import type {
   MainWindowStatus,
   MainWindowStats,
   CaptureSettings,
+  ObservationState,
   SemanticPipelineMode,
   SubscriptionPlan,
 } from '../../shared/types'
@@ -88,6 +90,11 @@ interface MainWindowDependencies {
   databaseUploadSync?: {
     triggerUpload: () => Promise<{ success: boolean; error?: string }>
   }
+  observation: {
+    start: (durationMs: number) => ObservationState
+    stop: (reason: 'user' | 'timer') => ObservationState
+    getState: () => ObservationState
+  }
 }
 
 let mainWindow: BrowserWindow | null = null
@@ -113,6 +120,14 @@ export function sendStatusToRenderer(): void {
 
   const status = buildStatus()
   mainWindow.webContents.send('main-window:statusChanged', status)
+}
+
+/**
+ * Broadcast an observation state update to the renderer.
+ */
+export function sendObservationUpdate(state: ObservationState): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('main-window:observationUpdate', state)
 }
 
 /**
@@ -561,6 +576,30 @@ export function initMainWindowIPC(dependencies: MainWindowDependencies): void {
       return { success: false, error: 'Not available' }
     }
     return deps.databaseUploadSync.triggerUpload()
+  })
+
+  // Observation (build exclusion list from live activity)
+  ipcMain.handle('main-window:startObservation', (_event, durationMs: number) => {
+    if (!deps) return null
+    return deps.observation.start(durationMs)
+  })
+
+  ipcMain.handle('main-window:stopObservation', () => {
+    if (!deps) return null
+    return deps.observation.stop('user')
+  })
+
+  ipcMain.handle('main-window:getObservationState', () => {
+    if (!deps) return null
+    return deps.observation.getState()
+  })
+
+  // Installed apps + seen domains (for privacy UI)
+  ipcMain.handle('main-window:listInstalledApps', () => listInstalledApps())
+
+  ipcMain.handle('main-window:listSeenDomains', () => {
+    if (!deps) return []
+    return deps.storage.activities.getDistinctTlds()
   })
 
   // Capture settings
