@@ -123,6 +123,61 @@ describe('app-watcher backend selection and fan-out', () => {
     expect(stopMac).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps backend alive across interleaved subscribers (interaction-monitor + observation)', async () => {
+    setPlatform('darwin')
+    const startMac = vi.fn()
+    const stopMac = vi.fn()
+    let capturedDispatch: ((event: unknown) => void) | null = null
+    vi.doMock('./app-watcher-mac', () => ({
+      startAppWatcherMac: (cb: (event: unknown) => void) => {
+        capturedDispatch = cb
+        startMac()
+      },
+      stopAppWatcherMac: stopMac,
+      isAppWatcherRunningMac: vi.fn().mockReturnValue(true),
+    }))
+    vi.doMock('./app-watcher-win', () => ({
+      startAppWatcherWin: vi.fn(),
+      stopAppWatcherWin: vi.fn(),
+      isAppWatcherRunningWin: vi.fn().mockReturnValue(false),
+    }))
+    mockLogger()
+
+    const { addAppWatcherListener } = await import('./app-watcher')
+
+    // 1. interaction-monitor subscribes first — backend boots.
+    const interactionListener = vi.fn()
+    const unsubInteraction = addAppWatcherListener(interactionListener)
+    expect(startMac).toHaveBeenCalledTimes(1)
+    expect(stopMac).not.toHaveBeenCalled()
+
+    // 2. observation subscribes on top — no second backend boot.
+    const observationListener = vi.fn()
+    const unsubObservation = addAppWatcherListener(observationListener)
+    expect(startMac).toHaveBeenCalledTimes(1)
+
+    // Both listeners receive a native event.
+    const event1 = { type: 'app_change', timestamp: 1, app: 'Slack' }
+    capturedDispatch!(event1)
+    expect(interactionListener).toHaveBeenCalledWith(event1)
+    expect(observationListener).toHaveBeenCalledWith(event1)
+
+    // 3. interaction-monitor unsubscribes (e.g. user stops capture).
+    //    Backend MUST stay running because observation still needs it.
+    unsubInteraction()
+    expect(stopMac).not.toHaveBeenCalled()
+
+    // Observation still receives events; interaction listener does not.
+    const event2 = { type: 'window_change', timestamp: 2, url: 'https://bank.example.com' }
+    capturedDispatch!(event2)
+    expect(interactionListener).toHaveBeenCalledTimes(1)
+    expect(observationListener).toHaveBeenCalledWith(event2)
+
+    // 4. observation unsubscribes — backend stops now.
+    unsubObservation()
+    expect(stopMac).toHaveBeenCalledTimes(1)
+  })
+
   it('warns and no-ops on unsupported platforms', async () => {
     setPlatform('linux')
     const warn = vi.fn()

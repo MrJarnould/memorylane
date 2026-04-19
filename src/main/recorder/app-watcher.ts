@@ -55,15 +55,21 @@ function dispatch(event: AppWatcherEvent): void {
   }
 }
 
-function ensureBackendStarted(): void {
-  if (backendStarted) return
+function ensureBackendStarted(): boolean {
+  if (backendStarted) return true
   const backend = PLATFORM_APP_WATCHER_BACKENDS[process.platform]
   if (!backend) {
     log.warn(`[AppWatcher] No backend available for platform "${process.platform}"`)
-    return
+    return false
   }
-  backend.start(dispatch)
+  try {
+    backend.start(dispatch)
+  } catch (error) {
+    log.error(`[AppWatcher] Backend start threw for "${process.platform}":`, error)
+    throw error
+  }
   backendStarted = true
+  return true
 }
 
 function maybeStopBackend(): void {
@@ -75,8 +81,10 @@ function maybeStopBackend(): void {
 }
 
 export function addAppWatcherListener(listener: Listener): () => void {
-  listeners.add(listener)
+  // Start the backend first. If it throws, the listener is never added — so a
+  // leaked entry can't block a future clean restart.
   ensureBackendStarted()
+  listeners.add(listener)
   return () => {
     if (!listeners.delete(listener)) return
     maybeStopBackend()
