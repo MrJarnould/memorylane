@@ -166,6 +166,7 @@ describe('observation-controller', () => {
   })
 
   it('clamps absurd durations', async () => {
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
     const { createObservationController } = await import('./observation-controller')
 
     const ctrl = createObservationController({
@@ -174,11 +175,41 @@ describe('observation-controller', () => {
       onSettingsPatch: vi.fn(),
     })
 
+    const now = Date.now()
+
     ctrl.start(10) // below minimum
-    expect(ctrl.getState().durationMs).toBeGreaterThanOrEqual(5_000)
+    expect(ctrl.getState().endsAt).not.toBeNull()
+    expect(ctrl.getState().endsAt! - now).toBeGreaterThanOrEqual(5_000)
     ctrl.stop('user')
 
     ctrl.start(10 * 60 * 60_000) // above max
-    expect(ctrl.getState().durationMs).toBeLessThanOrEqual(30 * 60_000)
+    expect(ctrl.getState().endsAt! - now).toBeLessThanOrEqual(30 * 60_000)
+  })
+
+  it('emits only on start/stop/collection-change (no tick broadcast)', async () => {
+    const { createObservationController } = await import('./observation-controller')
+
+    const onUpdate = vi.fn()
+
+    const ctrl = createObservationController({
+      captureControl: { setFrameCaptureSuppressed: vi.fn() },
+      onUpdate,
+      onSettingsPatch: vi.fn(),
+    })
+
+    ctrl.start(120_000)
+    expect(onUpdate).toHaveBeenCalledTimes(1) // start
+
+    vi.advanceTimersByTime(30_000) // no tick broadcast while idle
+    expect(onUpdate).toHaveBeenCalledTimes(1)
+
+    emit(makeEvent({ bundleId: 'com.tinyspeck.slackmacgap' }))
+    expect(onUpdate).toHaveBeenCalledTimes(2) // change
+
+    emit(makeEvent({ bundleId: 'com.tinyspeck.slackmacgap' })) // duplicate, no change
+    expect(onUpdate).toHaveBeenCalledTimes(2)
+
+    ctrl.stop('user')
+    expect(onUpdate).toHaveBeenCalledTimes(3) // stop
   })
 })

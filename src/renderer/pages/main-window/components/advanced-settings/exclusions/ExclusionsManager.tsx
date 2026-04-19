@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Tabs, TabsList, TabsTab, TabsPanel } from '@components/ui/tabs'
 import type { ObservationState } from '@types'
 import { useMainWindowAPI } from '@/renderer/hooks/use-main-window-api'
 import { AppExclusionList } from './AppExclusionList'
 import { WebsiteExclusionList } from './WebsiteExclusionList'
 import { ObserveButton } from './ObserveButton'
-import { ObservationBanner } from './ObservationBanner'
+import { ObservationRunningBanner } from './ObservationRunningBanner'
+import { ObservationFinishedBanner } from './ObservationFinishedBanner'
 
 const DEFAULT_DURATION_MS = 120_000
 const RECENTLY_ADDED_TTL_MS = 30_000
@@ -27,49 +28,47 @@ export function ExclusionsManager({
 }: ExclusionsManagerProps): React.JSX.Element {
   const api = useMainWindowAPI()
   const [observation, setObservation] = useState<ObservationState | null>(null)
-  const [recentlyAddedApps, setRecentlyAddedApps] = useState<string[]>([])
-  const [recentlyAddedUrls, setRecentlyAddedUrls] = useState<string[]>([])
-  const [justFinishedAt, setJustFinishedAt] = useState<number | null>(null)
-  const lastRunAtRef = useRef<number | null>(null)
-  const recentlyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [dismissedAt, setDismissedAt] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     let cancelled = false
     void api.getObservationState().then((initial) => {
       if (cancelled) return
       setObservation(initial)
-      lastRunAtRef.current = initial.lastRun?.at ?? null
     })
-    const unsubscribe = api.onObservationUpdate((next) => {
-      setObservation(next)
-    })
+    const unsubscribe = api.onObservationUpdate((next) => setObservation(next))
     return () => {
       cancelled = true
       unsubscribe()
-      if (recentlyTimerRef.current) {
-        clearTimeout(recentlyTimerRef.current)
-        recentlyTimerRef.current = null
-      }
     }
   }, [api])
 
+  const lastRun = observation?.lastRun
+  const showLastRun =
+    lastRun !== undefined && lastRun.at > dismissedAt && now - lastRun.at < RECENTLY_ADDED_TTL_MS
+
+  // Single 1 Hz ticker while a lastRun is potentially visible, so the TTL
+  // gates above reevaluate and the banner auto-dismisses.
   useEffect(() => {
-    if (!observation?.lastRun) return
-    const runAt = observation.lastRun.at
-    if (runAt === lastRunAtRef.current) return
-    lastRunAtRef.current = runAt
+    if (!lastRun) return
+    if (lastRun.at <= dismissedAt) return
+    if (Date.now() - lastRun.at >= RECENTLY_ADDED_TTL_MS) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [lastRun, dismissedAt])
 
-    setRecentlyAddedApps(observation.lastRun.apps)
-    setRecentlyAddedUrls(observation.lastRun.urls)
-    setJustFinishedAt(runAt)
+  // Notify the page once per run so settings reload.
+  const notifiedAtRef = useRef(0)
+  useEffect(() => {
+    if (!lastRun) return
+    if (lastRun.at === notifiedAtRef.current) return
+    notifiedAtRef.current = lastRun.at
     onObserved()
+  }, [lastRun, onObserved])
 
-    if (recentlyTimerRef.current) clearTimeout(recentlyTimerRef.current)
-    recentlyTimerRef.current = setTimeout(() => {
-      setRecentlyAddedApps([])
-      setRecentlyAddedUrls([])
-    }, RECENTLY_ADDED_TTL_MS)
-  }, [observation, onObserved])
+  const recentlyAddedApps = showLastRun ? (lastRun?.apps ?? []) : []
+  const recentlyAddedUrls = showLastRun ? (lastRun?.urls ?? []) : []
 
   const handleStart = useCallback((): void => {
     void api.startObservation(DEFAULT_DURATION_MS).then((next) => setObservation(next))
@@ -79,17 +78,21 @@ export function ExclusionsManager({
     void api.stopObservation().then((next) => setObservation(next))
   }, [api])
 
-  const dismissFinished = useCallback((): void => {
-    setJustFinishedAt(null)
+  const dismissRecent = useCallback((): void => {
+    setDismissedAt(Date.now())
   }, [])
 
-  const dismissRecentApps = useCallback((): void => {
-    setRecentlyAddedApps([])
-  }, [])
+  const banner = useMemo(() => {
+    if (observation?.phase === 'running') {
+      return <ObservationRunningBanner state={observation} />
+    }
+    if (showLastRun && lastRun) {
+      return <ObservationFinishedBanner lastRun={lastRun} onDismiss={dismissRecent} />
+    }
+    return null
+  }, [observation, showLastRun, lastRun, dismissRecent])
 
-  const dismissRecentUrls = useCallback((): void => {
-    setRecentlyAddedUrls([])
-  }, [])
+  const showTip = observation?.phase !== 'running' && !showLastRun
 
   return (
     <div>
@@ -101,24 +104,20 @@ export function ExclusionsManager({
           </TabsList>
           <ObserveButton state={observation} onStart={handleStart} onStop={handleStop} />
         </div>
-        {observation?.phase !== 'running' && !justFinishedAt && (
+        {showTip && (
           <p className="mt-2 text-[11px] text-muted-foreground">
             Tip: hit <span className="font-medium">Auto-fill from activity</span> and use the apps
-            and sites you want blocked, and we'll add them to the list for you (no screenshots
+            and sites you want blocked, and we&apos;ll add them to the list for you (no screenshots
             taken).
           </p>
         )}
-        <ObservationBanner
-          state={observation}
-          justFinishedAt={justFinishedAt}
-          onDismissFinished={dismissFinished}
-        />
+        {banner}
         <TabsPanel value="apps" className="pt-2">
           <AppExclusionList
             excludedApps={excludedApps}
             onChange={onAppsChange}
             recentlyAdded={recentlyAddedApps}
-            onDismissRecent={dismissRecentApps}
+            onDismissRecent={dismissRecent}
           />
         </TabsPanel>
         <TabsPanel value="websites" className="pt-2">
@@ -126,7 +125,7 @@ export function ExclusionsManager({
             excludedUrlPatterns={excludedUrlPatterns}
             onChange={onUrlsChange}
             recentlyAdded={recentlyAddedUrls}
-            onDismissRecent={dismissRecentUrls}
+            onDismissRecent={dismissRecent}
           />
         </TabsPanel>
       </Tabs>

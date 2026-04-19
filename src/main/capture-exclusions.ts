@@ -28,6 +28,11 @@ export function normalizeToken(value: string): string {
   return alias ?? token
 }
 
+export function tokenFromBundleId(bundleId: string): string {
+  const last = bundleId.split('.').pop() ?? bundleId
+  return normalizeToken(last)
+}
+
 const APP_TOKEN_ALIASES: Record<string, string> = {
   edge: 'msedge',
   'microsoft edge': 'msedge',

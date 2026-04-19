@@ -1,19 +1,51 @@
-import { execFile } from 'child_process'
 import * as fs from 'fs/promises'
 import * as os from 'os'
 import * as path from 'path'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 import log from '../logger'
-import { normalizeToken } from '../capture-exclusions'
+import { normalizeToken, tokenFromBundleId } from '../capture-exclusions'
+import type { InstalledApp } from '../../shared/types'
 
 const execFileAsync = promisify(execFile)
 
-export interface InstalledApp {
-  bundleId: string
-  displayName: string
-  matchToken: string
-  iconDataUrl: string | null
+let cachedApps: InstalledApp[] | null = null
+let cacheLoadPromise: Promise<InstalledApp[]> | null = null
+
+export async function listInstalledApps(): Promise<InstalledApp[]> {
+  if (cachedApps) return cachedApps
+  if (cacheLoadPromise) return cacheLoadPromise
+
+  cacheLoadPromise = loadForPlatform()
+  try {
+    cachedApps = await cacheLoadPromise
+    return cachedApps
+  } finally {
+    cacheLoadPromise = null
+  }
 }
+
+async function loadForPlatform(): Promise<InstalledApp[]> {
+  if (process.platform === 'darwin') return loadMacApps()
+  if (process.platform === 'win32') return loadWindowsApps()
+  return []
+}
+
+function dedupeAndSort(apps: InstalledApp[]): InstalledApp[] {
+  const byToken = new Map<string, InstalledApp>()
+  for (const app of apps) {
+    if (!app.matchToken) continue
+    if (byToken.has(app.matchToken)) continue
+    byToken.set(app.matchToken, app)
+  }
+  return [...byToken.values()].sort((a, b) =>
+    a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }),
+  )
+}
+
+// ---------------------------------------------------------------------------
+// macOS: enumerate .app bundles in standard locations, read CFBundleIdentifier.
+// ---------------------------------------------------------------------------
 
 const SEARCH_DIRS_MAC = [
   '/Applications',
@@ -23,43 +55,13 @@ const SEARCH_DIRS_MAC = [
   path.join(os.homedir(), 'Applications'),
 ]
 
-let cachedApps: InstalledApp[] | null = null
-let cacheLoadPromise: Promise<InstalledApp[]> | null = null
-
-export async function listInstalledApps(): Promise<InstalledApp[]> {
-  if (process.platform !== 'darwin') return []
-  if (cachedApps) return cachedApps
-  if (cacheLoadPromise) return cacheLoadPromise
-
-  cacheLoadPromise = loadInstalledApps()
-  try {
-    cachedApps = await cacheLoadPromise
-    return cachedApps
-  } finally {
-    cacheLoadPromise = null
-  }
+async function loadMacApps(): Promise<InstalledApp[]> {
+  const bundlePaths = await collectMacAppBundles()
+  const resolved = await Promise.all(bundlePaths.map(readMacAppBundle))
+  return dedupeAndSort(resolved.filter((app): app is InstalledApp => app !== null))
 }
 
-async function loadInstalledApps(): Promise<InstalledApp[]> {
-  const bundlePaths = await collectAppBundles()
-  const deduped = new Map<string, InstalledApp>()
-
-  await Promise.all(
-    bundlePaths.map(async (bundlePath) => {
-      const info = await readAppBundle(bundlePath)
-      if (!info) return
-      const existing = deduped.get(info.bundleId.toLowerCase())
-      if (existing) return
-      deduped.set(info.bundleId.toLowerCase(), info)
-    }),
-  )
-
-  return Array.from(deduped.values()).sort((a, b) =>
-    a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }),
-  )
-}
-
-async function collectAppBundles(): Promise<string[]> {
+async function collectMacAppBundles(): Promise<string[]> {
   const results: string[] = []
   for (const dir of SEARCH_DIRS_MAC) {
     try {
@@ -75,7 +77,7 @@ async function collectAppBundles(): Promise<string[]> {
   return results
 }
 
-async function readAppBundle(bundlePath: string): Promise<InstalledApp | null> {
+async function readMacAppBundle(bundlePath: string): Promise<InstalledApp | null> {
   try {
     const plistPath = path.join(bundlePath, 'Contents', 'Info.plist')
     const xml = await readPlistAsXml(plistPath)
@@ -89,14 +91,7 @@ async function readAppBundle(bundlePath: string): Promise<InstalledApp | null> {
       extractPlistString(xml, 'CFBundleName') ??
       path.basename(bundlePath, '.app')
 
-    const matchToken = deriveMatchToken(bundleId)
-
-    return {
-      bundleId,
-      displayName,
-      matchToken,
-      iconDataUrl: null,
-    }
+    return { displayName, matchToken: tokenFromBundleId(bundleId) }
   } catch (error) {
     log.debug(`Failed to read app bundle ${bundlePath}: ${error}`)
     return null
@@ -125,18 +120,74 @@ async function readPlistAsXml(plistPath: string): Promise<string | null> {
   }
 }
 
-function deriveMatchToken(bundleId: string): string {
-  const last = bundleId.split('.').pop() ?? bundleId
-  return normalizeToken(last)
-}
-
-/**
- * Extracts a <string> value for a given <key> from a plist XML document.
- * Returns null if the key is missing or the plist is binary (not XML).
- */
 function extractPlistString(xml: string, key: string): string | null {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const re = new RegExp(`<key>${escaped}</key>\\s*<string>([^<]*)</string>`)
   const match = re.exec(xml)
   return match ? match[1].trim() || null : null
+}
+
+// ---------------------------------------------------------------------------
+// Windows: enumerate .lnk shortcut filenames under Start Menu. The filename is
+// the human-readable display name (e.g. "Google Chrome.lnk"). We don't resolve
+// the .lnk binary — normalizeToken on the display name already yields the same
+// token the capture-exclusion matcher uses.
+// ---------------------------------------------------------------------------
+
+async function loadWindowsApps(): Promise<InstalledApp[]> {
+  const roots = collectWindowsStartMenuRoots()
+  const all: InstalledApp[] = []
+  for (const root of roots) {
+    try {
+      await collectWindowsShortcuts(root, all, 0)
+    } catch {
+      // Missing / inaccessible — skip.
+    }
+  }
+  return dedupeAndSort(all.filter((app) => !isWindowsNoise(app.displayName)))
+}
+
+function collectWindowsStartMenuRoots(): string[] {
+  const roots: string[] = []
+  const programData = process.env.ProgramData
+  if (programData) {
+    roots.push(path.join(programData, 'Microsoft', 'Windows', 'Start Menu', 'Programs'))
+  }
+  const appData = process.env.APPDATA
+  if (appData) {
+    roots.push(path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs'))
+  }
+  return roots
+}
+
+async function collectWindowsShortcuts(
+  dir: string,
+  out: InstalledApp[],
+  depth: number,
+): Promise<void> {
+  if (depth > 3) return
+  let entries: import('fs').Dirent[]
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      await collectWindowsShortcuts(path.join(dir, entry.name), out, depth + 1)
+      continue
+    }
+    if (!entry.name.toLowerCase().endsWith('.lnk')) continue
+    const displayName = entry.name.slice(0, -4)
+    const matchToken = normalizeToken(displayName)
+    if (!matchToken) continue
+    out.push({ displayName, matchToken })
+  }
+}
+
+const WINDOWS_NOISE_PATTERNS = ['uninstall', 'readme', 'release notes', 'documentation']
+
+function isWindowsNoise(displayName: string): boolean {
+  const lowered = displayName.toLowerCase()
+  return WINDOWS_NOISE_PATTERNS.some((p) => lowered.includes(p))
 }

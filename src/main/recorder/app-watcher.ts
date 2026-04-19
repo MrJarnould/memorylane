@@ -83,17 +83,6 @@ export function addAppWatcherListener(listener: Listener): () => void {
   }
 }
 
-export function startAppWatcher(callback: Listener): void {
-  addAppWatcherListener(callback)
-}
-
-export function stopAppWatcher(): void {
-  listeners.clear()
-  const backend = PLATFORM_APP_WATCHER_BACKENDS[process.platform]
-  backend?.stop()
-  backendStarted = false
-}
-
 export function isAppWatcherRunning(): boolean {
   const backend = PLATFORM_APP_WATCHER_BACKENDS[process.platform]
   return backend?.isRunning() ?? false

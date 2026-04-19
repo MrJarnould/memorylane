@@ -16,7 +16,7 @@ function ScrollArea({
     >
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        className="h-full w-full outline-none"
+        className="h-full max-h-[inherit] w-full outline-none"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>

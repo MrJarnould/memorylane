@@ -1,5 +1,5 @@
 import { addAppWatcherListener, AppWatcherEvent } from './recorder/app-watcher'
-import { normalizeToken } from './capture-exclusions'
+import { normalizeToken, tokenFromBundleId } from './capture-exclusions'
 import { extractTld } from './recorder/tld-utils'
 import { NON_WEBSITE_HOSTS } from '../shared/app-utils'
 import type { ObservationState } from '../shared/types'
@@ -13,7 +13,8 @@ const DEFAULT_DURATION_MS = 120_000
 const MIN_DURATION_MS = 5_000
 const MAX_DURATION_MS = 30 * 60_000
 
-const SELF_BUNDLE_ID_FRAGMENTS = ['memorylane']
+const SELF_TOKENS = new Set(['memorylane'])
+const SELF_BUNDLE_IDS = new Set(['dev.deusxmachina.memorylane'])
 
 export interface ObservationController {
   start(durationMs: number): ObservationState
@@ -29,12 +30,8 @@ interface ControllerParams {
 
 function tokenForApp(event: AppWatcherEvent): string | null {
   if (event.bundleId) {
-    const parts = event.bundleId.split('.')
-    const last = parts[parts.length - 1]
-    if (last) {
-      const token = normalizeToken(last)
-      if (token) return token
-    }
+    const token = tokenFromBundleId(event.bundleId)
+    if (token) return token
   }
   if (event.app) {
     const token = normalizeToken(event.app)
@@ -44,35 +41,27 @@ function tokenForApp(event: AppWatcherEvent): string | null {
 }
 
 function isSelf(event: AppWatcherEvent): boolean {
-  const bundleId = event.bundleId?.toLowerCase() ?? ''
-  const app = event.app?.toLowerCase() ?? ''
-  return SELF_BUNDLE_ID_FRAGMENTS.some((frag) => bundleId.includes(frag) || app.includes(frag))
+  if (event.bundleId && SELF_BUNDLE_IDS.has(event.bundleId.toLowerCase())) return true
+  const token = tokenForApp(event)
+  return token !== null && SELF_TOKENS.has(token)
 }
 
 export function createObservationController(params: ControllerParams): ObservationController {
   let phase: 'idle' | 'running' = 'idle'
-  let durationMs = DEFAULT_DURATION_MS
-  let startedAt = 0
-  let endsAt = 0
+  let endsAt: number | null = null
   let apps = new Set<string>()
   let urls = new Set<string>()
   let unsubscribe: (() => void) | null = null
-  let tickInterval: NodeJS.Timeout | null = null
   let endTimer: NodeJS.Timeout | null = null
   let lastRun: ObservationState['lastRun'] | undefined
 
-  const getState = (): ObservationState => {
-    const secondsRemaining =
-      phase === 'running' ? Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)) : 0
-    return {
-      phase,
-      durationMs,
-      secondsRemaining,
-      appsCount: apps.size,
-      urlsCount: urls.size,
-      lastRun,
-    }
-  }
+  const getState = (): ObservationState => ({
+    phase,
+    endsAt: phase === 'running' ? endsAt : null,
+    appsCount: apps.size,
+    urlsCount: urls.size,
+    lastRun,
+  })
 
   const emit = (): void => {
     try {
@@ -106,21 +95,13 @@ export function createObservationController(params: ControllerParams): Observati
     if (changed) emit()
   }
 
-  const clearTimers = (): void => {
-    if (tickInterval) {
-      clearInterval(tickInterval)
-      tickInterval = null
-    }
+  const stop = (reason: 'user' | 'timer'): ObservationState => {
+    if (phase !== 'running') return getState()
+
     if (endTimer) {
       clearTimeout(endTimer)
       endTimer = null
     }
-  }
-
-  const stop = (reason: 'user' | 'timer'): ObservationState => {
-    if (phase !== 'running') return getState()
-
-    clearTimers()
     if (unsubscribe) {
       unsubscribe()
       unsubscribe = null
@@ -140,6 +121,7 @@ export function createObservationController(params: ControllerParams): Observati
     }
 
     phase = 'idle'
+    endsAt = null
     lastRun = {
       appsAdded,
       urlsAdded,
@@ -165,11 +147,9 @@ export function createObservationController(params: ControllerParams): Observati
       ),
     )
 
-    durationMs = clamped
     apps = new Set<string>()
     urls = new Set<string>()
-    startedAt = Date.now()
-    endsAt = startedAt + clamped
+    endsAt = Date.now() + clamped
     phase = 'running'
 
     try {
@@ -177,12 +157,12 @@ export function createObservationController(params: ControllerParams): Observati
     } catch (error) {
       log.error('[Observation] Failed to subscribe to app-watcher:', error)
       phase = 'idle'
+      endsAt = null
       throw error
     }
 
     void params.captureControl.setFrameCaptureSuppressed(true)
 
-    tickInterval = setInterval(emit, 1000)
     endTimer = setTimeout(() => {
       stop('timer')
     }, clamped)

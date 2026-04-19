@@ -151,8 +151,7 @@ export interface MainWindowStatus {
 
 export interface ObservationState {
   phase: 'idle' | 'running'
-  durationMs: number
-  secondsRemaining: number
+  endsAt: number | null
   appsCount: number
   urlsCount: number
   lastRun?: {
@@ -197,10 +196,8 @@ export interface CaptureSettings {
 }
 
 export interface InstalledApp {
-  bundleId: string
   displayName: string
   matchToken: string
-  iconDataUrl: string | null
 }
 
 export interface SeenDomain {
