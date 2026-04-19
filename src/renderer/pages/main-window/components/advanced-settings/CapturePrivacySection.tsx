@@ -28,6 +28,7 @@ interface CapturePrivacySectionProps {
     excludedWindowTitlePatterns: string[]
     excludedUrlPatterns: string[]
   }) => void
+  onObserved: () => void
   onReset: () => void
 }
 
@@ -59,6 +60,7 @@ export function CapturePrivacySection({
   onSettingCommit,
   onExcludePrivateBrowsingChange,
   onExcludedRulesCommit,
+  onObserved,
   onReset,
 }: CapturePrivacySectionProps): React.JSX.Element {
   const [moreOpen, setMoreOpen] = useState(false)
@@ -160,6 +162,7 @@ export function CapturePrivacySection({
             excludedUrlPatterns={form.excludedUrlPatterns}
             onAppsChange={commitAppsChange}
             onUrlsChange={commitUrlsChange}
+            onObserved={onObserved}
           />
 
           {/* More sub-section */}

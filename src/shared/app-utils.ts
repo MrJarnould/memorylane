@@ -45,6 +45,12 @@ const BROWSER_PROCESS_NAMES = new Set([
   'firefox',
 ])
 
+// Hostnames that aren't real websites (browser-internal pages).
+// Filtered out of the user-visible seen-domains picker and observation collection,
+// but NOT from extractTld itself — it's used for activity-boundary detection where
+// these transitions are still a legitimate signal.
+export const NON_WEBSITE_HOSTS = new Set(['newtab'])
+
 // Transient app process names for platforms without bundle IDs
 const TRANSIENT_PROCESS_NAMES = new Set([
   // Windows equivalents

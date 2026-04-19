@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3'
 import type { SearchFilters } from '../../shared/types'
 import type { StoredActivity, ActivitySummary, ActivityDetail } from './types'
+import { NON_WEBSITE_HOSTS } from '../../shared/app-utils'
 import { vectorToBlob, blobToVector, sanitizeFtsQuery, SQLITE_VEC_KNN_MAX } from './utils'
 import log from '../logger'
 
@@ -195,16 +196,18 @@ export class ActivityRepository {
   }
 
   getDistinctTlds(limit = 200): { tld: string; count: number; lastSeenAt: number }[] {
+    const excluded = [...NON_WEBSITE_HOSTS]
+    const placeholders = excluded.map(() => '?').join(', ')
     const rows = this.db
       .prepare(
         `SELECT tld, COUNT(*) AS count, MAX(end_timestamp) AS last_seen_at
        FROM activities
-       WHERE tld IS NOT NULL AND tld != ''
+       WHERE tld IS NOT NULL AND tld != '' AND tld NOT IN (${placeholders})
        GROUP BY tld
        ORDER BY count DESC, last_seen_at DESC
        LIMIT ?`,
       )
-      .all(limit) as Record<string, unknown>[]
+      .all(...excluded, limit) as Record<string, unknown>[]
 
     return rows.map((row) => ({
       tld: row.tld as string,

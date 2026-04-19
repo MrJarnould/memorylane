@@ -10,11 +10,15 @@ import { useMainWindowAPI } from '@/renderer/hooks/use-main-window-api'
 interface AppExclusionListProps {
   excludedApps: string[]
   onChange: (next: string[]) => void
+  recentlyAdded?: string[]
+  onDismissRecent?: () => void
 }
 
 export function AppExclusionList({
   excludedApps,
   onChange,
+  recentlyAdded,
+  onDismissRecent,
 }: AppExclusionListProps): React.JSX.Element {
   const api = useMainWindowAPI()
   const [apps, setApps] = useState<InstalledApp[] | null>(null)
@@ -43,6 +47,16 @@ export function AppExclusionList({
     () => new Set(excludedApps.map((e) => e.toLowerCase())),
     [excludedApps],
   )
+
+  const recentEntries = useMemo(() => {
+    if (!recentlyAdded || recentlyAdded.length === 0) return []
+    const byToken = new Map<string, string>()
+    for (const app of apps ?? []) byToken.set(app.matchToken.toLowerCase(), app.displayName)
+    return recentlyAdded.map((token) => {
+      const key = token.toLowerCase()
+      return { token: key, displayName: byToken.get(key) ?? token }
+    })
+  }, [recentlyAdded, apps])
 
   const knownTokens = useMemo(
     () => new Set((apps ?? []).map((a) => a.matchToken.toLowerCase())),
@@ -90,11 +104,48 @@ export function AppExclusionList({
 
   return (
     <div className="flex flex-col gap-2">
+      {recentEntries.length > 0 && (
+        <div className="space-y-1 rounded-lg border border-primary/40 bg-primary/5 p-2">
+          <div className="flex items-center justify-between px-1">
+            <p className="text-[11px] font-medium text-foreground">
+              Just added ({recentEntries.length})
+            </p>
+            {onDismissRecent && (
+              <button
+                type="button"
+                onClick={onDismissRecent}
+                className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Dismiss
+              </button>
+            )}
+          </div>
+          <ul className="divide-y divide-border/60">
+            {recentEntries.map((entry) => {
+              const checked = excludedSet.has(entry.token)
+              return (
+                <li key={entry.token} className="flex items-center gap-2 px-2 py-1.5">
+                  <span className="flex-1 truncate text-xs">{entry.displayName}</span>
+                  <Switch
+                    checked={checked}
+                    onCheckedChange={(next) => toggleApp(entry.token, next)}
+                    aria-label={`Exclude ${entry.displayName}`}
+                  />
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
       <div className="relative">
         <Search className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            if (e.target.value.length > 0 && onDismissRecent) onDismissRecent()
+          }}
           placeholder="Search applications..."
           className="pl-7 text-xs"
         />
