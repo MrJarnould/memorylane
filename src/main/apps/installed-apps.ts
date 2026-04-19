@@ -127,7 +127,30 @@ function extractPlistString(xml: string, key: string): string | null {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const re = new RegExp(`<key>${escaped}</key>\\s*<string>([^<]*)</string>`)
   const match = re.exec(xml)
-  return match ? match[1].trim() || null : null
+  if (!match) return null
+  const decoded = decodeXmlEntities(match[1]).trim()
+  return decoded || null
+}
+
+function decodeXmlEntities(value: string): string {
+  return value.replace(/&(amp|apos|quot|lt|gt|#(\d+)|#x([0-9a-fA-F]+));/g, (_, name, dec, hex) => {
+    if (dec) return String.fromCodePoint(parseInt(dec, 10))
+    if (hex) return String.fromCodePoint(parseInt(hex, 16))
+    switch (name) {
+      case 'amp':
+        return '&'
+      case 'apos':
+        return "'"
+      case 'quot':
+        return '"'
+      case 'lt':
+        return '<'
+      case 'gt':
+        return '>'
+      default:
+        return _
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------

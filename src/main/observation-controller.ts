@@ -177,11 +177,26 @@ export function createObservationController(params: ControllerParams): Observati
       throw error
     }
 
-    void params.captureControl.setFrameCaptureSuppressed(true)
-
     endTimer = setTimeout(() => {
       stop('timer')
     }, clamped)
+
+    try {
+      void params.captureControl.setFrameCaptureSuppressed(true)
+    } catch (error) {
+      log.error('[Observation] setFrameCaptureSuppressed(true) threw:', error)
+      clearTimeout(endTimer)
+      endTimer = null
+      try {
+        unsubscribe()
+      } catch (unsubError) {
+        log.error('[Observation] app-watcher unsubscribe threw during rollback:', unsubError)
+      }
+      unsubscribe = null
+      phase = 'idle'
+      endsAt = null
+      throw error
+    }
 
     log.info(`[Observation] Started (durationMs=${clamped})`)
     emit()

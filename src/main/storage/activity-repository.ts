@@ -196,17 +196,20 @@ export class ActivityRepository {
   }
 
   getDistinctTlds(limit = 200): { tld: string; count: number; lastSeenAt: number }[] {
-    const placeholders = [...NON_WEBSITE_HOSTS].map(() => '?').join(', ')
+    const excludedHosts = [...NON_WEBSITE_HOSTS]
+    const notInClause = excludedHosts.length
+      ? ` AND tld NOT IN (${excludedHosts.map(() => '?').join(', ')})`
+      : ''
     const rows = this.db
       .prepare(
         `SELECT tld, COUNT(*) AS count, MAX(end_timestamp) AS last_seen_at
        FROM activities
-       WHERE tld IS NOT NULL AND tld != '' AND tld NOT IN (${placeholders})
+       WHERE tld IS NOT NULL AND tld != ''${notInClause}
        GROUP BY tld
        ORDER BY count DESC, last_seen_at DESC
        LIMIT ?`,
       )
-      .all(...NON_WEBSITE_HOSTS, limit) as Record<string, unknown>[]
+      .all(...excludedHosts, limit) as Record<string, unknown>[]
 
     return rows.map((row) => ({
       tld: row.tld as string,

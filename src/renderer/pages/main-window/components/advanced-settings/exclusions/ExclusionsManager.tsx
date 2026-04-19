@@ -102,7 +102,12 @@ export function ExclusionsManager({
             <TabsTab value="apps">Exclude Apps ({excludedApps.length})</TabsTab>
             <TabsTab value="websites">Exclude Websites ({excludedUrlPatterns.length})</TabsTab>
           </TabsList>
-          <ObserveButton state={observation} onStart={handleStart} onStop={handleStop} />
+          <ObserveButton
+            state={observation}
+            durationMs={DEFAULT_DURATION_MS}
+            onStart={handleStart}
+            onStop={handleStop}
+          />
         </div>
         {showTip && (
           <p className="mt-2 text-[11px] text-muted-foreground">
