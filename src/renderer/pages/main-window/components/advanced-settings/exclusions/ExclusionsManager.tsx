@@ -9,7 +9,6 @@ import { ObservationRunningBanner } from './ObservationRunningBanner'
 import { ObservationFinishedBanner } from './ObservationFinishedBanner'
 
 const DEFAULT_DURATION_MS = 120_000
-const RECENTLY_ADDED_TTL_MS = 30_000
 
 interface ExclusionsManagerProps {
   excludedApps: string[]
@@ -29,7 +28,6 @@ export function ExclusionsManager({
   const api = useMainWindowAPI()
   const [observation, setObservation] = useState<ObservationState | null>(null)
   const [dismissedAt, setDismissedAt] = useState(0)
-  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     let cancelled = false
@@ -45,18 +43,7 @@ export function ExclusionsManager({
   }, [api])
 
   const lastRun = observation?.lastRun
-  const showLastRun =
-    lastRun !== undefined && lastRun.at > dismissedAt && now - lastRun.at < RECENTLY_ADDED_TTL_MS
-
-  // Single 1 Hz ticker while a lastRun is potentially visible, so the TTL
-  // gates above reevaluate and the banner auto-dismisses.
-  useEffect(() => {
-    if (!lastRun) return
-    if (lastRun.at <= dismissedAt) return
-    if (Date.now() - lastRun.at >= RECENTLY_ADDED_TTL_MS) return
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [lastRun, dismissedAt])
+  const showLastRun = lastRun !== undefined && lastRun.at > dismissedAt
 
   // Notify the page once per run so settings reload.
   const notifiedAtRef = useRef(0)
@@ -87,10 +74,10 @@ export function ExclusionsManager({
       return <ObservationRunningBanner state={observation} />
     }
     if (showLastRun && lastRun) {
-      return <ObservationFinishedBanner lastRun={lastRun} onDismiss={dismissRecent} />
+      return <ObservationFinishedBanner lastRun={lastRun} />
     }
     return null
-  }, [observation, showLastRun, lastRun, dismissRecent])
+  }, [observation, showLastRun, lastRun])
 
   const showTip = observation?.phase !== 'running' && !showLastRun
 
@@ -117,7 +104,7 @@ export function ExclusionsManager({
           </p>
         )}
         {banner}
-        <TabsPanel value="apps" className="pt-2">
+        <TabsPanel value="apps" className="pt-2" keepMounted>
           <AppExclusionList
             excludedApps={excludedApps}
             onChange={onAppsChange}
@@ -125,7 +112,7 @@ export function ExclusionsManager({
             onDismissRecent={dismissRecent}
           />
         </TabsPanel>
-        <TabsPanel value="websites" className="pt-2">
+        <TabsPanel value="websites" className="pt-2" keepMounted>
           <WebsiteExclusionList
             excludedUrlPatterns={excludedUrlPatterns}
             onChange={onUrlsChange}

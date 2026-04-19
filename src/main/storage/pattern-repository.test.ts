@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { StorageService } from './index'
 import { applyMigrations } from './migrator'
+import * as os from 'os'
 import * as path from 'path'
 import { deleteDbFiles } from './test-utils'
 import type { Pattern, PatternSighting } from './pattern-repository'
@@ -39,7 +40,7 @@ const createSighting = (
 // ---------------------------------------------------------------------------
 
 describe('PatternRepository', () => {
-  const TEST_DB_PATH = path.join(process.cwd(), 'temp_pattern_repo_test.db')
+  const TEST_DB_PATH = path.join(os.tmpdir(), 'temp_pattern_repo_test.db')
   let storage: StorageService
 
   beforeEach(() => {

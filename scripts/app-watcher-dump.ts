@@ -2,11 +2,7 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
-import {
-  startAppWatcher,
-  stopAppWatcher,
-  type AppWatcherEvent,
-} from '../src/main/recorder/app-watcher'
+import { addAppWatcherListener, type AppWatcherEvent } from '../src/main/recorder/app-watcher'
 
 interface CliArgs {
   durationMs: number
@@ -70,13 +66,13 @@ async function main(): Promise<void> {
   console.log(`[AppWatcherDump] Duration: ${durationMs}ms`)
   console.log(`[AppWatcherDump] Output: ${runOutputDir}`)
 
+  const unsubscribe = addAppWatcherListener((event) => {
+    events.push(event)
+  })
   try {
-    startAppWatcher((event) => {
-      events.push(event)
-    })
     await sleep(durationMs)
   } finally {
-    stopAppWatcher()
+    unsubscribe()
   }
 
   // Give the child process close handlers a brief moment to settle.
