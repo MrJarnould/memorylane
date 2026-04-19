@@ -1,3 +1,4 @@
+import * as os from 'os'
 import * as path from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
@@ -6,8 +7,8 @@ import { applyMigrations } from '../storage/migrator'
 import { deleteDbFiles, createStoredActivity } from '../storage/test-utils'
 import { stripDatabaseForUpload } from './strip-database-for-upload'
 
-const TEST_DB_PATH = path.join(process.cwd(), 'temp_strip_test.db')
-const COPY_DB_PATH = path.join(process.cwd(), 'temp_strip_copy.db')
+const TEST_DB_PATH = path.join(os.tmpdir(), 'temp_strip_test.db')
+const COPY_DB_PATH = path.join(os.tmpdir(), 'temp_strip_copy.db')
 
 describe('stripDatabaseForUpload', () => {
   let storage: StorageService

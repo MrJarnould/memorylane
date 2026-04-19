@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as fs from 'fs'
+import * as os from 'os'
 import * as path from 'path'
 import type { ActivityRepository } from './storage/activity-repository'
 import { StorageService } from './storage'
@@ -105,7 +106,7 @@ describe('SqliteActivitySink', () => {
   })
 
   it('persists to real sqlite storage', async () => {
-    const testDbPath = path.join(process.cwd(), 'temp_sqlite_activity_sink.db')
+    const testDbPath = path.join(os.tmpdir(), 'temp_sqlite_activity_sink.db')
     const deleteDbFiles = (): void => {
       for (const suffix of ['', '-wal', '-shm']) {
         const filepath = testDbPath + suffix

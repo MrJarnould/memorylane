@@ -12,6 +12,7 @@ import { migrations } from './migrations'
 import { migration as migration0001 } from './migrations/0001_initial_schema'
 import { migration as migration0002 } from './migrations/0002_migrate_context_events'
 import { migration as migration0003 } from './migrations/0003_fts_sync_triggers'
+import * as os from 'os'
 import * as path from 'path'
 import { v, deleteDbFiles } from './test-utils'
 
@@ -19,8 +20,8 @@ import { v, deleteDbFiles } from './test-utils'
 // StorageService lifecycle and metadata
 // ---------------------------------------------------------------------------
 
-const TEST_DB_PATH = path.join(process.cwd(), 'temp_storage_test.db')
-const BACKUP_DB_PATH = path.join(process.cwd(), 'temp_storage_backup_test.db')
+const TEST_DB_PATH = path.join(os.tmpdir(), 'temp_storage_test.db')
+const BACKUP_DB_PATH = path.join(os.tmpdir(), 'temp_storage_backup_test.db')
 
 describe('StorageService', () => {
   let storage: StorageService
@@ -117,7 +118,7 @@ describe('StorageService', () => {
 // Legacy context_events migration
 // ---------------------------------------------------------------------------
 
-const MIGRATION_DB_PATH = path.join(process.cwd(), 'temp_migration_test.db')
+const MIGRATION_DB_PATH = path.join(os.tmpdir(), 'temp_migration_test.db')
 
 /** Seed a raw SQLite database with the legacy context_events schema. */
 function seedLegacyDb(
@@ -376,7 +377,7 @@ describe('context_events migration', () => {
 // Migration system
 // ---------------------------------------------------------------------------
 
-const SYSTEM_DB_PATH = path.join(process.cwd(), 'temp_migration_system_test.db')
+const SYSTEM_DB_PATH = path.join(os.tmpdir(), 'temp_migration_system_test.db')
 
 describe('migration system', () => {
   afterEach(() => {

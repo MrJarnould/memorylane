@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest'
+import * as os from 'os'
 import * as path from 'path'
 import log from '@main/logger'
 import { StorageService } from '@main/storage'
@@ -17,7 +18,7 @@ import {
   cmdPattern,
 } from './index'
 
-const TEST_DB_PATH = path.join(process.cwd(), 'temp_cli_test.db')
+const TEST_DB_PATH = path.join(os.tmpdir(), 'temp_cli_test.db')
 
 // Silence electron-log output during tests
 beforeAll(() => {

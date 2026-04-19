@@ -2,11 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import Database from 'better-sqlite3'
 import { StorageService } from './index'
 import { applyMigrations } from './migrator'
+import * as os from 'os'
 import * as path from 'path'
 import { v, deleteDbFiles, createStoredActivity } from './test-utils'
 
 describe('ActivityRepository', () => {
-  const TEST_DB_PATH = path.join(process.cwd(), 'temp_repo_test.db')
+  const TEST_DB_PATH = path.join(os.tmpdir(), 'temp_repo_test.db')
   let storage: StorageService
 
   beforeEach(() => {
