@@ -64,10 +64,10 @@ export function AppExclusionList({
       onDismissRecent={onDismissRecent}
       legacyEntries={[]}
       legacyTitle=""
-      emptyViewMode="all"
+      emptyViewMode="excluded-only"
       placeholder="Search or type an app name to block (e.g. signal)"
       loadingLabel="Loading applications..."
-      emptyLabel="No applications found."
+      emptyLabel="No apps blocked yet. Type a name above to block it."
     />
   )
 }

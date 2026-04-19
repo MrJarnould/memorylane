@@ -1,22 +1,12 @@
-import { useEffect } from 'react'
 import type { ObservationState } from '@types'
-
-const FINISHED_VISIBLE_MS = 5_000
 
 interface ObservationFinishedBannerProps {
   lastRun: NonNullable<ObservationState['lastRun']>
-  onDismiss: () => void
 }
 
 export function ObservationFinishedBanner({
   lastRun,
-  onDismiss,
 }: ObservationFinishedBannerProps): React.JSX.Element {
-  useEffect(() => {
-    const timer = setTimeout(onDismiss, FINISHED_VISIBLE_MS)
-    return () => clearTimeout(timer)
-  }, [onDismiss])
-
   const { appsAdded, urlsAdded } = lastRun
   const total = appsAdded + urlsAdded
   return (
