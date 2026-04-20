@@ -32,7 +32,7 @@ import { UserContextBuilder } from './services/user-context-builder'
 import { RawDatabaseExportSync } from './services/raw-database-export-sync'
 import { DatabaseUploadSync } from './services/database-upload-sync'
 import { createMainRuntime, type MainRuntime } from './runtime'
-import { createObservationController } from './observation-controller'
+import { createObservationController, type ObservationController } from './observation-controller'
 import { getAppDirectoryName } from './paths'
 import { loadAppEditionConfig } from './edition'
 import { ENTERPRISE_BACKEND_CONFIG } from '../shared/constants'
@@ -75,10 +75,31 @@ let userContextBuilder: UserContextBuilder | null = null
 let patternDetector: PatternDetector | null = null
 let rawDatabaseExportSync: RawDatabaseExportSync | null = null
 let databaseUploadSync: DatabaseUploadSync | null = null
+let observation: ObservationController | null = null
 
-app.on('before-quit', () => {
+// Blocks `app.quit()` until all subscribers to native helpers have released
+// them. Critical on Windows MSI upgrades: Electron's process is closed by
+// RestartManager, but Rust helpers (app-watcher-windows.exe) aren't registered
+// with it. If Electron exits before the observation controller and runtime
+// release their app-watcher subscriptions, the helper outlives the main
+// process, keeps an open handle on resources\rust\app-watcher-windows.exe,
+// and MSI has to defer replacement to a reboot (return code 3010).
+let shutdownCompleted = false
+app.on('before-quit', (event) => {
+  if (shutdownCompleted) return
+  event.preventDefault()
+
   runtime?.accessProvider.stopPeriodicRefresh()
-  void Promise.all([runtime?.dispose(), rawDatabaseExportSync?.stop(), databaseUploadSync?.stop()])
+  observation?.dispose()
+
+  void Promise.allSettled([
+    runtime?.dispose(),
+    rawDatabaseExportSync?.stop(),
+    databaseUploadSync?.stop(),
+  ]).finally(() => {
+    shutdownCompleted = true
+    app.quit()
+  })
 })
 
 app.on('will-quit', () => {
@@ -219,7 +240,7 @@ app.on('ready', async () => {
 
   const { sendObservationUpdate } = await import('./ui/main-window')
 
-  const observation = createObservationController({
+  observation = createObservationController({
     captureControl: runtime.capture,
     onUpdate: (state) => sendObservationUpdate(state),
     onSettingsPatch: ({ apps, urls }) => {
