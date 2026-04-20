@@ -160,7 +160,10 @@ describe('observation-controller', () => {
 
     ctrl.start(60_000)
     emit(makeEvent({ bundleId: 'dev.deusxmachina.memorylane' }))
+    emit(makeEvent({ bundleId: 'com.memorylane.app' }))
+    emit(makeEvent({ bundleId: 'com.memorylane.enterprise' }))
     emit(makeEvent({ app: 'MemoryLane' }))
+    emit(makeEvent({ app: 'MemoryLane Enterprise' }))
     ctrl.stop('user')
 
     const state = ctrl.getState()

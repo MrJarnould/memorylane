@@ -8,6 +8,26 @@ import { ObserveButton } from './ObserveButton'
 import { ObservationRunningBanner } from './ObservationRunningBanner'
 
 const DEFAULT_DURATION_MS = 120_000
+const DISMISSED_APPS_KEY = 'exclusions.dismissedAppsAt'
+const DISMISSED_URLS_KEY = 'exclusions.dismissedUrlsAt'
+
+function readDismissedAt(key: string): number {
+  try {
+    const raw = window.localStorage.getItem(key)
+    const parsed = raw === null ? 0 : Number(raw)
+    return Number.isFinite(parsed) ? parsed : 0
+  } catch {
+    return 0
+  }
+}
+
+function writeDismissedAt(key: string, value: number): void {
+  try {
+    window.localStorage.setItem(key, String(value))
+  } catch {
+    // storage unavailable — dismissal will just not persist across reopens
+  }
+}
 
 interface ExclusionsManagerProps {
   excludedApps: string[]
@@ -26,8 +46,8 @@ export function ExclusionsManager({
 }: ExclusionsManagerProps): React.JSX.Element {
   const api = useMainWindowAPI()
   const [observation, setObservation] = useState<ObservationState | null>(null)
-  const [dismissedAppsAt, setDismissedAppsAt] = useState(0)
-  const [dismissedUrlsAt, setDismissedUrlsAt] = useState(0)
+  const [dismissedAppsAt, setDismissedAppsAt] = useState(() => readDismissedAt(DISMISSED_APPS_KEY))
+  const [dismissedUrlsAt, setDismissedUrlsAt] = useState(() => readDismissedAt(DISMISSED_URLS_KEY))
 
   useEffect(() => {
     let cancelled = false
@@ -68,11 +88,15 @@ export function ExclusionsManager({
   }, [api])
 
   const dismissFoundApps = useCallback((): void => {
-    setDismissedAppsAt(Date.now())
+    const now = Date.now()
+    setDismissedAppsAt(now)
+    writeDismissedAt(DISMISSED_APPS_KEY, now)
   }, [])
 
   const dismissFoundUrls = useCallback((): void => {
-    setDismissedUrlsAt(Date.now())
+    const now = Date.now()
+    setDismissedUrlsAt(now)
+    writeDismissedAt(DISMISSED_URLS_KEY, now)
   }, [])
 
   const banner = useMemo(() => {

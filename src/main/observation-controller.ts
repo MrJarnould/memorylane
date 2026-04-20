@@ -13,8 +13,12 @@ const DEFAULT_DURATION_MS = 120_000
 const MIN_DURATION_MS = 5_000
 const MAX_DURATION_MS = 30 * 60_000
 
-const SELF_TOKENS = new Set(['memorylane'])
-const SELF_BUNDLE_IDS = new Set(['dev.deusxmachina.memorylane'])
+const SELF_TOKENS = new Set(['memorylane', 'memorylane enterprise'])
+const SELF_BUNDLE_IDS = new Set([
+  'dev.deusxmachina.memorylane',
+  'com.memorylane.app',
+  'com.memorylane.enterprise',
+])
 
 export interface ObservationController {
   start(durationMs: number): ObservationState
