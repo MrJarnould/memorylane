@@ -1,4 +1,4 @@
-# MemoryLane v0.23.2
+# MemoryLane v0.23.3
 
 macOS enterprise edition and exclusions UI polish.
 
@@ -22,4 +22,4 @@ macOS enterprise edition and exclusions UI polish.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.23.1...v0.23.2
+https://github.com/deusXmachina-dev/memorylane/compare/v0.23.1...v0.23.3
