@@ -128,7 +128,7 @@ module.exports = {
     artifactName: '${productName}-Setup.${ext}',
   },
   pkg: {
-    artifactName: '${productName}-Setup.${ext}',
+    artifactName: '${productName}-${arch}-mac.${ext}',
     installLocation: '/Applications',
     allowAnywhere: false,
     allowCurrentUserHome: false,
