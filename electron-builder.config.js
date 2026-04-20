@@ -5,31 +5,27 @@ const productName = isEnterprise ? 'MemoryLane Enterprise' : 'MemoryLane'
 const packageName = isEnterprise ? 'memorylane-enterprise' : 'memorylane'
 const appId = isEnterprise ? 'com.memorylane.enterprise' : 'com.memorylane.app'
 
-const macConfig = isEnterprise
-  ? undefined
-  : {
-      notarize: false,
-      category: 'public.app-category.productivity',
-      extendInfo: {
-        LSUIElement: true,
-      },
-      identity: 'Filip Kubis (ZN3J54N7AP)',
-      hardenedRuntime: true,
-      gatekeeperAssess: false,
-      entitlements: 'build/entitlements.mac.plist',
-      entitlementsInherit: 'build/entitlements.mac.inherit.plist',
-      artifactName: '${productName}-${arch}-mac.${ext}',
-      target: [
-        {
-          target: 'zip',
-          arch: ['arm64'],
-        },
-        {
-          target: 'dmg',
-          arch: ['arm64'],
-        },
-      ],
-    }
+const macTargets = isEnterprise
+  ? [{ target: 'pkg', arch: ['arm64'] }]
+  : [
+      { target: 'zip', arch: ['arm64'] },
+      { target: 'dmg', arch: ['arm64'] },
+    ]
+
+const macConfig = {
+  notarize: false,
+  category: 'public.app-category.productivity',
+  extendInfo: {
+    LSUIElement: true,
+  },
+  identity: 'Filip Kubis (ZN3J54N7AP)',
+  hardenedRuntime: true,
+  gatekeeperAssess: false,
+  entitlements: 'build/entitlements.mac.plist',
+  entitlementsInherit: 'build/entitlements.mac.inherit.plist',
+  artifactName: '${productName}-${arch}-mac.${ext}',
+  target: macTargets,
+}
 
 const winTargets = isEnterprise
   ? [
@@ -102,7 +98,7 @@ module.exports = {
     '**/*.node',
   ],
   afterSign: 'build/notarize.js',
-  ...(macConfig ? { mac: macConfig } : {}),
+  mac: macConfig,
   win: {
     extraResources: [
       {
@@ -130,5 +126,13 @@ module.exports = {
     perMachine: true,
     oneClick: true,
     artifactName: '${productName}-Setup.${ext}',
+  },
+  pkg: {
+    artifactName: '${productName}-Setup.${ext}',
+    installLocation: '/Applications',
+    allowAnywhere: false,
+    allowCurrentUserHome: false,
+    allowRootDirectory: true,
+    isRelocatable: false,
   },
 }

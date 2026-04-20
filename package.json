@@ -7,6 +7,7 @@
   "private": true,
   "scripts": {
     "dev": "cross-env LOG_LEVEL=debug electron-vite dev",
+    "dev:enterprise": "cross-env LOG_LEVEL=debug EDITION=enterprise electron-vite dev",
     "dev:debug-pipeline": "cross-env LOG_LEVEL=debug DEBUG_PIPELINE=1 electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
@@ -18,7 +19,7 @@
     "make:mac": "npm run build && npm run build:swift && npm run build:model && electron-builder --config electron-builder.config.js --mac --publish never",
     "make:win": "npm run build && npm run build:rust && npm run build:model && electron-builder --config electron-builder.config.js --win --publish never",
     "make:customer:mac": "cross-env EDITION=customer npm run make:mac",
-    "make:enterprise:mac": "node -e \"console.error('Enterprise builds are Windows MSI-only.'); process.exit(1)\"",
+    "make:enterprise:mac": "cross-env EDITION=enterprise npm run make:mac",
     "make:customer:win": "cross-env EDITION=customer npm run make:win",
     "make:enterprise:win": "cross-env EDITION=enterprise npm run make:win",
     "make:win:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/make-win-signed.ps1",
