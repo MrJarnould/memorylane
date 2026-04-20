@@ -26,7 +26,6 @@ export interface ObservationController {
 interface ControllerParams {
   captureControl: CaptureSuppressor
   onUpdate: (state: ObservationState) => void
-  onSettingsPatch: (patch: { apps: string[]; urls: string[] }) => void
 }
 
 function tokenForApp(event: AppWatcherEvent): string | null {
@@ -132,12 +131,6 @@ export function createObservationController(params: ControllerParams): Observati
     const collectedUrls = [...urls]
     const appsAdded = collectedApps.length
     const urlsAdded = collectedUrls.length
-
-    try {
-      params.onSettingsPatch({ apps: collectedApps, urls: collectedUrls })
-    } catch (error) {
-      log.error('[Observation] onSettingsPatch threw:', error)
-    }
 
     lastRun = {
       appsAdded,
