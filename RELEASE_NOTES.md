@@ -1,14 +1,12 @@
-# MemoryLane v0.23.0
+# MemoryLane v0.23.1
 
-Faster exclusion setup and better Windows app matching.
+Privacy and Windows stability fixes.
 
 ## What's Changed
 
-- **Auto-fill exclusions from activity**: new "Auto-fill from activity" flow watches app/URL changes for 2 minutes (screen capture suppressed while running) and pre-populates the exclusion lists. A "Just added" pinned section lets you un-toggle anything captured by mistake.
-- **Search-first websites picker**: default view shows currently-blocked domains; the search input doubles as add-custom. Matches come from the union of excluded and seen domains.
-- **Windows apps picker parity**: Start Menu scanner now resolves `.lnk` targets and uses the target exe stem as the match token, so toggles actually take effect at runtime. Noise entries like `.msc` snap-ins and release notes are dropped (#119).
-- Privacy hardening: observation controller edge cases, unified host filter, `newtab` filtered at both entry points, cache TTL on installed-apps list.
-- App-watcher fans out to multiple subscribers so observation and interaction-monitor share one native watcher.
+- **Auto-fill is now opt-in**: discovered apps/sites appear in a "Found (N)" block with toggles off — you pick what to block, or click **Add all**. Previously items were auto-added to exclusions (#121).
+- **Windows MSI upgrades unbroken**: native helper processes are now killed on quit so the installer can replace them during upgrade (#120).
+- Per-tab dismiss: collapsing the Found block for Apps no longer collapses it for Websites (and vice versa).
 
 ## Known Issues & Limitations
 
@@ -22,4 +20,4 @@ Faster exclusion setup and better Windows app matching.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.22.1...v0.23.0
+https://github.com/deusXmachina-dev/memorylane/compare/v0.23.0...v0.23.1
