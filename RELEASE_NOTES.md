@@ -1,12 +1,12 @@
-# MemoryLane v0.23.1
+# MemoryLane v0.23.2
 
-Privacy and Windows stability fixes.
+macOS enterprise edition and exclusions UI polish.
 
 ## What's Changed
 
-- **Auto-fill is now opt-in**: discovered apps/sites appear in a "Found (N)" block with toggles off — you pick what to block, or click **Add all**. Previously items were auto-added to exclusions (#121).
-- **Windows MSI upgrades unbroken**: native helper processes are now killed on quit so the installer can replace them during upgrade (#120).
-- Per-tab dismiss: collapsing the Found block for Apps no longer collapses it for Websites (and vice versa).
+- **macOS enterprise (.pkg)**: the enterprise edition now ships for macOS as a signed + notarized `.pkg` installer alongside the Windows MSI. Same runtime as Windows enterprise — license activation, no auto-update, optional DB upload sync.
+- **Found banner dismissal persists**: collapsing the "Found (N)" block now sticks across window reopens within a session.
+- **Self-filter works in packaged builds**: MemoryLane no longer shows up in its own Found list for customer/enterprise bundles.
 
 ## Known Issues & Limitations
 
@@ -15,9 +15,11 @@ Privacy and Windows stability fixes.
 
 ## Installation
 
-- macOS (Apple Silicon): install from the latest GitHub release or via the project install script
-- Windows: download the latest GitHub release and use either `MemoryLane-Setup.exe` or `MemoryLane-Setup.msi`
+- macOS customer (Apple Silicon): install from the latest GitHub release or via the project install script
+- macOS enterprise (Apple Silicon): `MemoryLane Enterprise-arm64-mac.pkg` — delivered privately
+- Windows customer: `MemoryLane-Setup.exe`
+- Windows enterprise: `MemoryLane Enterprise-Setup.msi` — delivered privately
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.23.0...v0.23.1
+https://github.com/deusXmachina-dev/memorylane/compare/v0.23.1...v0.23.2
