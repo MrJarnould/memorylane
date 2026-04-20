@@ -98,6 +98,7 @@ module.exports = {
     '**/*.node',
   ],
   afterSign: 'build/notarize.js',
+  afterAllArtifactBuild: 'build/notarize-pkg.js',
   mac: macConfig,
   win: {
     extraResources: [
