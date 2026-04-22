@@ -9,7 +9,15 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import log from '../logger'
-import { detectStaleSignal, isCurrentCliEntry } from './migration-utils'
+import { buildAppMcpEntry, getMcpEntryScriptPath } from './app-mcp-entry'
+import {
+  detectLegacyAppSignal,
+  detectLegacyNpxSignal,
+  extractDbPathArg,
+  isCurrentAppEntry,
+} from './migration-utils'
+import { app } from 'electron'
+import type { McpEntryStatus } from '../../shared/types'
 
 interface ClaudeCodeSettings {
   mcpServers?: Record<string, MCPServerEntry>
@@ -67,59 +75,31 @@ function isRegistered(settings: ClaudeCodeSettings): boolean {
 }
 
 /**
- * Build the MCP server entry pointing to the CLI package.
+ * Build the MCP server entry pointing at the current Electron app,
+ * preserving any user-added `--db-path` from a prior entry.
  */
-function buildMCPEntry(): MCPServerEntry {
-  return {
-    type: 'stdio',
-    command: 'npx',
-    args: ['-y', '-p', '@deusxmachina-dev/memorylane-cli', 'memorylane-mcp'],
-  }
+function buildMCPEntry(preservedDbPath?: string): MCPServerEntry {
+  const base = buildAppMcpEntry()
+  const args = preservedDbPath ? [...base.args, '--db-path', preservedDbPath] : base.args
+  return { type: 'stdio', command: base.command, args, env: base.env }
 }
 
 /**
- * Check whether MemoryLane is currently registered in Claude Code's settings on disk.
+ * Report whether MemoryLane is registered in Claude Code's settings, and
+ * whether the entry matches the current app. See getClaudeDesktopStatus for
+ * the three-state semantics and the conservative stance on foreign entries.
  */
-export function isMcpAddedToClaudeCode(): boolean {
+export function getClaudeCodeStatus(): McpEntryStatus {
   const settings = readSettings(getClaudeCodeSettingsPath())
-  return isRegistered(settings)
-}
+  const existing = settings.mcpServers?.[MCP_SERVER_KEY]
+  if (!existing) return 'not-registered'
 
-/**
- * If a stale (pre-v0.18) MemoryLane MCP entry exists, replace it with the CLI entry.
- * Best-effort: never throws — see migrateClaudeDesktop for rationale.
- */
-export function migrateClaudeCode(): void {
-  const settingsPath = getClaudeCodeSettingsPath()
-  try {
-    if (!fs.existsSync(settingsPath)) {
-      log.debug(`[Claude Code Integration] No settings at ${settingsPath}, skipping migration`)
-      return
-    }
-    const settings = readSettings(settingsPath)
-    const existing = settings.mcpServers?.[MCP_SERVER_KEY]
-    if (!existing) {
-      log.debug('[Claude Code Integration] No memorylane entry present, nothing to migrate')
-      return
-    }
-    if (isCurrentCliEntry(existing)) {
-      log.debug('[Claude Code Integration] memorylane entry already current, nothing to migrate')
-      return
-    }
-    const signal = detectStaleSignal(existing)
-    if (!signal) {
-      log.info(
-        '[Claude Code Integration] memorylane entry present but does not match a known stale shape, leaving it alone',
-      )
-      return
-    }
+  const currentExe = app.getPath('exe')
+  const currentScript = getMcpEntryScriptPath()
+  if (isCurrentAppEntry(existing, currentExe, currentScript)) return 'current'
 
-    settings.mcpServers![MCP_SERVER_KEY] = buildMCPEntry()
-    writeSettings(settingsPath, settings)
-    log.info(`[Claude Code Integration] Migrated from Electron MCP to CLI (signal: ${signal})`)
-  } catch (error) {
-    log.warn('[Claude Code Integration] Migration failed:', error)
-  }
+  const signal = detectLegacyNpxSignal(existing) ?? detectLegacyAppSignal(existing)
+  return signal !== null ? 'stale' : 'current'
 }
 
 export async function registerWithClaudeCode(): Promise<boolean> {
@@ -130,11 +110,14 @@ export async function registerWithClaudeCode(): Promise<boolean> {
     const settings = readSettings(settingsPath)
 
     const alreadyRegistered = isRegistered(settings)
+    const preservedDbPath = alreadyRegistered
+      ? extractDbPathArg(settings.mcpServers?.[MCP_SERVER_KEY]?.args)
+      : undefined
 
     if (settings.mcpServers === undefined) {
       settings.mcpServers = {}
     }
-    settings.mcpServers[MCP_SERVER_KEY] = buildMCPEntry()
+    settings.mcpServers[MCP_SERVER_KEY] = buildMCPEntry(preservedDbPath)
 
     writeSettings(settingsPath, settings)
 

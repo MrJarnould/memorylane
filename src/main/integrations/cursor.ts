@@ -9,7 +9,15 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import log from '../logger'
-import { detectStaleSignal, isCurrentCliEntry } from './migration-utils'
+import { buildAppMcpEntry, getMcpEntryScriptPath } from './app-mcp-entry'
+import {
+  detectLegacyAppSignal,
+  detectLegacyNpxSignal,
+  extractDbPathArg,
+  isCurrentAppEntry,
+} from './migration-utils'
+import { app } from 'electron'
+import type { McpEntryStatus } from '../../shared/types'
 
 interface CursorMCPConfig {
   mcpServers?: Record<string, MCPServerEntry>
@@ -66,58 +74,31 @@ function isRegistered(config: CursorMCPConfig): boolean {
 }
 
 /**
- * Build the MCP server entry pointing to the CLI package.
+ * Build the MCP server entry pointing at the current Electron app,
+ * preserving any user-added `--db-path` from a prior entry.
  */
-function buildMCPEntry(): MCPServerEntry {
-  return {
-    command: 'npx',
-    args: ['-y', '-p', '@deusxmachina-dev/memorylane-cli', 'memorylane-mcp'],
-  }
+function buildMCPEntry(preservedDbPath?: string): MCPServerEntry {
+  const base = buildAppMcpEntry()
+  const args = preservedDbPath ? [...base.args, '--db-path', preservedDbPath] : base.args
+  return { command: base.command, args, env: base.env }
 }
 
 /**
- * Check whether MemoryLane is currently registered in Cursor's MCP config on disk.
+ * Report whether MemoryLane is registered in Cursor's MCP config, and whether
+ * the entry matches the current app. See getClaudeDesktopStatus for the
+ * three-state semantics and the conservative stance on foreign entries.
  */
-export function isMcpAddedToCursor(): boolean {
+export function getCursorStatus(): McpEntryStatus {
   const config = readCursorConfig(getCursorConfigPath())
-  return isRegistered(config)
-}
+  const existing = config.mcpServers?.[MCP_SERVER_KEY]
+  if (!existing) return 'not-registered'
 
-/**
- * If a stale (pre-v0.18) MemoryLane MCP entry exists, replace it with the CLI entry.
- * Best-effort: never throws — see migrateClaudeDesktop for rationale.
- */
-export function migrateCursor(): void {
-  const configPath = getCursorConfigPath()
-  try {
-    if (!fs.existsSync(configPath)) {
-      log.debug(`[Cursor Integration] No config at ${configPath}, skipping migration`)
-      return
-    }
-    const config = readCursorConfig(configPath)
-    const existing = config.mcpServers?.[MCP_SERVER_KEY]
-    if (!existing) {
-      log.debug('[Cursor Integration] No memorylane entry present, nothing to migrate')
-      return
-    }
-    if (isCurrentCliEntry(existing)) {
-      log.debug('[Cursor Integration] memorylane entry already current, nothing to migrate')
-      return
-    }
-    const signal = detectStaleSignal(existing)
-    if (!signal) {
-      log.info(
-        '[Cursor Integration] memorylane entry present but does not match a known stale shape, leaving it alone',
-      )
-      return
-    }
+  const currentExe = app.getPath('exe')
+  const currentScript = getMcpEntryScriptPath()
+  if (isCurrentAppEntry(existing, currentExe, currentScript)) return 'current'
 
-    config.mcpServers![MCP_SERVER_KEY] = buildMCPEntry()
-    writeCursorConfig(configPath, config)
-    log.info(`[Cursor Integration] Migrated from Electron MCP to CLI (signal: ${signal})`)
-  } catch (error) {
-    log.warn('[Cursor Integration] Migration failed:', error)
-  }
+  const signal = detectLegacyNpxSignal(existing) ?? detectLegacyAppSignal(existing)
+  return signal !== null ? 'stale' : 'current'
 }
 
 export async function registerWithCursor(): Promise<boolean> {
@@ -128,11 +109,14 @@ export async function registerWithCursor(): Promise<boolean> {
     const config = readCursorConfig(configPath)
 
     const alreadyRegistered = isRegistered(config)
+    const preservedDbPath = alreadyRegistered
+      ? extractDbPathArg(config.mcpServers?.[MCP_SERVER_KEY]?.args)
+      : undefined
 
     if (config.mcpServers === undefined) {
       config.mcpServers = {}
     }
-    config.mcpServers[MCP_SERVER_KEY] = buildMCPEntry()
+    config.mcpServers[MCP_SERVER_KEY] = buildMCPEntry(preservedDbPath)
 
     writeCursorConfig(configPath, config)
 

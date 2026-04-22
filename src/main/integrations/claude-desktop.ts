@@ -9,7 +9,15 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import log from '../logger'
-import { detectStaleSignal, isCurrentCliEntry } from './migration-utils'
+import { buildAppMcpEntry, getMcpEntryScriptPath } from './app-mcp-entry'
+import {
+  detectLegacyAppSignal,
+  detectLegacyNpxSignal,
+  extractDbPathArg,
+  isCurrentAppEntry,
+} from './migration-utils'
+import { app } from 'electron'
+import type { McpEntryStatus } from '../../shared/types'
 
 interface ClaudeDesktopConfig {
   mcpServers?: Record<string, MCPServerEntry>
@@ -83,59 +91,35 @@ function isRegistered(config: ClaudeDesktopConfig): boolean {
 }
 
 /**
- * Build the MCP server entry pointing to the CLI package.
+ * Build the MCP server entry pointing at the current Electron app,
+ * preserving any user-added `--db-path` from a prior entry.
  */
-function buildMCPEntry(): MCPServerEntry {
-  return {
-    command: 'npx',
-    args: ['-y', '-p', '@deusxmachina-dev/memorylane-cli', 'memorylane-mcp'],
-  }
+function buildMCPEntry(preservedDbPath?: string): MCPServerEntry {
+  const base = buildAppMcpEntry()
+  const args = preservedDbPath ? [...base.args, '--db-path', preservedDbPath] : base.args
+  return { command: base.command, args, env: base.env }
 }
 
 /**
- * Check whether MemoryLane is currently registered in Claude Desktop's config on disk.
+ * Report whether MemoryLane is registered in Claude Desktop's config, and
+ * whether the entry matches the current app. Surfaces three states so the UI
+ * can prompt the user to reconnect instead of rewriting silently.
+ *
+ * Returns 'stale' only when the entry matches a legacy shape we're confident
+ * we own (v0 Electron-as-node, v1 npx CLI, moved .app). A foreign entry under
+ * the memorylane key reports 'current' — same conservative posture as before.
  */
-export function isMcpAddedToClaudeDesktop(): boolean {
+export function getClaudeDesktopStatus(): McpEntryStatus {
   const config = readClaudeConfig(getClaudeConfigPath())
-  return isRegistered(config)
-}
+  const existing = config.mcpServers?.[MCP_SERVER_KEY]
+  if (!existing) return 'not-registered'
 
-/**
- * If a stale (pre-v0.18) MemoryLane MCP entry exists, replace it with the CLI entry.
- * Best-effort: never throws — Claude Desktop config may be missing, malformed,
- * or unwritable, and none of those should block app startup.
- */
-export function migrateClaudeDesktop(): void {
-  const configPath = getClaudeConfigPath()
-  try {
-    if (!fs.existsSync(configPath)) {
-      log.debug(`[Claude Integration] No config at ${configPath}, skipping migration`)
-      return
-    }
-    const config = readClaudeConfig(configPath)
-    const existing = config.mcpServers?.[MCP_SERVER_KEY]
-    if (!existing) {
-      log.debug('[Claude Integration] No memorylane entry present, nothing to migrate')
-      return
-    }
-    if (isCurrentCliEntry(existing)) {
-      log.debug('[Claude Integration] memorylane entry already current, nothing to migrate')
-      return
-    }
-    const signal = detectStaleSignal(existing)
-    if (!signal) {
-      log.info(
-        '[Claude Integration] memorylane entry present but does not match a known stale shape, leaving it alone',
-      )
-      return
-    }
+  const currentExe = app.getPath('exe')
+  const currentScript = getMcpEntryScriptPath()
+  if (isCurrentAppEntry(existing, currentExe, currentScript)) return 'current'
 
-    config.mcpServers![MCP_SERVER_KEY] = buildMCPEntry()
-    writeClaudeConfig(configPath, config)
-    log.info(`[Claude Integration] Migrated from Electron MCP to CLI (signal: ${signal})`)
-  } catch (error) {
-    log.warn('[Claude Integration] Migration failed:', error)
-  }
+  const signal = detectLegacyNpxSignal(existing) ?? detectLegacyAppSignal(existing)
+  return signal !== null ? 'stale' : 'current'
 }
 
 export async function registerWithClaudeDesktop(): Promise<boolean> {
@@ -146,11 +130,14 @@ export async function registerWithClaudeDesktop(): Promise<boolean> {
     const config = readClaudeConfig(configPath)
 
     const alreadyRegistered = isRegistered(config)
+    const preservedDbPath = alreadyRegistered
+      ? extractDbPathArg(config.mcpServers?.[MCP_SERVER_KEY]?.args)
+      : undefined
 
     if (config.mcpServers === undefined) {
       config.mcpServers = {}
     }
-    config.mcpServers[MCP_SERVER_KEY] = buildMCPEntry()
+    config.mcpServers[MCP_SERVER_KEY] = buildMCPEntry(preservedDbPath)
 
     writeClaudeConfig(configPath, config)
 
