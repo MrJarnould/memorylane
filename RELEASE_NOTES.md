@@ -1,12 +1,12 @@
-# MemoryLane v0.23.4
+# MemoryLane v0.23.5
 
-macOS enterprise edition and exclusions UI polish.
+App is now the MCP entrypoint, with multi-DB support.
 
 ## What's Changed
 
-- **macOS enterprise (.pkg)**: the enterprise edition now ships for macOS as a signed + notarized `.pkg` installer alongside the Windows MSI. Same runtime as Windows enterprise — license activation, no auto-update, optional DB upload sync.
-- **Found banner dismissal persists**: collapsing the "Found (N)" block now sticks across window reopens within a session.
-- **Self-filter works in packaged builds**: MemoryLane no longer shows up in its own Found list for customer/enterprise bundles.
+- **No more Node prerequisite for integrations**: one-click setup for Claude Desktop, Claude Code, and Cursor now runs the MemoryLane app directly under `ELECTRON_RUN_AS_NODE=1` instead of shelling out to `npx`. Integrations keep working on machines without Node installed.
+- **Reconnect flow for stale entries**: if the app was moved or upgraded, the Integrations panel surfaces a "Reconnect" button instead of silently rewriting config. User-added `--db-path` args are preserved when reconnecting.
+- **Multi-DB via `set_db_path` / `reset_db_path`**: the MCP server can now be pointed at a different MemoryLane database at runtime. The recorder always writes to the default DB — `set_db_path` only affects what the MCP server reads.
 
 ## Known Issues & Limitations
 
@@ -22,4 +22,4 @@ macOS enterprise edition and exclusions UI polish.
 
 ## Full Changelog
 
-https://github.com/deusXmachina-dev/memorylane/compare/v0.23.1...v0.23.4
+https://github.com/deusXmachina-dev/memorylane/compare/v0.23.4...v0.23.5
